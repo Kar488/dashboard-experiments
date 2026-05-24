@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Merchandising Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <h1>Merchandising</h1>
+        <span class="badge">Jewel</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="updated">Data updated through May 9, 2025</span>
+        <a class="ghost-button nav-link" href="promo-plan-status.html">Plan Status</a>
+        <button class="ghost-button" id="themeToggle">Dark Mode</button>
+        <button class="ghost-button">Karthik Iyer</button>
+        <button class="primary-button">Ask Assistant</button>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="filters" aria-label="Dashboard filters">
+        <button class="filter-button">Filters</button>
+        <div><strong>Time Period:</strong> <span id="filterPeriod">Last 52 Weeks Completed</span></div>
+        <div>May 11, 2024 - May 9, 2025</div>
+        <div><strong>Calendar:</strong> Fiscal</div>
+        <div><strong>Comparison:</strong> <span id="comparisonText">Last Year 52 Weeks</span></div>
+        <div><strong>Department:</strong> 370 - Deli/Prepared Foods</div>
+        <label class="mode-toggle"><input type="checkbox" id="offlineToggle" /> Offline Mode</label>
+        <span class="data-mode" id="dataMode">Real-time mode: local API</span>
+      </section>
+
+      <section class="kpi-grid" id="primaryMetrics" aria-label="Primary metrics"></section>
+      <section class="secondary-grid" id="secondaryMetrics" aria-label="Secondary basket and household metrics"></section>
+
+      <section class="actions-grid" aria-label="Pending actions">
+        <article class="action-card orange">
+          <div class="action-title"><span>!</span><div><h2>Cost Change Exposure</h2><p>Next 14 days</p></div></div>
+          <div class="action-values"><strong>$1.82M<span>Sales Exposed</span></strong><strong>$118K<span>AGP Risk</span></strong></div>
+          <div class="action-breakdown"><span>278<br>Items Impacted</span><span>34<br>No Retail Decision</span><span>6<br>Promos Impacted</span></div>
+          <button>Review Cost Changes</button>
+        </article>
+        <article class="action-card purple">
+          <div class="action-title"><span>?</span><div><h2>Approval Backlog</h2><p>Needs your action</p></div></div>
+          <div class="action-values"><strong>$2.67M<span>$ Tied to Approvals</span></strong><strong>56<span>Items / Events</span></strong></div>
+          <div class="action-breakdown"><span>23<br>Allowances<br>$1.21M</span><span>33<br>Promotions<br>$1.46M</span><span>8 days<br>Oldest Pending</span></div>
+          <button>Review Approvals</button>
+        </article>
+        <article class="action-card blue">
+          <div class="action-title"><span>#</span><div><h2>Promo Readiness</h2><p>Next 14 days</p></div></div>
+          <div class="action-values"><strong>48<span>Upcoming Events</span></strong><strong>16<span>Not Ready</span></strong></div>
+          <div class="action-breakdown"><span>8<br>Missing Funding</span><span>5<br>Missing Retail</span><span>3<br>Missing Setup</span></div>
+          <button>View Promo Calendar</button>
+        </article>
+      </section>
+
+      <section class="panel promo-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Promotion Execution vs Plan</h2>
+            <p>Predicted recommendations compared with actuals for the selected period.</p>
+          </div>
+        </div>
+        <div class="promo-layout">
+          <article class="prediction-card">
+            <div class="prediction-header">
+              <div><h3>Revenue Forecast vs Actual</h3><p>Actual $5.41M vs forecast $6.02M</p></div>
+              <strong class="negative">-$0.61M<br><span>-10.2%</span></strong>
+            </div>
+            <svg class="dual-chart" data-actual="65,70,73,92,79,68,71,76,74,67,70,79,83,75,72,69,74,68" data-compare="72,75,78,88,84,80,78,82,86,83,84,91,94,88,86,84,87,86"></svg>
+          </article>
+          <article class="prediction-card">
+            <div class="prediction-header">
+              <div><h3>Units Forecast vs Actual</h3><p>Actual 2.22M vs forecast 2.47M</p></div>
+              <strong class="negative">-250K<br><span>-10.0%</span></strong>
+            </div>
+            <svg class="dual-chart" data-actual="42,47,55,62,48,50,54,60,63,55,49,58,65,54,57,70,73,61" data-compare="52,54,58,66,62,60,63,68,70,66,65,71,75,72,71,76,78,73"></svg>
+          </article>
+          <article class="prediction-card">
+            <div class="prediction-header">
+              <div><h3>AGP Forecast vs Actual</h3><p>Actual $1.84M vs forecast $1.79M</p></div>
+              <strong class="positive">+$50K<br><span>+2.8%</span></strong>
+            </div>
+            <svg class="dual-chart" data-actual="47,48,49,50,51,50,52,53,52,54,55,54,52,50,51,49,53,54" data-compare="45,47,48,49,49,50,50,51,51,52,52,53,52,51,50,49,51,52"></svg>
+          </article>
+          <article class="prediction-card">
+            <div class="prediction-header">
+              <div><h3>Household Forecast vs Actual</h3><p>Actual 42.7% vs forecast 43.9%</p></div>
+              <strong class="negative">-1.2pp<br><span>-2.7%</span></strong>
+            </div>
+            <svg class="dual-chart" data-actual="31,32,33,33,34,36,37,38,37,39,39,40,41,40,42,41,43,42" data-compare="33,34,35,36,36,37,38,39,40,41,42,42,43,43,44,44,44,44"></svg>
+          </article>
+        </div>
+        <div class="summary-grid promo-summary">
+          <article class="subpanel">
+            <div class="table-tabs" data-table-tabs="performance">
+              <button class="active" data-metric="sales">Sales</button>
+              <button data-metric="units">Units</button>
+              <button data-metric="agp">AGP</button>
+            </div>
+            <h2>Top & Bottom Performing Items vs Plan</h2>
+            <div class="compact-table" id="performanceTable"></div>
+          </article>
+          <article class="subpanel">
+            <h2>Promotions Working vs Not Working</h2>
+            <div class="compact-table" id="promoTable"></div>
+          </article>
+          <article class="subpanel">
+            <h2>Front Page Circular Performance</h2>
+            <div class="compact-table" id="circularTable"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel detail-panel">
+        <div class="panel-heading detail-heading">
+          <div class="tabs" id="detailTabs">
+            <button class="active" data-view="top">Top Performing Items</button>
+            <button data-view="under">Underperforming Items</button>
+            <button data-view="funding">Vendor Funding Issues</button>
+            <button data-view="healthy">Healthy Vendors</button>
+          </div>
+          <div class="detail-actions">
+            <label>View: <select><option>All Items</option><option>Flagged Items</option><option>Current Vendor</option></select></label>
+            <button class="export-button">Export</button>
+          </div>
+        </div>
+        <div class="wide-table-wrap">
+          <table class="wide-table">
+            <thead>
+              <tr>
+                <th>Item / CIG / NCRC / UPC</th>
+                <th>Vendor</th>
+                <th>Role</th>
+                <th>Sales</th>
+                <th>Units</th>
+                <th>AGP %</th>
+                <th>AGP $</th>
+                <th>Allowances</th>
+                <th>Deadnet Cost</th>
+                <th>Sales Mix</th>
+                <th>CPI (P-U)</th>
+                <th>Markdown $</th>
+                <th>Driver</th>
+              </tr>
+            </thead>
+            <tbody id="itemRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel trends-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Weekly P&L and KPI Trends</h2>
+            <p id="trendSubtitle">Filtered by the page period and comparison. Search by UPC, CIG, or NCRC to focus the P&L view.</p>
+          </div>
+          <div class="detail-actions trend-search">
+            <select id="trendSearchType" aria-label="Search type"><option>CIG</option><option>UPC</option><option>NCRC</option></select>
+            <input id="trendSearch" type="search" placeholder="Search CIG, UPC, or NCRC" />
+            <button class="export-button">Export</button>
+          </div>
+        </div>
+        <div class="trend-filters" aria-label="Trend table filters">
+          <div class="role-chips">
+            <span>Item Role:</span>
+            <button class="active" type="button">All (41)</button>
+            <button type="button">Background (33)</button>
+            <button type="button">Foreground (7)</button>
+            <button type="button">Critical (0)</button>
+            <button type="button">KV1 (1)</button>
+          </div>
+          <div class="filter-row">
+            <label>ASM <select><option>Eric Hacker</option></select></label>
+            <label>Category <select><option>8402 - Apples</option></select></label>
+            <label>Class <select><option>All</option><option>Apples Core</option></select></label>
+            <label>Vendor <select><option>All</option><option>Stemilt</option><option>Lil Snappers</option></select></label>
+            <label>Store <select><option>All Stores</option></select></label>
+            <label>Compare <select id="comparisonMode"><option value="ly">LY period</option><option value="division">Another division</option></select></label>
+            <label id="divisionCompareLabel" hidden>Division <select id="divisionCompare">
+              <option>Mountain West Division</option>
+              <option>Northern California Division</option>
+              <option>Southern California Division</option>
+              <option>Seattle Division</option>
+              <option>Portland Division</option>
+              <option>Southwest Division</option>
+              <option>Texas Division</option>
+              <option>Jewel-Osco Division</option>
+              <option>Shaw's and Star Market Division</option>
+              <option>Mid-Atlantic Division</option>
+              <option>United Division</option>
+            </select></label>
+          </div>
+        </div>
+        <svg class="large-chart" id="weeklyTrend"></svg>
+        <div class="week-table-wrap">
+          <table class="week-table">
+            <thead>
+              <tr><th>P&L / KPI</th><th id="currentCompareHeader">Current<br><small>vs LY period</small></th><th>W22</th><th>W23</th><th>W24</th><th>W25</th><th>W26</th><th>W27</th><th>W28</th><th>W29</th><th>Total</th></tr>
+            </thead>
+            <tbody id="weekRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div class="overlay" id="scoreOverlay" hidden>
+      <aside class="scorecard" role="dialog" aria-modal="true" aria-labelledby="scoreTitle">
+        <button class="close-button" id="closeScorecard" aria-label="Close">x</button>
+        <div id="scoreContent"></div>
+      </aside>
+    </div>
+
+    <div class="context-menu" id="contextMenu" hidden>
+      <button id="askAssistantFromContext" type="button">Ask Assistant</button>
+    </div>
+
+    <aside class="assistant-panel" id="assistantPanel" aria-label="AI Assistant" hidden>
+      <div class="assistant-head">
+        <strong>AI Assistant</strong>
+        <button class="ghost-button" id="closeAssistant" type="button">x</button>
+      </div>
+      <div class="assistant-body" id="assistantBody"></div>
+    </aside>
+
+    <script src="app.js"></script>
+  </body>
+</html>

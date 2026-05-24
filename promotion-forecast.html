@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Promotion Forecast</title>
+    <link rel="stylesheet" href="promotion-forecast.css" />
+  </head>
+  <body>
+    <main class="forecast-shell">
+      <header class="page-header">
+        <section class="category-summary">
+          <div class="category-image" aria-hidden="true"></div>
+          <div class="category-title">
+            <div class="title-row">
+              <h1>Yogurt</h1>
+              <span>Dairy & Refrigerated</span>
+            </div>
+            <div class="scope-metrics">
+              <button>NCRC <strong>147</strong></button>
+              <button>CIG <strong>23</strong></button>
+              <button>CIC <strong>89</strong></button>
+              <button>Vendors <strong>12</strong></button>
+              <button>Allowance <strong>$1,245,000 (9.6%)</strong></button>
+              <button>Promo Sales <strong>$1.3M (48%)</strong></button>
+            </div>
+          </div>
+        </section>
+        <nav class="workflow">
+          <div class="steps">
+            <span class="active">1 Strategy</span>
+            <span>2 Promotion Plan</span>
+            <span>3 NCRC Detail</span>
+          </div>
+        </nav>
+      </header>
+
+      <section class="filter-bar">
+        <button class="active">All 147 NCRCs</button>
+        <span>Navigate by</span>
+        <button>Top Vendors</button>
+        <button>Tillamook (15%)</button>
+        <button>Chobani (8%)</button>
+        <button>Danone (6%)</button>
+        <span>Item Velocity</span>
+        <button>Bin 1 <em>30</em></button>
+        <button>Bin 2 <em>29</em></button>
+        <button>Bin 3 <em>30</em></button>
+        <button>Bin 4 <em>29</em></button>
+        <button>Bin 5 <em>29</em></button>
+      </section>
+
+      <section class="main-grid">
+        <article class="strategy-panel">
+          <div class="section-heading">
+            <div>
+              <h2>Promotion Strategy and Analysis - 6 Weeks</h2>
+              <p>Showing 147 NCRCs - All items</p>
+            </div>
+            <button class="strategy-pill">Optimize Revenue</button>
+          </div>
+
+          <h3>Performance Metrics</h3>
+          <div class="metrics-table-wrap">
+            <table class="metrics-table">
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th>Sales</th>
+                  <th>Unit</th>
+                  <th>AGP</th>
+                  <th>HH</th>
+                  <th>Allowance</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>LY 6 Week</td>
+                  <td>$480.7K</td>
+                  <td>95.6K</td>
+                  <td>$109.1K</td>
+                  <td>385.9K</td>
+                  <td>$23.5K</td>
+                </tr>
+                <tr>
+                  <td>LY Promo Contribution</td>
+                  <td>$80.7K <small>(16.8%)</small></td>
+                  <td>25.6K <small>(26.8%)</small></td>
+                  <td>-$70.9K <small>(-65.0%)</small></td>
+                  <td>218.4K <small>(56.6%)</small></td>
+                  <td>$23.5K <small>(100.0%)</small></td>
+                </tr>
+                <tr class="selected-row">
+                  <td>Optimized CY 6 Week Plan</td>
+                  <td>$509.3K</td>
+                  <td>89.5K</td>
+                  <td>$155.5K</td>
+                  <td>224.0K</td>
+                  <td>$23.2K</td>
+                </tr>
+                <tr class="delta-row">
+                  <td>Delta with LY</td>
+                  <td><span class="positive">+$28.7K</span><small>+6.0%</small></td>
+                  <td><span class="negative">-6.0K</span><small>-6.3%</small></td>
+                  <td><span class="positive">+$46.4K</span><small>+42.5%</small></td>
+                  <td><span class="negative">-161.9K</span><small>-42.0%</small></td>
+                  <td><span class="negative">-$249.6</span><small>-1.1%</small></td>
+                </tr>
+                <tr>
+                  <td>Forecast if no promo</td>
+                  <td>$479.8K</td>
+                  <td>74.6K</td>
+                  <td>$187.1K</td>
+                  <td>173.0K</td>
+                  <td>-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <aside class="side-panel category-plan decision-panel">
+          <h3>View Category Under Full-Plan Scenario</h3>
+          <p class="scenario-helper">Category results shown as a lens over the selected total store / price-area plan.</p>
+          <table class="plan-table">
+            <thead><tr><th>Full-plan scenario</th><th>Sales</th><th>Units</th><th>AGP</th></tr></thead>
+            <tbody id="categoryPlanRows"></tbody>
+          </table>
+          <div class="approval-card">
+            <h4>Approval Progress</h4>
+            <div class="bar"><span style="width:16%"></span><span style="width:59%"></span><span style="width:14%"></span></div>
+            <p><span>Approved</span><strong>23 (16%)</strong></p>
+            <p><span>Submitted</span><strong>86 (59%)</strong></p>
+            <p><span>Pending</span><strong>20 (14%)</strong></p>
+          </div>
+          <div class="approval-actions">
+            <button class="apply-button">Approve All 6 Weeks</button>
+            <button class="apply-secondary">Approve Current Week</button>
+          </div>
+          <button class="review-button">Review Full Promo Plan</button>
+        </aside>
+
+        <aside class="side-panel store-plan">
+          <div class="store-head">
+            <h3>Total Store Plan Results</h3>
+          </div>
+          <div id="storePlanCards" class="store-plan-cards"></div>
+          <p class="plan-info-legend">Plan info: Items on promo / Avg markdown depth / Items &gt;30% depth</p>
+          <div class="store-scope">
+            <span>NCRC <strong>1,284</strong></span>
+            <span>CIG <strong>188</strong></span>
+            <span>CIC <strong>426</strong></span>
+            <span>Vendors <strong>74</strong></span>
+            <span>Allowance <strong>$9.8M</strong></span>
+          </div>
+          <p class="model-run-note">Model run: May 14, 2026 at 06:15 AM - Price-area aggregated scope</p>
+        </aside>
+      </section>
+
+      <section class="impact-section">
+        <div class="impact-heading">
+          <h2>NCRC Promo Impact</h2>
+          <span>Win-Win Zone</span>
+          <span>Velocity: 1 2 3 4 5</span>
+        </div>
+        <div class="scatter-grid" id="scatterGrid"></div>
+      </section>
+    </main>
+
+    <div class="overlay" id="explainOverlay" hidden>
+      <section class="wiki-modal">
+        <button class="close-button" id="closeExplain">x</button>
+        <header>
+          <h2>Why Category Results May Not Match the Category Objective</h2>
+          <p>Merchant-facing explanation of total-plan optimization and category rollups.</p>
+        </header>
+        <div class="wiki-body">
+          <section>
+            <h3>Short Answer</h3>
+            <p>This optimiser is designed to make the best total plan for the store / price area, not to independently maximise every category. It chooses one offer per item-week slot and evaluates the full promotional plan against the selected objective: Units, Revenue, or AGP.</p>
+          </section>
+          <section>
+            <h3>What Is Being Optimized</h3>
+            <p>Category is a reporting and governance lens. The optimization target is the total selected plan across the configured store / price-area scope.</p>
+            <ul>
+              <li>Each item-week slot has candidate offers: different depths, tactics, channels, or no-promo options.</li>
+              <li>The solver picks exactly one candidate per slot.</li>
+              <li>Units, Revenue, and AGP are three complete full-plan scenarios, not category rows.</li>
+            </ul>
+          </section>
+          <section>
+            <h3>Why A Category Can Look Unbalanced</h3>
+            <p>The model may lean into categories where predicted response, margin, funding, price image, and guardrail compliance are strongest. Another category may receive less investment if promotion would weaken the total plan.</p>
+          </section>
+          <section>
+            <h3>How To Read The Rows</h3>
+            <p>The Units row is the plan selected when movement is primary; its Revenue and AGP columns are outcomes of that Units-focused full plan. Sometimes that plan can also produce strong AGP because those items have good margin, funding, or response.</p>
+          </section>
+          <section>
+            <h3>What Would Change This</h3>
+            <p>If the business wants category balance, the model needs explicit category-level constraints: AGP floors, promo-share caps, investment budgets, or minimum representation rules.</p>
+          </section>
+        </div>
+        <footer><button id="closeExplainBottom">Close</button></footer>
+      </section>
+    </div>
+
+    <script src="promotion-forecast.js"></script>
+  </body>
+</html>

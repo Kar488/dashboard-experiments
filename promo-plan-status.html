@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Promotion Plan Status</title>
+    <link rel="stylesheet" href="promo-plan-status.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <h1>Promotion Plan Status</h1>
+        <span class="badge">Jewel</span>
+      </div>
+      <div class="topbar-actions">
+        <a class="ghost-link" href="index.html">Dashboard</a>
+        <span>Plan window: Jan 01 - Feb 11, 2026</span>
+        <button class="ghost-button" id="themeToggle">Dark Mode</button>
+        <button class="primary-button">Export CSV</button>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="filters">
+        <button class="filter-button">Filters</button>
+        <label>View <select id="scopeSelect"><option value="desk">My Desk</option><option value="division">Total Division</option></select></label>
+        <label>Weeks <select><option>Next 6 Weeks</option><option>Next 8 Weeks</option><option>Next 12 Weeks</option></select></label>
+        <span class="data-mode" id="scopeLabel">Desk view: Dairy & Refrigerated categories</span>
+      </section>
+
+      <section class="hero-panel">
+        <div>
+          <p class="eyebrow">Promotion prize and execution readiness</p>
+          <h2 id="heroTitle">Revised mixed plan protects $5.4M revenue and 5.17M units</h2>
+          <p>Compared with a no-promotion scenario, this plan spends markdown, recovers vendor funding, and creates incremental units, revenue, AGP, and households.</p>
+        </div>
+        <div class="hero-score">
+          <strong id="completionScore">1.42x</strong>
+          <span>net ROI vs no promo</span>
+        </div>
+      </section>
+
+      <section class="plan-grid" id="planCards"></section>
+
+      <section class="coverage-grid" id="coverageCards"></section>
+
+      <section class="overview-grid decision-grid">
+        <article class="panel roi-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>ROI vs No-Promotion Scenario</h2>
+            <p id="benchmarkText">Vendor allowance recovery benchmarked against Mountain West Division.</p>
+          </div>
+          <label>Allowance benchmark <select id="benchmarkDivision">
+            <option>Mountain West Division</option>
+            <option>Northern California Division</option>
+            <option>Southern California Division</option>
+            <option>Seattle Division</option>
+            <option>Portland Division</option>
+            <option>Southwest Division</option>
+            <option>Texas Division</option>
+            <option>Jewel-Osco Division</option>
+            <option>Mid-Atlantic Division</option>
+          </select></label>
+        </div>
+        <div class="roi-story">
+          <div><span>No Promo Baseline</span><strong>$4.74M</strong><small>Revenue without markdown support</small></div>
+          <div><span>Promoted Sales</span><strong>$5.40M</strong><small>Revised mixed plan outcome</small></div>
+          <div><span>Incremental Prize</span><strong class="positive">+$660K</strong><small>Revenue lift before cost recovery</small></div>
+          <div><span>Net Investment</span><strong class="negative">-$360.7K</strong><small>Markdown less vendor allowances</small></div>
+          <div><span>Net ROI</span><strong>1.42x</strong><small>Incremental AGP / net investment</small></div>
+        </div>
+        <div class="roi-lines">
+          <div><span>Units lift vs no promo</span><strong class="positive">+812K</strong></div>
+          <div><span>AGP lift vs no promo</span><strong class="positive">+$512K</strong></div>
+          <div><span>Household lift vs no promo</span><strong class="positive">+18.4K</strong></div>
+          <div><span>Allowance Recovery</span><strong id="recoveryScore">Fair</strong></div>
+        </div>
+        </article>
+        <article class="panel interaction-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Complement & Substitute Impact</h2>
+              <p>Halo and cannibalization from NCRCs promoted together.</p>
+            </div>
+            <button id="openInteractions">View partners</button>
+          </div>
+          <div class="interaction-score">
+            <div class="halo"><span>Halo</span><strong>+$18.4K</strong><small>+92 units, +1.8K HHs</small></div>
+            <div class="cannibal"><span>Cannibalization</span><strong>-$148.9</strong><small>-24 units across 5 partners</small></div>
+          </div>
+          <p class="interaction-note">Net demand is slightly negative, while AGP stays positive from mix and funding.</p>
+        </article>
+
+        <article class="panel status-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Execution Status</h2>
+              <p>Downstream readiness across APEX and OMS.</p>
+            </div>
+            <strong>918 NCRCs</strong>
+          </div>
+          <div class="stacked-bar" id="statusBar"></div>
+          <div class="legend-grid" id="statusLegend"></div>
+        </article>
+
+        <article class="panel composition-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Plan Composition</h2>
+              <p>Selected source objective by NCRC.</p>
+            </div>
+            <strong>Mixed objective plan</strong>
+          </div>
+          <div class="stacked-bar" id="compositionBar"></div>
+          <div class="legend-grid" id="compositionLegend"></div>
+        </article>
+
+        <article class="panel roi-panel legacy-roi" hidden>
+          <div class="panel-heading">
+            <div>
+              <h2>Cost of Promotion</h2>
+              <p id="benchmarkTextLegacy">Allowance collection vs Mountain West Division.</p>
+            </div>
+          </div>
+          <div class="roi-number"><span>$714.9K ÷ $360.7K</span><strong>1.98x</strong><small>ROI</small></div>
+          <div class="roi-lines">
+            <div><span>Promo Gross Profit</span><strong>$714.9K</strong></div>
+            <div><span>Markdown Cost</span><strong class="negative">-$514.7K</strong></div>
+            <div><span>Vendor Allowances</span><strong class="positive">+$154.0K</strong></div>
+            <div><span>Allowance Recovery</span><strong id="recoveryScoreLegacy">Fair</strong></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel rollup-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Plan Rollup by Department and Category</h2>
+            <p>Start at total desk or division, then drill into categories and weekly NCRC details. Green deltas compare the revised mixed plan against a no-promotion baseline.</p>
+          </div>
+        </div>
+        <div class="rollup-wrap">
+          <table class="rollup-table">
+            <thead>
+              <tr>
+                <th>Department / Category</th>
+                <th>Coverage</th>
+                <th>Sales</th>
+                <th>Units</th>
+                <th>AGP $</th>
+                <th>AGP %</th>
+                <th>HHs</th>
+                <th>Markdown</th>
+                <th>Allowances</th>
+                <th>Recovery</th>
+                <th>Approved</th>
+              </tr>
+            </thead>
+            <tbody id="rollupRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div class="overlay" id="detailOverlay" hidden>
+      <aside class="detail-drawer">
+        <button class="close-button" id="closeDetail">x</button>
+        <div id="detailContent"></div>
+      </aside>
+    </div>
+
+    <div class="overlay centered" id="notEvaluatedOverlay" hidden>
+      <section class="modal-card">
+        <button class="close-button" id="closeNotEvaluated">x</button>
+        <div class="modal-header">
+          <h2>Pending Plan Submission</h2>
+          <p>124 NCRCs to be submitted to APEX / OMS.</p>
+        </div>
+        <div class="modal-body">
+          <div class="modal-table-wrap">
+            <table>
+              <thead><tr><th>NCRC ID</th><th>Description</th><th>Pack</th><th>Size</th></tr></thead>
+              <tbody id="notEvaluatedRows"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-actions"><button id="closeNotEvaluatedBottom">Close</button></div>
+      </section>
+    </div>
+
+    <div class="overlay centered" id="scopeOverlay" hidden>
+      <section class="modal-card scope-modal">
+        <button class="close-button" id="closeScope">x</button>
+        <div class="modal-header">
+          <h2 id="scopeTitle">Scope Detail</h2>
+          <p id="scopeSub">Identifiers in this desk scope.</p>
+        </div>
+        <div class="modal-body">
+          <div class="modal-table-wrap">
+            <table>
+              <thead><tr><th>Velocity</th><th>Identifier</th><th>Name</th><th>Vendor</th><th>Revenue</th><th>Units</th><th>AGP</th><th>HHs</th></tr></thead>
+              <tbody id="scopeRows"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-actions"><button id="closeScopeBottom">Close</button></div>
+      </section>
+    </div>
+
+    <div class="overlay centered" id="ladderOverlay" hidden>
+      <section class="modal-card ladder-modal">
+        <button class="close-button" id="closeLadder">x</button>
+        <div id="ladderContent"></div>
+      </section>
+    </div>
+
+    <div class="overlay centered" id="interactionsOverlay" hidden>
+      <section class="modal-card interactions-modal">
+        <button class="close-button" id="closeInteractions">x</button>
+        <div class="modal-header">
+          <h2>Complement and Substitute NCRCs</h2>
+          <p>Partner effects by hero NCRC, week, transaction support, and households.</p>
+        </div>
+        <div class="modal-body">
+          <div class="modal-table-wrap">
+            <table>
+              <thead><tr><th>Hero NCRC</th><th>Partner NCRC</th><th>Type</th><th>Score</th><th>Txn Count</th><th>HH Count</th><th>Weeks</th><th>Value</th></tr></thead>
+              <tbody id="interactionRows"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-actions"><button id="closeInteractionsBottom">Close</button></div>
+      </section>
+    </div>
+
+    <script src="promo-plan-status.js"></script>
+  </body>
+</html>

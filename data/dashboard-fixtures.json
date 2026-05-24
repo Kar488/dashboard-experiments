@@ -1,0 +1,156 @@
+{
+  "apiVersion": "dashboard-ui-local-v1",
+  "generatedAt": "2026-05-12T09:30:00+10:00",
+  "requests": {
+    "categoryOverview": {
+      "method": "POST",
+      "url": "/dashboard-ui/api/category-sales",
+      "body": {
+        "screen_name": "cat_insight_and_act_overview",
+        "kpi_card_name": "Category Performance Heatmap",
+        "task_type": "ui_workflow",
+        "DIVISION": "JEWEL",
+        "department": "Produce",
+        "time_period": "last_52_weeks",
+        "comparison": "previous_52weeks"
+      }
+    },
+    "upcPerformance": {
+      "method": "POST",
+      "url": "/dashboard-ui/api/category-sales",
+      "body": {
+        "screen_name": "product_trends_upc_performance_data",
+        "kpi_card_name": "UPC_performance_data",
+        "DIVISION": "JEWEL",
+        "DEPARTMENT": "Produce",
+        "CATEGORY": "APPLES",
+        "time_period": "last_52_weeks",
+        "comparison": "previous_52weeks",
+        "toggle": "cig"
+      }
+    },
+    "vendorPerformance": {
+      "method": "POST",
+      "url": "/dashboard-ui/api/category-sales",
+      "body": {
+        "screen_name": "fiscal_vendor_level_display",
+        "task_type": "ui_workflow",
+        "DIVISION": "JEWEL",
+        "DEPARTMENT": "Produce",
+        "CATEGORY": "ALL",
+        "time_period": "last_52_weeks",
+        "comparison": "previous_52weeks"
+      }
+    },
+    "categories": {
+      "method": "GET",
+      "url": "/dashboard-ui/api/get-categories?department_name=Produce&division_name=JEWEL"
+    }
+  },
+  "responses": {
+    "categoryOverview": {
+      "cache_status": "loaded from local fixture",
+      "cache_key": "tool:ui_workflow:v1:local_category_overview",
+      "data": [
+        {
+          "level": "Division_Department_Category",
+          "Division": "JEWEL",
+          "Department": "Produce",
+          "Category": "CITRUS",
+          "CATEGORY_ID": "8408",
+          "Display_data": {
+            "SALES_P1": 3500000,
+            "SALES_PCT_CHG": 8.1,
+            "UNITS_PCT_CHG": 11.3,
+            "AGP_PCT_CHG": 6.3,
+            "PRIMARY_DRIVER": "Promo growth offset base declines"
+          }
+        },
+        {
+          "level": "Division_Department_Category",
+          "Division": "JEWEL",
+          "Department": "Produce",
+          "Category": "SNACKING",
+          "CATEGORY_ID": "8472",
+          "Display_data": {
+            "SALES_P1": -1300000,
+            "SALES_PCT_CHG": -4.0,
+            "UNITS_PCT_CHG": -3.5,
+            "AGP_PCT_CHG": -2.8,
+            "PRIMARY_DRIVER": "Weaker promotions"
+          }
+        }
+      ]
+    },
+    "upcPerformance": {
+      "cache_status": "loaded from local fixture",
+      "cache_key": "tool:ui_workflow:v1:local_upc_performance",
+      "data": [
+        {
+          "COMMON_ITEM_GROUP_DSC": "King's Hawaiian Rolls 12 OZ",
+          "COMMON_ITEM_GROUP_CD": "3257",
+          "NATIONAL_COMMON_RETAIL_CD": "913",
+          "UPC_NBR": "073210003257",
+          "VENDOR_NM": "OWN BRANDS",
+          "ITEM_ROLE": "BG",
+          "Display_data": {
+            "SALES_P1": 2420000,
+            "SALES_PCT_CHG": 13.1,
+            "UNITS_P1": 918300,
+            "UNITS_PCT_CHG": 11.4,
+            "AGP_PCT_P1": 0.498,
+            "AGP_PCT_CHG": 1.8,
+            "AGP_DOLLAR_P1": 2110000,
+            "ALLOWANCES_P1": 352000,
+            "DEADNET_COST_P1": 510200,
+            "SALES_MIX_P1": 0.432
+          }
+        },
+        {
+          "COMMON_ITEM_GROUP_DSC": "Boar's Head Turkey Breast 1 LB",
+          "COMMON_ITEM_GROUP_CD": "6708",
+          "NATIONAL_COMMON_RETAIL_CD": "159",
+          "UPC_NBR": "0200006708",
+          "VENDOR_NM": "BOAR'S HEAD",
+          "ITEM_ROLE": "FG",
+          "Display_data": {
+            "SALES_P1": 1150000,
+            "SALES_PCT_CHG": -2.4,
+            "UNITS_P1": 487800,
+            "UNITS_PCT_CHG": -15.1,
+            "AGP_PCT_P1": 0.576,
+            "AGP_PCT_CHG": 1.1,
+            "AGP_DOLLAR_P1": 661100,
+            "ALLOWANCES_P1": 24700,
+            "DEADNET_COST_P1": 487600,
+            "SALES_MIX_P1": 0.145
+          }
+        }
+      ]
+    },
+    "vendorPerformance": {
+      "cache_status": "loaded from local fixture",
+      "cache_key": "tool:ui_workflow:v1:local_vendor_performance",
+      "data": [
+        {
+          "VENDOR_NM": "BOAR'S HEAD",
+          "NCRC_COUNT": 159,
+          "HEALTH": "Needs review",
+          "SALES_P1": 31090000,
+          "SALES_PCT_CHG": 10.9,
+          "UNITS_P1": 4410000,
+          "AIV_P1": 7.04,
+          "AGP_PCT_P1": 0.419,
+          "AGP_DOLLAR_P1": 13010000,
+          "COGS_P1": 18080000,
+          "ALLOWANCES_P1": 31700000,
+          "ALLOWANCES_PCT_CHG": -59.2,
+          "PRIMARY_DRIVER": "Funding Decline"
+        }
+      ]
+    },
+    "categories": {
+      "result": [["APPLES", "8402"], ["AVOCADO", "8404"], ["BANANAS", "8406"], ["CITRUS", "8408"]]
+    }
+  }
+}
