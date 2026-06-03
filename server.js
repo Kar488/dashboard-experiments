@@ -11,6 +11,14 @@ const types = {
   ".json": "application/json; charset=utf-8"
 };
 
+// Provider selection: PROMO_PLAN_PROVIDER=real will load the (currently
+// not-implemented) real provider; default is mock. Keeps a developer hook
+// to switch to true forecasting / persistence without touching the routes.
+const promoPlanProvider = process.env.PROMO_PLAN_PROVIDER === "real"
+  ? require("./data/promoPlanRealStore")
+  : require("./data/promoPlanStore");
+const dashboardProvider = require("./data/dashboardStore");
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
@@ -35,6 +43,12 @@ function readJsonBody(request) {
 function loadFixture() {
   const fixturePath = path.join(root, "data", "dashboard-fixtures.json");
   return JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+}
+
+function searchToObject(url) {
+  const out = {};
+  for (const [k, v] of url.searchParams.entries()) out[k] = v;
+  return out;
 }
 
 const server = http.createServer((request, response) => {
@@ -68,6 +82,87 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  // --- 52-week promotional plan -----------------------------------------
+  // Dashboard bootstrap — everything the dashboard's static widgets
+  // need in one call. Moved out of inline constants in the browser-side
+  // JS so the views render purely from API output.
+  if (url.pathname === "/api/dashboard/bootstrap" && request.method === "GET") {
+    try {
+      const data = dashboardProvider.getDashboardBootstrap();
+      sendJson(response, 200, { data });
+    } catch (error) {
+      sendJson(response, 500, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/promo-plan" && request.method === "GET") {
+    try {
+      const filters = searchToObject(url);
+      if (filters.divisions) filters.divisions = filters.divisions.split(",").map((s) => s.trim()).filter(Boolean);
+      const data = promoPlanProvider.getPromoPlan(filters);
+      sendJson(response, 200, { data });
+    } catch (error) {
+      sendJson(response, 500, { error: error.message });
+    }
+    return;
+  }
+
+  // --- Promotion Detail Screen endpoints --------------------------------
+  if (url.pathname === "/api/promotion-detail/options" && request.method === "GET") {
+    try {
+      const data = promoPlanProvider.getPromotionDetailOptions(searchToObject(url));
+      sendJson(response, 200, { data });
+    } catch (error) {
+      sendJson(response, 500, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/promotion-detail/worklist" && request.method === "GET") {
+    try {
+      const data = promoPlanProvider.getPromotionDetailWorklist(searchToObject(url));
+      sendJson(response, 200, { data });
+    } catch (error) {
+      sendJson(response, 500, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/promotion-detail" && request.method === "GET") {
+    try {
+      const data = promoPlanProvider.getPromotionDetail(searchToObject(url));
+      sendJson(response, 200, { data });
+    } catch (error) {
+      sendJson(response, 500, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/promotion-detail/confirm" && request.method === "POST") {
+    readJsonBody(request).then((body) => {
+      try {
+        const data = promoPlanProvider.confirmPromotion(body);
+        sendJson(response, 200, { data });
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/promotion-detail/override" && request.method === "POST") {
+    readJsonBody(request).then((body) => {
+      try {
+        const data = promoPlanProvider.overrideForecast(body);
+        sendJson(response, 200, { data });
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+    });
+    return;
+  }
+
   const requestPath = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname);
   const safePath = path.normalize(requestPath).replace(/^[/\\]+/, "").replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(root, safePath);
@@ -91,5 +186,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`Merchandising dashboard running at http://localhost:${port}`);
+  console.log(`Merchandising dashboard running at http://localhost:${port} (promo-plan provider: ${promoPlanProvider.source})`);
 });

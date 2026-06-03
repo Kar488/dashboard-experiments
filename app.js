@@ -7,7 +7,12 @@ let pendingAssistantContext = null;
 let comparisonMode = "ly";
 let comparisonDivision = "Mountain West Division";
 
-const primaryMetrics = [
+// The page used to define every dataset inline. Those constants now
+// live in data/dashboardStore.js on the server and are fetched via
+// /api/dashboard/bootstrap. We keep this seeded copy as a fallback so
+// the first paint never blanks out if the API fails — but every
+// renderer reads from the API result the moment it lands.
+let primaryMetrics = [
   { label: "Total Sales", icon: "$", value: "$820.39M", previous: "$824.06M", change: "-0.45% (-$3.68M)", accent: "green", trend: [62, 61, 63, 60, 64, 66, 67, 70, 68, 69, 72, 71], split: ["Store $704.8M", "Ecom $115.6M"], drivers: ["Top: Citrus +$3.5M", "Watch: Snacking -$1.3M"], modal: "sales" },
   { label: "Total Units", icon: "U", value: "357.79M", previous: "348.90M", change: "+2.55% (+8.88M)", accent: "blue", trend: [44, 47, 43, 50, 48, 55, 57, 62, 60, 63, 61, 64], split: ["Store 302.1M", "Ecom 55.7M"], drivers: ["Top: Avocado +8.48M", "Watch: Onions -818K"], modal: "units" },
   { label: "AGP", icon: "%", value: "34.02%", previous: "34.30%", change: "-0.25pp (-$2.44M)", accent: "purple", trend: [35, 34, 36, 33, 38, 35, 37, 36, 35, 34, 35, 34], split: ["Store 34.4%", "Ecom 31.8%"], drivers: ["Top: Tropical Fruit +$2.46M", "Watch: Cherries -$2.63M"], modal: "agp" },
@@ -17,7 +22,7 @@ const primaryMetrics = [
   { label: "Market Share", icon: "M", value: "25.88%", previous: "26.20%", change: "-0.3pp (-$4.88M)", accent: "orange", trend: [27, 26.9, 26.7, 26.6, 26.2, 26.1, 25.9, 26.0, 25.8, 25.9, 25.7, 25.88], split: [], drivers: ["Outperforming: 17 categories", "At risk: 19 categories"], modal: "share" }
 ];
 
-const secondaryMetrics = [
+let secondaryMetrics = [
   ["Avg Basket Spend", "$47.82", "$45.67", "+3.2%", "green"],
   ["Items per Basket", "12.4", "13.5", "-1.1%", "red"],
   ["Household Trips/Week", "2.8", "2.6", "+5.3%", "green"],
@@ -27,7 +32,7 @@ const secondaryMetrics = [
   ["% Revenue from Top 100 Items", "67.8%", "68.3%", "-0.5%", "red"]
 ];
 
-const detailViews = {
+let detailViews = {
   top: [
     ["King's Hawaiian Rolls 12 OZ", "3257 / King's Hawaiian / NCRC 913 / UPC 073210003257", "OWN BRANDS", "BG", "$2.42M", "+13.1%", "918.3K", "+11.4%", "49.8%", "+1.8pp", "$2.11M", "+15.5%", "43.2%", "+2.2pp", "31.2%", "+0.6pp", "$352.0K", "+42.7%", "$1.13M", "+57.7%"],
     ["Boar's Head Turkey Breast 1 LB", "6708 / Boar's Head / NCRC 159 / UPC 0200006708", "BOAR'S HEAD", "FG", "$1.15M", "-2.4%", "487.8K", "-15.1%", "57.6%", "+1.1pp", "$661.1K", "+6.2%", "14.5%", "-0.6pp", "25.7%", "-0.3pp", "$24.7K", "-49.0%", "$66.1K", "-50.5%"],
@@ -48,7 +53,7 @@ const detailViews = {
   ]
 };
 
-const performanceTables = {
+let performanceTables = {
   sales: [
     ["Boar's Head Turkey Breast 1 LB", "$1.15M", "$1.27M", "-$120K", "-9.4%", "-2.4%"],
     ["Private Label Deli Ham 1 LB", "$982K", "$904K", "+$78K", "+8.6%", "+8.6%"],
@@ -67,7 +72,7 @@ const performanceTables = {
   ]
 };
 
-const promoRows = [
+let promoRows = [
   ["Feature", "42", "$1.24M", "+15.6%", "612K", "+11.1%", "$422K", "+7.4%"],
   ["Digital Coupon", "18", "$882K", "+12.3%", "344K", "+7.2%", "$301K", "+4.1%"],
   ["BOGO", "25", "$714K", "+5.4%", "286K", "+2.1%", "$245K", "+1.8%"],
@@ -75,7 +80,7 @@ const promoRows = [
   ["Price Discount", "27", "$439K", "-5.8%", "181K", "-1.9%", "$141K", "-4.6%"]
 ];
 
-const circularRows = [
+let circularRows = [
   ["Boar's Head Turkey Breast 1 LB", "$661K", "287K", "$381K"],
   ["Kretschmar Ham Off The Bone 1 LB", "$652K", "241K", "$393K"],
   ["Private Label Deli Ham 1 LB", "$472K", "199K", "$227K"],
@@ -83,7 +88,7 @@ const circularRows = [
   ["TopLat", "$210K", "91K", "$74K"]
 ];
 
-const modalDrivers = {
+let modalDrivers = {
   sales: ["8408 - CITRUS|Promo growth offset base declines to lift sales 8.07%.|+8.1%|+$3.5M", "8404 - AVOCADO|Sales up 6.63% on 73.08% promo unit surge.|+6.6%|+$1.6M", "8406 - BANANAS|Sales up 5.58% despite units down 4.98%.|+5.6%|+$1.6M", "8472 - SNACKING|Sales declined on weaker promotions.|-4.0%|-$1.3M"],
   units: ["8404 - AVOCADO|Units up 48% on 73% stronger promo volume.|+48.4%|+8.48M", "8408 - CITRUS|Double-digit units from promo volume.|+11.3%|+3.96M", "8445 - ONIONS|Promos and base both declined.|-7.0%|818K"],
   agp: ["8415 - TROPICAL FRUIT|AGP up on lower COGS and higher sales.|+620.4%|$2.46M", "8406 - BANANAS|Sales and AGP improved with AIV gains.|+16.3%|$1.88M", "8419 - CHERRIES|COGS pressure reduced AGP dollars.|-64.6%|-$2.63M"],
@@ -91,8 +96,8 @@ const modalDrivers = {
   share: ["Outperforming|17 categories are gaining faster than competitors.|+12.75pp|$71.0K", "At Risk|19 categories declining faster than market.|-4.30pp|-$2.9K", "Contracting Market|Fresh cut outperforming in shrinking category.|+0.03pp|$61.0K"]
 };
 
-const currentTrend = [28, 26, 30, 25, 29, 24, 21, 28, 29, 32, 35, 29, 31, 28, 33, 28, 58, 76, 59, 64, 31, 29, 32, 34, 31, 29, 28, 33, 31, 42, 37, 66, 39, 24, 20, 22, 18, 17, 15, 14, 16, 15, 17, 16, 18, 19, 20, 11, 14, 15];
-const lastTrend = [41, 36, 32, 35, 34, 39, 31, 29, 31, 30, 34, 32, 29, 31, 27, 28, 39, 55, 51, 61, 52, 39, 38, 32, 34, 28, 29, 31, 29, 36, 32, 52, 64, 27, 28, 31, 27, 26, 22, 18, 19, 17, 21, 26, 24, 27, 23, 20, 22, 24];
+let currentTrend = [28, 26, 30, 25, 29, 24, 21, 28, 29, 32, 35, 29, 31, 28, 33, 28, 58, 76, 59, 64, 31, 29, 32, 34, 31, 29, 28, 33, 31, 42, 37, 66, 39, 24, 20, 22, 18, 17, 15, 14, 16, 15, 17, 16, 18, 19, 20, 11, 14, 15];
+let lastTrend = [41, 36, 32, 35, 34, 39, 31, 29, 31, 30, 34, 32, 29, 31, 27, 28, 39, 55, 51, 61, 52, 39, 38, 32, 34, 28, 29, 31, 29, 36, 32, 52, 64, 27, 28, 31, 27, 26, 22, 18, 19, 17, 21, 26, 24, 27, 23, 20, 22, 24];
 
 function pointClass(value) {
   return String(value).trim().startsWith("-") ? "negative" : "positive";
@@ -353,14 +358,43 @@ function openScorecard(type = "item", row) {
 
 function openDriverModal(kind) {
   const rows = modalDrivers[kind] || modalDrivers.sales;
-  const titles = { sales: "Sales Drivers", units: "Unit Drivers", agp: "AGP Drivers", household: "Household Penetration Drivers", share: "Market Share Buckets" };
+  const titles = { sales: "Sales Drivers Analysis", units: "Unit Drivers Analysis", agp: "AGP Drivers Analysis", household: "Household Penetration Drivers", share: "Market Share Buckets" };
+  const subtitles = { sales: "Category-level drivers of sales change", units: "Category-level drivers of unit change", agp: "Category-level drivers of AGP change", household: "Category-level drivers of household penetration change", share: "Buckets of market share movement" };
   document.getElementById("scoreContent").innerHTML = `
-    <div class="score-title"><h2 id="scoreTitle">${titles[kind] || "Drivers"} Analysis</h2><p class="score-sub">Category-level drivers based on ${selectedPeriod} vs ${comparisonPeriod}</p></div>
-    ${rows.map((entry) => {
-      const [name, impact, change, dollars] = entry.split("|");
-      return `<div class="driver-line"><h2>${name}</h2><p>${impact}</p><strong class="${pointClass(change)}">${change}<br>${dollars}</strong></div>`;
-    }).join("")}
-    <div class="score-actions"><button>Export</button><button id="modalCloseInline">Close</button></div>`;
+    <div class="drivers-modal">
+      <header class="drivers-head">
+        <div>
+          <h2 id="scoreTitle">${titles[kind] || "Drivers Analysis"}</h2>
+          <p>${subtitles[kind] || "Category-level drivers"}</p>
+        </div>
+      </header>
+      <div class="drivers-list">
+        ${rows.map((entry) => {
+          const [name, impact, change, dollars] = entry.split("|");
+          const positive = !String(change).trim().startsWith("-");
+          const arrow = positive ? "&uarr;" : "&darr;";
+          return `
+            <div class="drivers-row ${positive ? "is-positive" : "is-negative"}">
+              <div class="drivers-row-text">
+                <h3>${name} <button type="button" class="drivers-info" aria-label="More about this driver">i</button></h3>
+                <p>Impact: ${impact}</p>
+              </div>
+              <div class="drivers-row-delta">
+                <span class="drivers-delta-pct ${positive ? "positive" : "negative"}">${arrow} ${change}</span>
+                <span class="drivers-delta-dollar">${dollars}</span>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      <footer class="drivers-foot">
+        <div class="drivers-foot-note">
+          <p>Analysis for <strong>JEWEL</strong> based on <strong>${selectedPeriod}</strong> performance vs <strong>${comparisonPeriod}</strong>.</p>
+          <p><em>* Data reflects Same Stores only.</em></p>
+        </div>
+        <button type="button" class="drivers-close" id="modalCloseInline">Close</button>
+      </footer>
+    </div>`;
   document.getElementById("scoreOverlay").hidden = false;
   document.getElementById("modalCloseInline").addEventListener("click", closeScorecard);
 }
@@ -732,8 +766,42 @@ function bindEvents() {
   });
 }
 
-renderSummaryTables();
-renderItemRows();
-renderWeekRows();
-bindEvents();
+window.detailViews = detailViews;
+
+// Pull every static dataset from /api/dashboard/bootstrap (served by
+// data/dashboardStore.js) and overwrite the locals before first paint.
+// On failure we fall back to whatever was seeded inline at the top of
+// this file so the page is never blank.
+async function bootstrapDashboardData() {
+  try {
+    const response = await fetch("/api/dashboard/bootstrap", { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const data = payload && payload.data;
+    if (!data) return;
+    if (Array.isArray(data.primaryMetrics))   primaryMetrics = data.primaryMetrics;
+    if (Array.isArray(data.secondaryMetrics)) secondaryMetrics = data.secondaryMetrics;
+    if (data.detailViews)                     { detailViews = data.detailViews; window.detailViews = detailViews; }
+    if (data.performanceTables)               performanceTables = data.performanceTables;
+    if (Array.isArray(data.promoRows))        promoRows = data.promoRows;
+    if (Array.isArray(data.circularRows))     circularRows = data.circularRows;
+    if (data.modalDrivers)                    modalDrivers = data.modalDrivers;
+    if (Array.isArray(data.currentTrend))     currentTrend = data.currentTrend;
+    if (Array.isArray(data.lastTrend))        lastTrend = data.lastTrend;
+    // Expose the rest of the payload for dashboard-extras.js to read.
+    window.__dashboardBootstrap = data;
+    // Notify other scripts so they can re-render their widgets.
+    document.dispatchEvent(new CustomEvent("dashboard:bootstrap-ready", { detail: data }));
+  } catch (error) {
+    console.warn("Dashboard bootstrap failed; using seeded fallback values.", error);
+  }
+}
+
+(async () => {
+  await bootstrapDashboardData();
+  renderSummaryTables();
+  renderItemRows();
+  renderWeekRows();
+  bindEvents();
+})();
 loadDashboardData();

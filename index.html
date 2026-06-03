@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Merchandising Dashboard</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="promo-plan.css" />
   </head>
   <body>
     <header class="topbar">
@@ -29,8 +30,8 @@
         <div><strong>Calendar:</strong> Fiscal</div>
         <div><strong>Comparison:</strong> <span id="comparisonText">Last Year 52 Weeks</span></div>
         <div><strong>Department:</strong> 370 - Deli/Prepared Foods</div>
-        <label class="mode-toggle"><input type="checkbox" id="offlineToggle" /> Offline Mode</label>
-        <span class="data-mode" id="dataMode">Real-time mode: local API</span>
+        <label class="mode-toggle" hidden><input type="checkbox" id="offlineToggle" /></label>
+        <span class="data-mode" id="dataMode" hidden></span>
       </section>
 
       <section class="kpi-grid" id="primaryMetrics" aria-label="Primary metrics"></section>
@@ -57,17 +58,46 @@
         </article>
       </section>
 
-      <section class="panel promo-panel">
+      <section class="panel weekly-plan-panel" aria-label="52 Week Promotional Plan">
         <div class="panel-heading">
+          <div>
+            <h2>52 Week Promotional Plan</h2>
+            <p id="promoPlanHelper">Store tactic by week. Showing 2 divisions as preview. Weeks 1-6 are locked actuals; weeks 7-52 are forecast-prefilled from LY trends.</p>
+          </div>
+          <div class="plan-toggle-cluster">
+            <div class="metric-toggles plan-mode-chips" aria-label="View mode">
+              <button class="active" type="button" data-plan-mode="plan">View plan</button>
+              <button type="button" data-plan-mode="metrics">View metrics</button>
+            </div>
+            <div class="segmented table-view-toggle">
+              <button class="active" type="button" data-promo-view="division">Divisions</button>
+              <button type="button" data-promo-view="vendor">Vendors</button>
+            </div>
+            <button class="detail-toggle-button download-sheet-button" type="button" data-download-sheet title="Download a CSV deal-sheet seeded for the active scenario"><span class="download-glyph" aria-hidden="true">⇩</span> Download spreadsheet</button>
+            <button class="detail-toggle-button" type="button" id="togglePromoPlan" aria-expanded="false">+ Show all divisions</button>
+            <button class="create-scenario-button" type="button" id="openScenarioBuilder" aria-haspopup="dialog" aria-expanded="false">Create additional scenarios +</button>
+          </div>
+        </div>
+        <div id="scenarioStrip" class="scenario-strip" aria-label="Plan scenarios"></div>
+        <div id="weeklyPlanTable" class="projection-wrap"></div>
+      </section>
+
+      <section class="panel promo-panel" id="promoExecPanel">
+        <div class="panel-heading promo-exec-heading">
           <div>
             <h2>Promotion Execution vs Plan</h2>
             <p>Predicted recommendations compared with actuals for the selected period.</p>
           </div>
+          <button type="button" class="ghost-button promo-exec-toggle" id="promoExecToggle" aria-expanded="true" aria-controls="promoExecBody">Collapse</button>
         </div>
-        <div class="promo-layout">
+        <div class="promo-exec-summary" id="promoExecSummary" hidden></div>
+        <div id="promoExecBody">
+        <article class="mix-card" id="deptMixCard"></article>
+        <!-- Original prediction-card row kept in the DOM so renderMixTiles can read the data-* attrs; visually hidden because the 2x2 tile grid above already renders them. -->
+        <div class="promo-layout" hidden>
           <article class="prediction-card">
             <div class="prediction-header">
-              <div><h3>Revenue Forecast vs Actual</h3><p>Actual $5.41M vs forecast $6.02M</p></div>
+              <div><h3>Sales Forecast vs Actual</h3><p>Actual $5.41M vs forecast $6.02M</p></div>
               <strong class="negative">-$0.61M<br><span>-10.2%</span></strong>
             </div>
             <svg class="dual-chart" data-actual="65,70,73,92,79,68,71,76,74,67,70,79,83,75,72,69,74,68" data-compare="72,75,78,88,84,80,78,82,86,83,84,91,94,88,86,84,87,86"></svg>
@@ -113,6 +143,7 @@
             <div class="compact-table" id="circularTable"></div>
           </article>
         </div>
+        </div><!-- /#promoExecBody -->
       </section>
 
       <section class="panel detail-panel">
@@ -152,65 +183,106 @@
         </div>
       </section>
 
-      <section class="panel trends-panel">
-        <div class="panel-heading">
-          <div>
-            <h2>Weekly P&L and KPI Trends</h2>
-            <p id="trendSubtitle">Filtered by the page period and comparison. Search by UPC, CIG, or NCRC to focus the P&L view.</p>
-          </div>
-          <div class="detail-actions trend-search">
-            <select id="trendSearchType" aria-label="Search type"><option>CIG</option><option>UPC</option><option>NCRC</option></select>
-            <input id="trendSearch" type="search" placeholder="Search CIG, UPC, or NCRC" />
-            <button class="export-button">Export</button>
-          </div>
-        </div>
-        <div class="trend-filters" aria-label="Trend table filters">
-          <div class="role-chips">
-            <span>Item Role:</span>
-            <button class="active" type="button">All (41)</button>
-            <button type="button">Background (33)</button>
-            <button type="button">Foreground (7)</button>
-            <button type="button">Critical (0)</button>
-            <button type="button">KV1 (1)</button>
-          </div>
-          <div class="filter-row">
-            <label>ASM <select><option>Eric Hacker</option></select></label>
-            <label>Category <select><option>8402 - Apples</option></select></label>
-            <label>Class <select><option>All</option><option>Apples Core</option></select></label>
-            <label>Vendor <select><option>All</option><option>Stemilt</option><option>Lil Snappers</option></select></label>
-            <label>Store <select><option>All Stores</option></select></label>
-            <label>Compare <select id="comparisonMode"><option value="ly">LY period</option><option value="division">Another division</option></select></label>
-            <label id="divisionCompareLabel" hidden>Division <select id="divisionCompare">
-              <option>Mountain West Division</option>
-              <option>Northern California Division</option>
-              <option>Southern California Division</option>
-              <option>Seattle Division</option>
-              <option>Portland Division</option>
-              <option>Southwest Division</option>
-              <option>Texas Division</option>
-              <option>Jewel-Osco Division</option>
-              <option>Shaw's and Star Market Division</option>
-              <option>Mid-Atlantic Division</option>
-              <option>United Division</option>
-            </select></label>
-          </div>
-        </div>
-        <svg class="large-chart" id="weeklyTrend"></svg>
-        <div class="week-table-wrap">
-          <table class="week-table">
-            <thead>
-              <tr><th>P&L / KPI</th><th id="currentCompareHeader">Current<br><small>vs LY period</small></th><th>W22</th><th>W23</th><th>W24</th><th>W25</th><th>W26</th><th>W27</th><th>W28</th><th>W29</th><th>Total</th></tr>
-            </thead>
-            <tbody id="weekRows"></tbody>
-          </table>
-        </div>
+      <section class="panel trends-panel" id="weeklyPLPanel">
+        <!-- Content rendered by dashboard-extras.js -->
+        <!-- Hidden legacy stubs so the original app.js render calls still find their targets without throwing. -->
+        <div id="weeklyTrend" hidden></div>
+        <div id="weekRows" hidden></div>
       </section>
+
+      <div class="scenario-popover" id="scenarioPopover" hidden role="dialog" aria-label="Create Scenario">
+        <div class="scenario-popover-arrow" aria-hidden="true"></div>
+        <header class="scenario-popover-head">
+          <div>
+            <strong>Create Scenario</strong>
+            <small>Locked inputs stay pinned while related recommended ranges and unlocked values respond to your changes.</small>
+          </div>
+          <button class="scenario-popover-close" type="button" data-close-scenario aria-label="Close">x</button>
+        </header>
+        <form class="scenario-form" id="scenarioForm">
+          <label class="scenario-field"><span>Scenario name</span><input id="scenarioName" type="text" maxlength="40" placeholder="Scenario 1" autocomplete="off" /></label>
+          <label class="scenario-field"><span>Optimise for objective</span>
+            <select id="scenarioObjective">
+              <option value="sales" selected>Sales</option>
+              <option value="units">Units</option>
+              <option value="agp">AGP</option>
+            </select>
+          </label>
+          <label class="scenario-field"><span>Vendor</span>
+            <select id="scenarioVendor"><option value="All Vendors" selected>All Vendors</option></select>
+          </label>
+          <button class="scenario-custom-toggle" type="button" id="scenarioCustomToggle" aria-pressed="false"><i class="lock-symbol" aria-hidden="true"></i> Enter custom values</button>
+          <label class="scenario-lever">
+            <span class="scenario-lever-label">VLC EQ Unit</span><output id="vlcOutput" class="scenario-lever-out">2.10</output>
+            <input class="scenario-lever-input" id="vlcCustom" type="number" step="0.01" value="2.10" hidden />
+            <div class="range-wrap">
+              <input id="vlcLever" type="range" min="1.80" max="2.60" step="0.05" value="2.10" list="vlcTicks" />
+              <i class="rec-min-dot" data-label="$2.05"></i><i class="rec-max-dot" data-label="$2.26"></i>
+            </div>
+            <span class="lever-min">$1.80</span><span class="lever-max">$2.60</span>
+          </label>
+          <label class="scenario-lever">
+            <span class="scenario-lever-label">Avg CPI</span><output id="cpiOutput" class="scenario-lever-out">120</output>
+            <input class="scenario-lever-input" id="cpiCustom" type="number" step="1" value="120" hidden />
+            <div class="range-wrap">
+              <input id="cpiLever" type="range" min="0" max="250" step="5" value="120" />
+              <i class="rec-min-dot" data-label="88 bps"></i><i class="rec-max-dot" data-label="138 bps"></i>
+            </div>
+            <span class="lever-min">0 bps</span><span class="lever-max">250 bps</span>
+          </label>
+          <label class="scenario-lever">
+            <span class="scenario-lever-label">Avg Promo depth</span><output id="depthOutput" class="scenario-lever-out">20</output>
+            <input class="scenario-lever-input" id="depthCustom" type="number" step="1" value="20" hidden />
+            <div class="range-wrap">
+              <input id="depthLever" type="range" min="0" max="70" step="5" value="20" />
+              <i class="rec-min-dot" data-label="12%"></i><i class="rec-max-dot" data-label="30%"></i>
+            </div>
+            <span class="lever-min">0%</span><span class="lever-max">70%</span>
+          </label>
+          <label class="scenario-lever">
+            <span class="scenario-lever-label">Avg Promo Freq</span><output id="freqOutput" class="scenario-lever-out">12</output>
+            <input class="scenario-lever-input" id="freqCustom" type="number" step="1" value="12" hidden />
+            <div class="range-wrap">
+              <input id="freqLever" type="range" min="1" max="52" step="1" value="12" />
+              <i class="rec-min-dot" data-label="8 wks"></i><i class="rec-max-dot" data-label="19 wks"></i>
+            </div>
+            <span class="lever-min">1 wk</span><span class="lever-max">52 wks</span>
+          </label>
+          <p class="scenario-range-note" id="scenarioRangeNote">Higher CPI implies lighter promo depth and frequency unless custom inputs are locked.</p>
+          <button class="scenario-submit" type="submit">Add Scenario</button>
+        </form>
+      </div>
+
+      <div class="overlay drawer-overlay" id="periodDrillOverlay" hidden>
+        <aside class="drawer wide-drawer period-drill-drawer" role="dialog" aria-modal="true" aria-labelledby="periodDrillTitle">
+          <button class="close-button" type="button" data-close="periodDrillOverlay" aria-label="Close">x</button>
+          <div id="periodDrillContent" class="period-drill-content"></div>
+        </aside>
+      </div>
     </main>
 
     <div class="overlay" id="scoreOverlay" hidden>
       <aside class="scorecard" role="dialog" aria-modal="true" aria-labelledby="scoreTitle">
         <button class="close-button" id="closeScorecard" aria-label="Close">x</button>
         <div id="scoreContent"></div>
+      </aside>
+    </div>
+
+    <div class="plan-cell-popover" id="planCellPopover" hidden></div>
+
+    <div class="overlay drawer-overlay" id="showAllOverlay" hidden>
+      <aside class="drawer wide-drawer show-all-drawer" role="dialog" aria-modal="true" aria-labelledby="showAllTitle">
+        <button class="close-button" type="button" data-close="showAllOverlay" aria-label="Close">x</button>
+        <div id="showAllContent" class="show-all-content"></div>
+      </aside>
+    </div>
+
+    <div class="overlay drawer-overlay" id="promoDetailOverlay" hidden>
+      <aside class="drawer wide-drawer promo-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="promoDetailTitle">
+        <button class="close-button" type="button" data-close="promoDetailOverlay" aria-label="Close">x</button>
+        <div id="promoDetailContent" class="promo-detail-content" data-loading="true">
+          <div class="promo-detail-loader"><span></span>Loading promotion detail&hellip;</div>
+        </div>
       </aside>
     </div>
 
@@ -227,5 +299,11 @@
     </aside>
 
     <script src="app.js"></script>
+    <script src="vendor/react.production.min.js"></script>
+    <script src="vendor/react-dom.production.min.js"></script>
+    <script src="vendor/prop-types.min.js"></script>
+    <script src="vendor/recharts.js"></script>
+    <script src="promo-plan.js"></script>
+    <script src="dashboard-extras.js"></script>
   </body>
 </html>
