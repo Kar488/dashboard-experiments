@@ -136,11 +136,75 @@
     return new Set(order.slice(0, events));
   }
 
+  /* -------- interaction-aware 52-week scheduling (the optimiser's real placement) --------
+     Models the two learned effects directly in the plan:
+       • Cannibalisation — items in the SAME cluster are rivals, so they are staggered onto
+         different weeks. The one unavoidable seasonal peak they both want is shared with
+         offset depths (deepen the lead item, soften the rival).
+       • Halo — complementary items (same priority rank across DIFFERENT clusters) are
+         co-promoted on shared anchor weeks (key retail events) to capture attach lift.
+     The interactions panel reads this same plan, so it is a literal readout of the grid. */
+  function clusterSort(members) {
+    return members.slice().sort((a, b) => (a.hero !== b.hero ? (a.hero ? -1 : 1) : (a.bin - b.bin || a.uid.localeCompare(b.uid))));
+  }
+  function rankedClustersOf(cat) {
+    const m = {}; cat.items.forEach((o) => { (m[o.cluster] = m[o.cluster] || []).push(o); });
+    Object.keys(m).forEach((k) => { m[k] = clusterSort(m[k]); });
+    return m;
+  }
+  function coPromoAnchors() {
+    const out = [], seen = {};
+    RETAIL_EVENTS.map((e) => e.wk - 1).concat(rankedWeeks("bar")).forEach((w) => { if (!seen[w]) { seen[w] = 1; out.push(w); } });
+    return out;
+  }
+  function buildSchedule(cat, map) {
+    const ranked = rankedClustersOf(cat), clusters = Object.keys(ranked);
+    const nRanks = Math.max.apply(null, clusters.map((k) => ranked[k].length));
+    const anchors = coPromoAnchors(), HALO_PER = 2, sched = {};
+    const evOf = (m) => effective(m, map).events;
+    // 1. halo anchors aligned by rank → same rank in different clusters co-promotes; different rank never collides
+    clusters.forEach((k) => ranked[k].forEach((m, r) => {
+      const ev = evOf(m), s = sched[m.uid] = { weeks: new Set(), offset: {}, rank: r, cluster: k };
+      for (let j = 0; j < HALO_PER; j++) { const idx = r + j * nRanks; if (idx < anchors.length && s.weeks.size < ev) s.weeks.add(anchors[idx]); }
+    }));
+    // 2. within each cluster: one shared seasonal peak (depths offset), then stagger the rest
+    clusters.forEach((k) => {
+      const members = ranked[k], order = rankedWeeks(members[0].form);
+      if (members.length >= 2) {
+        const peak = order[0], t = members[0], s2 = members[1];
+        sched[t.uid].weeks.add(peak); sched[t.uid].offset[peak] = 0.38;
+        sched[s2.uid].weeks.add(peak); sched[s2.uid].offset[peak] = 0.12;
+      }
+      const used = new Set(); members.forEach((m) => sched[m.uid].weeks.forEach((w) => used.add(w)));
+      let oi = 0;
+      while (members.some((m) => sched[m.uid].weeks.size < evOf(m)) && oi < order.length) {
+        const w = order[oi++];
+        if (used.has(w)) continue; // keep rivals on different weeks
+        const cand = members.filter((m) => sched[m.uid].weeks.size < evOf(m));
+        if (!cand.length) break;
+        cand.sort((a, b) => (evOf(a) - sched[a.uid].weeks.size) - (evOf(b) - sched[b.uid].weeks.size));
+        const target = cand[cand.length - 1]; // greatest remaining need
+        sched[target.uid].weeks.add(w); used.add(w);
+      }
+    });
+    return sched;
+  }
+  let _schedCache = null;
+  function scheduleFor(cat, map) {
+    const key = cat.id + "|" + cat.items.map((o) => effective(o, map).events).join(",");
+    if (_schedCache && _schedCache.key === key) return _schedCache.sched;
+    _schedCache = { key, sched: buildSchedule(cat, map) };
+    return _schedCache.sched;
+  }
+  function rankedClusters(catId) { return rankedClustersOf(DATA[catId || state.categoryId]); }
+
   // 52-week tactic plan for an NCRC (optimised). 'ly' => last-year placement/posture.
   function weekPlan(o, map, ly) {
     const e = ly ? { events: o.lyEvents, depth: o.lyDepth } : effective(o, map);
-    const weeks = pickWeeks(o.form, e.events, ly ? "shift" : "top");
     const h = hashStr(o.uid);
+    let weeks, offset = {};
+    if (ly) { weeks = pickWeeks(o.form, e.events, "shift"); }
+    else { const s = scheduleFor(DATA[o.uid.split("-")[0]], map)[o.uid] || { weeks: new Set(), offset: {} }; weeks = s.weeks; offset = s.offset; }
     const arr = [];
     for (let w = 0; w < 52; w++) {
       const promoted = weeks.has(w), locked = w < CURRENT_WEEK;
@@ -148,7 +212,7 @@
       if (promoted) {
         offer = OFFERS[(w + h) % OFFERS.length];
         store = STORE_TACTICS[offer.store];
-        depth = snapDepth((offer.depth + e.depth) / 2);
+        depth = offset[w] != null ? offset[w] : snapDepth((offer.depth + e.depth) / 2);
         if (!ly && offer.digital && ((w + o.bin) % 2 === 0)) { digital = [offer.digital]; if ((w + h) % 3 === 0) digital.push("PERS"); }
         if (ly && (w % 2 === 0)) digital = ["ID"];
       }
@@ -304,8 +368,9 @@
     draft: {}, scenarios: [], scnSeq: 0, activeScenario: "base",
     showAllow: false, flip: {},
     res: { vendor: "all", binBy: null, bin: "all" },
+    ix: { binBy: "sales", bin: "1", ncrc: "", open: false },
     explain: { m: null, b: "plan", scope: "all" },
-    cf: { brandA: "Mars", brandB: "Snickers", eventsA: 30, eventsB: 32, option: "seasonal" }
+    cf: { strategy: "optimized", clustersOpen: false, expanded: {}, tab: {}, approved: {}, molOpen: false, focal: null }
   };
   function cat() { return DATA[state.categoryId]; }
   function draftOf(uid) { return state.draft[uid] || (state.draft[uid] = {}); }
@@ -354,7 +419,7 @@
     state, DATA, CATEGORIES, OBJECTIVES, STEPS, GUARDRAIL_GROUPS, CLUSTER_LABEL, CURVE, SEASON, OFFERS, STORE_TACTICS, DIGITAL_NAMES, DEPTH_LADDER, CURRENT_WEEK,
     cat, draftOf, displayMap, isDirty, isEdited, objMeta, objVal, ranges, askContext,
     effective, resultFor, lyResult, noPromoResult, respond, deadNetOf, promoPriceOf, applyLadder,
-    weekPlan, weeklyTrend, weeklySeries, binsFor, displayTactic, snapDepth, RETAIL_EVENTS,
+    weekPlan, weeklyTrend, weeklySeries, binsFor, displayTactic, snapDepth, RETAIL_EVENTS, rankedClusters,
     guardrailCount, findGuardrail, flaggedFor,
     fmt: { m: fmtM, u: fmtU, price: fmtPrice, pct: fmtPct, pctPlain: fmtPctPlain },
     util: { clamp, round, clone, hashStr },
@@ -423,7 +488,7 @@
       '<table class="np-modal-table"><thead><tr><th>NCRC</th><th>Vendor</th><th>Item</th><th>Discovered value</th></tr></thead><tbody>' +
       flagged.map((f) => "<tr><td class=\"np-ss-mono\">" + f.ncrc + "</td><td>" + f.vendor + "</td><td>" + f.item + "</td><td><b>" + f.value + "</b></td></tr>").join("") + "</tbody></table>" +
       '<p class="np-foot">⚠ ' + g.danger + "</p>";
-    modal.hidden = false; scrim.hidden = false;
+    modal.hidden = false; scrim.hidden = false; document.body.classList.add("np-noscroll");
     modal.querySelector(".np-modal-close").onclick = closeOverlays;
     scrim.onclick = closeOverlays;
   }
@@ -441,7 +506,7 @@
       '<div class="np-ask-why"><h4>Why we\'re ' + (ctx.dA >= 0 ? "up" : "down") + " vs last year</h4><ul>" + ctx.reasons.map((r) => "<li>" + r + "</li>").join("") + "</ul></div>" +
       '<div class="np-ask-chips"><button class="np-ask-chip">Compare tactic mix vs LY</button><button class="np-ask-chip">What if I add 2 events?</button><button class="np-ask-chip">Show cannibalisation peers</button></div>' +
       '<div class="np-ask-input"><input type="text" placeholder="Ask a follow-up about ' + o.item + '…" /><button class="primary-button" type="button">Ask</button></div>';
-    drawer.hidden = false; scrim.hidden = false; drawer.classList.add("is-open");
+    drawer.hidden = false; scrim.hidden = false; drawer.classList.add("is-open"); document.body.classList.add("np-noscroll");
     drawer.querySelector(".np-ask-close").onclick = closeOverlays;
     scrim.onclick = closeOverlays;
   }
@@ -449,6 +514,7 @@
   function closeOverlays() {
     ["npDrawer", "npDrawerScrim", "npModal", "npModalScrim", "npCtxMenu", "npCellHint", "npFcPop"].forEach((id) => { const e = document.getElementById(id); if (e) e.hidden = true; });
     const d = document.getElementById("npDrawer"); if (d) d.classList.remove("is-open");
+    document.body.classList.remove("np-noscroll");
   }
 
   /* ------------------------------------------------------------- render all */

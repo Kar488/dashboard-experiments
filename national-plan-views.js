@@ -306,7 +306,7 @@
     if (!items.length) body = '<div class="np-empty">No NCRCs match these filters.</div>';
     items.forEach((o) => { if (o.vendor !== lastVendor) { lastVendor = o.vendor; body += '<div class="np-rc-vendor">' + esc(o.vendor) + "</div>"; } body += resultCard(o, map, bins, binBy); });
     const sd = exSummaryData(items, map);
-    host.innerHTML = exBandHTML(sd) +
+    host.innerHTML = exBandHTML(sd) + interactionsPanel(NP.cat()) +
       '<section class="panel np-results-panel">' +
       '<div class="np-results-head">' +
         '<div class="np-rhead-top"><h2 class="np-rhead-title">52-week plan — store &amp; digital tactics</h2>' +
@@ -325,6 +325,8 @@
     const v = host.querySelector("#npResVendor"); if (v) v.onchange = () => { NP.state.res.vendor = v.value; NP.renderAll(); };
     host.querySelectorAll("[data-binby]").forEach((b) => b.onclick = () => { NP.state.res.binBy = b.dataset.binby; NP.renderAll(); });
     host.querySelectorAll("[data-bin]").forEach((b) => b.onclick = () => { NP.state.res.bin = b.dataset.bin; NP.renderAll(); });
+    bindInteractions(host);
+    host.querySelectorAll("[data-week]").forEach((el) => el.onclick = (e) => { e.stopPropagation(); const p = el.dataset.week.split("|"); openWeek(p[0], p[1], +p[2]); });
     host.addEventListener("mousemove", onSparkMove);
     host.addEventListener("mouseleave", clearSpark);
     // reveal the pinned mini-summary once the full band scrolls under the sticky header
@@ -393,15 +395,10 @@
   function resultCard(o, map, bins, binBy) {
     const plan = NP.resultFor(o, map);
     const wk = NP.weekPlan(o, map, false), evWeeks = new Set(NP.RETAIL_EVENTS.map((e) => e.wk));
-    const cells = wk.map((c, w) => {
-      const evCls = evWeeks.has(w) ? " np-wk-ev" : "";
-      if (!c.promoted) return '<span class="np-wk np-wk-none' + (c.locked ? " np-wk-locked" : "") + evCls + '" title="Wk ' + c.week + ' · no promo"></span>';
-      const tip = "Wk " + c.week + " · " + c.offer.label + " · " + (c.depth * 100).toFixed(0) + "% off · Store: " + c.store.name + (c.digital.length ? " · Digital: " + c.digital.map((d) => NP.DIGITAL_NAMES[d]).join(", ") : "");
-      return '<span class="np-wk tactic-' + c.store.className + (c.locked ? " np-wk-locked" : "") + evCls + '" title="' + esc(tip) + '">' + (c.digital.length ? '<i class="np-wk-dot"></i>' : "") + "</span>";
-    }).join("");
+    const cells = wk.map((c, w) => weekCell(c, evWeeks.has(w), o.uid, "plan")).join("");
     const totalsHtml = '<span class="np-rc-kv"><small>Units</small>' + fmt.u(plan.units) + '</span><span class="np-rc-kv"><small>Revenue</small>' + fmt.m(plan.revenueM) + '</span><span class="np-rc-kv"><small>AGP</small>' + fmt.m(plan.agpM) + "</span>";
     return '<div class="np-rc-card" data-uid="' + o.uid + '"><div class="np-rc-inner">' +
-      '<div class="np-rc-face np-rc-front"><div class="np-rc-info">' + nameBlock(o, bins, binBy) +
+      '<div class="np-rc-face np-rc-front"><div class="np-rc-info">' + nameBlock(o, bins, binBy, apprBadge(o, wk)) +
       '<div class="np-rc-totals">' + totalsHtml + '<button class="np-flip-btn" type="button" data-flip>Flip ⟳</button></div></div>' +
       '<div class="np-rc-ribbon">' + cells + "</div></div>" +
       '<div class="np-rc-face np-rc-back"><div class="np-rc-info">' + nameBlock(o, bins, binBy, '<span class="np-rc-backlbl">vs last year</span>') + '<button class="np-flip-btn" type="button" data-flip>⟲ Back</button></div>' +
@@ -684,58 +681,315 @@
     exModal(body);
   }
 
-  /* ============================================== VIEW 5: COUNTERFACTUAL ===== */
+  /* ============================================== VIEW 4: COUNTERFACTUAL ===== */
   function clustersOf(c) { const m = {}; c.items.forEach((o) => { (m[o.cluster] = m[o.cluster] || []).push(o); }); return m; }
-  const CF_OPTS = { seasonal: { season: 1.14, cannib: 0.17, halo: 0.02 }, staggered: { season: 1.03, cannib: 0.045, halo: 0.02 }, balanced: { season: 1.09, cannib: 0.09, halo: 0.07 } };
-  const CF_LABEL = { seasonal: "Seasonal max", staggered: "Staggered", balanced: "Halo-aware" };
+  function tcase(s) { return (s || "").replace(/\w\S*/g, (t) => t.charAt(0) + t.slice(1).toLowerCase()); }
+  // vendor share of the category (by the optimised plan), sorted high→low by sales
+  function vendorStats() {
+    const map = NP.displayMap(), byV = {}; let totS = 0, totU = 0;
+    NP.cat().items.forEach((o) => { const r = NP.resultFor(o, map), v = byV[o.vendor] || (byV[o.vendor] = { vendor: o.vendor, sales: 0, units: 0 }); v.sales += r.revenueM; v.units += r.units; totS += r.revenueM; totU += r.units; });
+    return Object.keys(byV).map((k) => { const v = byV[k]; return { vendor: k, sales: v.sales, units: v.units, salesPct: totS ? v.sales / totS : 0, unitsPct: totU ? v.units / totU : 0 }; }).sort((a, b) => b.sales - a.sales);
+  }
+  function ownVendor(vs) { return vs.find((v) => /OWN/i.test(v.vendor)); }
+  function favouredVendors(strategy) {
+    const vs = vendorStats();
+    if (strategy === "top1") return vs[0] ? [vs[0].vendor] : [];
+    if (strategy === "top2") return vs.slice(0, 2).map((v) => v.vendor);
+    if (strategy === "ownbrands") { const o = ownVendor(vs); return o ? [o.vendor] : []; }
+    return [];
+  }
+  function cfStrategies() {
+    const vs = vendorStats(), top1 = vs[0], top2 = vs.slice(0, 2), own = ownVendor(vs);
+    const share = (label, sp, up) => label + " · " + Math.round(sp * 100) + "% of sales · " + Math.round(up * 100) + "% of units";
+    const t2s = top2.reduce((s, v) => s + v.salesPct, 0), t2u = top2.reduce((s, v) => s + v.unitsPct, 0);
+    return [
+      { id: "optimized", name: "Optimised", tag: "recommended", desc: "Best {obj} across all vendors — demand, key weeks, halo & cannibalisation balanced inside the 22 guardrails. The Step-3 plan." },
+      { id: "top1", name: top1 ? "Favour " + tcase(top1.vendor) : "Favour top vendor", desc: top1 ? share(tcase(top1.vendor), top1.salesPct, top1.unitsPct) : "" },
+      { id: "top2", name: "Favour top 2 vendors", desc: top2.length ? share(top2.map((v) => tcase(v.vendor)).join(" + "), t2s, t2u) : "" },
+      { id: "ownbrands", name: "Push own brands", desc: own ? share(tcase(own.vendor), own.salesPct, own.unitsPct) : "No own-brand vendor in this category." },
+      { id: "matchly", name: "Last year", desc: "Same weeks & event count as last year — the comparison floor, so the lift from Optimised is obvious." }
+    ];
+  }
+  function cfStratName(id) { const s = cfStrategies().find((x) => x.id === id); return s ? s.name : id; }
+  // 52-week placement cells for an NCRC under a strategy
+  function cfWeeks(o, strategy) {
+    if (strategy === "matchly") return NP.weekPlan(o, null, true);
+    const wk = NP.weekPlan(o, NP.displayMap(), false);
+    if (strategy === "optimized") return wk;
+    // favour strategies: favoured vendors keep the full optimised cadence; others are thinned out
+    if (favouredVendors(strategy).indexOf(o.vendor) >= 0) return wk;
+    const promo = []; wk.forEach((c, i) => { if (c.promoted) promo.push(i); });
+    const drop = new Set(); promo.forEach((idx, k) => { if (k % 5 < 2) drop.add(idx); });
+    return wk.map((c, i) => drop.has(i) ? Object.assign({}, c, { promoted: false, store: NP.STORE_TACTICS.NONE, digital: [], offer: null, depth: 0 }) : c);
+  }
+  function cfResult(o, strategy) {
+    if (strategy === "optimized") return NP.resultFor(o, NP.displayMap());
+    if (strategy === "matchly") return NP.lyResult(o);
+    const isFav = favouredVendors(strategy).indexOf(o.vendor) >= 0, e = NP.effective(o, NP.displayMap());
+    if (isFav) return NP.respond(o, { events: Math.min(e.events + 3, 26), depth: e.depth + 0.02, deadNet: e.deadNet, seasonGain: 1.07, cannib: 0.04, halo: 0.085 });
+    const ev = cfWeeks(o, strategy).filter((c) => c.promoted).length;
+    return NP.respond(o, { events: ev, depth: e.depth, deadNet: e.deadNet, seasonGain: 1.02, cannib: 0.10, halo: 0.03 });
+  }
+  function cfTotals(strategy) { const t = { units: 0, revenueM: 0, agpM: 0 }; NP.cat().items.forEach((o) => { const r = cfResult(o, strategy); t.units += r.units; t.revenueM += r.revenueM; t.agpM += r.agpM; }); return t; }
+  function totObj(t) { const m = NP.objMeta().id; return m === "units" ? t.units : m === "agp" ? t.agpM : t.revenueM; }
+
   function renderCounterfactual() {
-    const host = document.getElementById("npStep4"), c = NP.cat(), clusters = clustersOf(c), cf = NP.state.cf;
-    const singleBrands = [...new Set((clusters.singles || clusters.cola || []).map((o) => o.brand))];
-    if (singleBrands.length && !singleBrands.includes(cf.brandA)) cf.brandA = singleBrands[0];
-    if (singleBrands.length && !singleBrands.includes(cf.brandB)) cf.brandB = singleBrands[1] || singleBrands[0];
-    host.innerHTML = '<section class="panel"><div class="panel-heading"><div><h2>Counterfactuals — distribute events across the 52 weeks</h2><p>Give an event budget per brand and the system places them across the year. Brands in a cluster <strong>cannibalise</strong> each other and share <strong>halo</strong>, so where events land — and whether two peers fire the same week — changes units, revenue and AGP.</p></div></div>' + clusterPanel(clusters) + "</section>" + cfControls(singleBrands) + '<div id="npCfResult"></div>';
-    bindCf(host, singleBrands); renderCfResult();
+    const host = document.getElementById("npStep4"), c = NP.cat(), cf = NP.state.cf;
+    host.innerHTML =
+      '<section class="panel"><div class="panel-heading"><div><h2>Counterfactuals — how events distribute across the year</h2>' +
+      '<p>Pick a distribution strategy: see its category outcome and where every vendor/NCRC promotes. Items in a cluster <strong>cannibalise</strong> and share <strong>halo</strong>, so timing changes the result.</p></div></div>' +
+      clustersCollapsible(c, cf) + stratCards(cf) + "</section>" +
+      (cf.strategy === "optimized" ? interactionsPanel(c) : "") +
+      placementSection(c, cf);
+    bindCounterfactual(host);
   }
-  function clusterPanel(clusters) { return '<div class="np-cluster-grid">' + Object.keys(clusters).map((k) => { const m = clusters[k]; return '<div class="np-cluster"><div class="np-cluster-head"><b>' + (NP.CLUSTER_LABEL[k] || k) + "</b><span>" + m.length + " NCRCs</span></div><div class=\"np-cluster-members\">" + m.map((o) => '<span class="np-chip np-chip-' + o.form + '">' + esc(o.brand) + "</span>").join("") + "</div><p class=\"np-foot\">" + clusterNote(k) + "</p></div>"; }).join("") + "</div>"; }
-  function clusterNote(k) { return ({ singles: "Impulse bars — high mutual substitution; summer peak. Promote peers on different weeks to limit cannibalisation.", sharingbag: "Sharing bags — Halloween, Easter & festive peaks; moderate substitution.", tubs: "Sharing tubs — concentrated in Nov–Dec; two tubs the same week split one basket.", cola: "Cola & dark sodas — strong substitution; summer & holiday peaks.", lemonlime: "Flavours — lighter substitution with the cola anchor." })[k] || "Grouped by learned halo and cannibalisation."; }
-  function cfControls(brands) {
-    const cf = NP.state.cf;
-    const opt = (id) => '<button type="button" class="np-cf-opt ' + (cf.option === id ? "is-active" : "") + '" data-cfopt="' + id + '"><b>' + CF_LABEL[id] + "</b><small>" + ({ seasonal: "Both pack peak weeks — max gross, max overlap", staggered: "Alternate weeks — least cannibalisation", balanced: "Shared tentpoles + spread — best blended" })[id] + "</small></button>";
-    const sel = (w, v) => '<select class="plan-category-select np-cf-brand" data-cfbrand="' + w + '">' + brands.map((b) => "<option" + (b === v ? " selected" : "") + ">" + esc(b) + "</option>").join("") + "</select>";
-    return '<section class="panel np-cf-controls"><div class="np-cf-inputs"><div class="np-cf-brandbox"><span class="plan-step-label">Brand A</span>' + sel("A", cf.brandA) + '<label class="np-cf-evlbl"># events <input class="np-cell-input np-cf-ev" inputmode="numeric" data-cfev="A" value="' + cf.eventsA + '"></label></div><div class="np-cf-brandbox"><span class="plan-step-label">Brand B</span>' + sel("B", cf.brandB) + '<label class="np-cf-evlbl"># events <input class="np-cell-input np-cf-ev" inputmode="numeric" data-cfev="B" value="' + cf.eventsB + '"></label></div></div><div class="np-cf-opts"><span class="plan-step-label">Distribution strategy</span><div class="np-cf-optrow">' + opt("seasonal") + opt("staggered") + opt("balanced") + "</div></div></section>";
+  function clustersCollapsible(c, cf) {
+    const clusters = clustersOf(c), open = cf.clustersOpen;
+    const grid = open ? '<div class="np-cluster-grid">' + Object.keys(clusters).map((k) => { const m = clusters[k]; return '<div class="np-cluster"><div class="np-cluster-head"><b>' + (NP.CLUSTER_LABEL[k] || k) + "</b><span>" + m.length + " NCRCs</span></div><div class=\"np-cluster-members\">" + m.map((o) => '<span class="np-chip np-chip-' + o.form + '">' + esc(o.brand) + "</span>").join("") + "</div></div>"; }).join("") + "</div>" : "";
+    return '<div class="np-cf-clusters"><button type="button" class="np-collapse-btn" data-clust>' + (open ? "▾" : "▸") + " NCRC clusters — grouped by learned halo &amp; cannibalisation</button>" + grid + "</div>";
   }
-  function bindCf(host, brands) {
-    host.querySelectorAll("[data-cfbrand]").forEach((s) => s.onchange = () => { NP.state.cf["brand" + s.dataset.cfbrand] = s.value; renderCfResult(); });
-    host.querySelectorAll("[data-cfev]").forEach((i) => i.addEventListener("input", () => { NP.state.cf["events" + i.dataset.cfev] = Math.round(clamp(parseFloat(i.value) || 0, 0, 40)); renderCfResult(); }));
-    host.querySelectorAll("[data-cfopt]").forEach((b) => b.onclick = () => { NP.state.cf.option = b.dataset.cfopt; renderCounterfactual(); });
+  function stratCards(cf) {
+    const objS = NP.objMeta().short, strategies = cfStrategies(), tot = {};
+    strategies.forEach((s) => { tot[s.id] = cfTotals(s.id); });
+    const floorObj = totObj(tot.matchly);
+    const cards = strategies.map((s) => {
+      const t = tot[s.id], lift = floorObj ? (totObj(t) - floorObj) / floorObj : 0;
+      const badge = s.id === "matchly" ? '<span class="np-strat-lift" style="color:var(--muted)">Comparison floor</span>' : '<span class="np-strat-lift ' + (lift >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(lift) + " " + objS + " vs LY</span>";
+      return '<button type="button" class="np-strat-card' + (cf.strategy === s.id ? " is-active" : "") + '" data-strat="' + s.id + '">' +
+        '<div class="np-strat-name">' + s.name + (s.tag ? ' <span class="np-strat-tag">' + s.tag + "</span>" : "") + "</div>" +
+        "<p>" + s.desc.replace("{obj}", objS) + "</p>" +
+        '<div class="np-strat-metrics"><div class="np-strat-orow"><span>Revenue</span><b>' + fmt.m(t.revenueM) + '</b></div><div class="np-strat-orow"><span>Units</span><b>' + fmt.u(t.units) + '</b></div><div class="np-strat-orow"><span>AGP</span><b>' + fmt.m(t.agpM) + "</b></div></div>" + badge + "</button>";
+    }).join("");
+    return '<div class="np-strat-cards">' + cards + '</div>' +
+      '<p class="np-cf-vendnote">Strategies tilt the plan toward vendors from this category’s line-up. For categories like produce, vendors are replaced by supply types — <strong>Organic · Conventional · Local</strong>.</p>';
   }
-  function pickWeeks(form, events, phase) {
-    const order = (NP.CURVE[form] || NP.CURVE.bar).map((v, i) => [i, v]).sort((a, b) => b[1] - a[1]).map((p) => p[0]);
-    if (phase === "even") { const out = []; for (let i = 1; i < order.length && out.length < events; i += 2) out.push(order[i]); for (let i = 0; i < order.length && out.length < events; i += 2) out.push(order[i]); return new Set(out); }
-    if (phase === "balanced") { const out = order.slice(0, Math.min(4, events)).slice(); for (let i = 4; i < order.length && out.length < events; i++) out.push(order[i]); return new Set(out); }
-    return new Set(order.slice(0, events));
+  // item-level proof of learned interactions, read straight off the optimised 52-week plan below
+  function ixController() {
+    const ix = NP.state.ix;
+    const cap = (label, opts, attr, cur) => '<span class="np-ix-ctl"><span class="np-ix-ctl-lbl">' + label + '</span><span class="wpl-metric-capsule wpl-metric-capsule-sm">' +
+      opts.map((o) => '<button type="button" class="wpl-capsule-opt' + (String(cur) === o[0] ? " active" : "") + '" ' + attr + '="' + o[0] + '">' + o[1] + "</button>").join("") + "</span></span>";
+    const velocity = cap("Velocity", [["sales", "Sales"], ["units", "Units"]], "data-ixbinby", ix.binBy);
+    const bin = cap("Bin", [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["all", "All"]], "data-ixbin", ix.bin);
+    const search = '<span class="np-ix-search"><svg viewBox="0 0 24 24" class="np-ix-searchicon" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>' +
+      '<input id="npIxSearch" type="text" placeholder="Find an NCRC or item…" value="' + esc(ix.ncrc || "") + '">' +
+      (ix.ncrc ? '<button type="button" class="np-ix-clear" data-ixclear aria-label="Clear">×</button>' : "") + "</span>";
+    return '<div class="np-ix-controls">' + velocity + bin + search + "</div>";
   }
-  function brandNcrc(brand) { return NP.cat().items.find((o) => o.brand === brand) || NP.cat().items[0]; }
-  function renderCfResult() {
-    const host = document.getElementById("npCfResult"); if (!host) return;
-    const cf = NP.state.cf, oA = brandNcrc(cf.brandA), oB = brandNcrc(cf.brandB), options = ["seasonal", "staggered", "balanced"];
-    const rows = options.map((opt) => { const k = CF_OPTS[opt]; const rA = NP.respond(oA, { events: cf.eventsA, depth: oA.recDepth, seasonGain: k.season, cannib: k.cannib, halo: k.halo }); const rB = NP.respond(oB, { events: cf.eventsB, depth: oB.recDepth, seasonGain: k.season, cannib: k.cannib, halo: k.halo }); return { opt, label: CF_LABEL[opt], units: rA.units + rB.units, rev: rA.revenueM + rB.revenueM, agp: rA.agpM + rB.agpM, cannib: k.cannib, halo: k.halo, rA, rB }; });
-    const bestAgp = Math.max.apply(null, rows.map((r) => r.agp)), sel = cf.option;
-    const weeksA = pickWeeks(oA.form, cf.eventsA, sel === "staggered" ? "even" : sel === "balanced" ? "balanced" : "top");
-    const weeksB = pickWeeks(oB.form, cf.eventsB, sel === "balanced" ? "balanced" : "top");
-    const overlap = [...weeksA].filter((w) => weeksB.has(w)).length, selRow = rows.find((r) => r.opt === sel);
-    host.innerHTML = '<div class="np-explain-cols"><section class="panel np-chart-card"><h4>Option comparison (' + esc(cf.brandA) + " + " + esc(cf.brandB) + " combined)</h4><table class=\"np-cf-table\"><thead><tr><th>Strategy</th><th>Units</th><th>Revenue</th><th>AGP</th><th>Cannib.</th><th>Halo</th></tr></thead><tbody>" + rows.map((r) => '<tr class="' + (r.opt === sel ? "is-sel" : "") + (r.agp === bestAgp ? " is-best" : "") + '"><td>' + r.label + (r.agp === bestAgp ? ' <span class="np-best-tag">best AGP</span>' : "") + "</td><td>" + fmt.u(r.units) + "</td><td>" + fmt.m(r.rev) + "</td><td>" + fmt.m(r.agp) + "</td><td>" + fmt.pctPlain(r.cannib) + "</td><td>+" + fmt.pctPlain(r.halo) + "</td></tr>").join("") + '</tbody></table><p class="np-foot">Switch strategy below to update the calendars and item-level results.</p></section><section class="panel np-chart-card"><h4>Item-level outcome — ' + CF_LABEL[sel] + "</h4>" + itemLevel(selRow, oA, oB) + "</section></div>" +
-      '<section class="panel np-chart-card"><h4>52-week placement — ' + CF_LABEL[sel] + ' <span class="np-overlap ' + (overlap > 3 ? "hot" : "cool") + '">' + overlap + " overlapping weeks</span></h4>" + heatmap(esc(cf.brandA), oA.form, weeksA) + heatmap(esc(cf.brandB), oB.form, weeksB) + '<p class="np-foot">Shading = seasonal demand (darker = stronger). Dots = promoted weeks. Overlapping promoted weeks drive cannibalisation between the two peers.</p></section>';
+  function interactionsPanel(c) {
+    const map = NP.displayMap(), ix = NP.state.ix, bins = NP.binsFor(), ranked = NP.rankedClusters(), keys = Object.keys(ranked);
+    const rankOf = {}; keys.forEach((k) => ranked[k].forEach((o, r) => (rankOf[o.uid] = r)));
+    const q = (ix.ncrc || "").trim().toLowerCase();
+    // focal items: an NCRC/item search wins; otherwise the chosen velocity bin
+    const focal = q
+      ? c.items.filter((o) => (o.ncrc + "").toLowerCase().includes(q) || o.item.toLowerCase().includes(q) || o.brand.toLowerCase().includes(q))
+      : c.items.filter((o) => ix.bin === "all" || bins[o.uid][ix.binBy] === +ix.bin);
+    // pair each focal item with its halo complement (same rank, different cluster — they share anchor
+    // weeks in the real plan) and its cannibalisation rival (same cluster). Lanes read the plan directly.
+    const halo = [], cann = [], seenH = {}, seenC = {};
+    focal.forEach((o) => {
+      const r = rankOf[o.uid];
+      const others = keys.filter((k) => k !== o.cluster && ranked[k].length);
+      if (others.length) { const ck = others[NP.util.hashStr(o.uid) % others.length], cm = ranked[ck], comp = cm[Math.min(r, cm.length - 1)]; const key = [o.uid, comp.uid].sort().join("|"); if (comp.uid !== o.uid && !seenH[key]) { seenH[key] = 1; halo.push({ a: o, b: comp }); } }
+      const mates = (ranked[o.cluster] || []).filter((x) => x.uid !== o.uid);
+      if (mates.length) { const rv = mates[NP.util.hashStr(o.uid + "r") % mates.length], key = [o.uid, rv.uid].sort().join("|"); if (!seenC[key]) { seenC[key] = 1; cann.push({ a: o, b: rv }); } }
+    });
+    const haloRows = halo.map((p) => ixPair(p.a, p.b, "halo", map)).join("");
+    const cannRows = cann.map((p) => ixPair(p.a, p.b, "cann", map)).join("");
+    const scope = q ? '<b>' + focal.length + '</b> item' + (focal.length === 1 ? "" : "s") + ' matching “' + esc(ix.ncrc) + '”'
+      : '<b>' + focal.length + '</b> item' + (focal.length === 1 ? "" : "s") + ' · ' + BIN_BASIS[ix.binBy] + ' velocity · ' + (ix.bin === "all" ? "all bins" : "bin&nbsp;" + ix.bin + " (top = 1)");
+    const open = !!NP.state.ix.open;
+    return '<section class="panel np-ix-panel"><div class="np-ix"><div class="np-ix-top">' +
+        '<div class="np-ix-titlewrap"><div><h2 class="np-ix-h">How the optimiser handled item interactions</h2>' +
+        '<p class="np-ix-sub">Read across the same items in the plan below — <b>bar height = discount depth</b>. See where the plan co-promotes complements and where it separates rivals or offsets their depths.</p></div></div>' +
+        '<div class="np-ix-headline"><div class="np-ix-stat np-ix-stat-h"><b>' + halo.length + '</b><small>complement pairs co-promoted for halo</small></div>' +
+        '<div class="np-ix-stat np-ix-stat-c"><b>' + cann.length + '</b><small>rival pairs depth-balanced &amp; separated</small></div>' +
+        '<button type="button" class="np-ix-toggle" data-ixtoggle aria-expanded="' + open + '">' + (open ? "Hide details ▴" : "Show details ▾") + "</button></div></div>" +
+      '<div class="np-ix-body"' + (open ? "" : " hidden") + ">" +
+      '<div class="np-ix-bar"><p class="np-ix-scope">Showing ' + scope + ' · ' + esc(c.name || "category") + "</p>" + ixController() + "</div>" +
+      '<div class="np-ix-cols"><div class="np-ix-col np-ix-halo"><h5>Paired up to capture halo</h5>' + (haloRows || '<p class="np-foot">No complement pairs for this filter.</p>') + "</div>" +
+        '<div class="np-ix-col np-ix-cann"><h5>Managed to avoid cannibalisation</h5>' + (cannRows || '<p class="np-foot">No rival pairs for this filter.</p>') + "</div></div>" +
+        '<div class="np-ix-key"><span><i class="np-ix-dot a"></i>top band = first item</span><span><i class="np-ix-dot b"></i>bottom band = second item</span><span><i class="np-ix-keybar"></i>taller bar = deeper discount</span><span><i class="np-ix-keyboth"></i>shared week (depths offset)</span></div>' +
+      "</div></div></section>";
   }
-  function itemLevel(row, oA, oB) {
-    if (!row) return "";
-    const line = (o, r) => '<div class="np-il-row"><div class="np-il-name"><b>' + esc(o.brand) + "</b><small>" + esc(o.item) + "</small></div><div class=\"np-il-metrics\"><span><small>Units</small>" + fmt.u(r.units) + "</span><span><small>Revenue</small>" + fmt.m(r.revenueM) + "</span><span><small>AGP</small>" + fmt.m(r.agpM) + "</span></div></div>";
-    return '<div class="np-il">' + line(oA, row.rA) + line(oB, row.rB) + '<div class="np-il-row np-il-total"><div class="np-il-name"><b>Cluster net</b><small>both brands</small></div><div class="np-il-metrics"><span><small>Units</small>' + fmt.u(row.units) + "</span><span><small>Revenue</small>" + fmt.m(row.rev) + "</span><span><small>AGP</small>" + fmt.m(row.agp) + "</span></div></div></div>";
+  function bindInteractions(host) {
+    host.querySelectorAll("[data-ixtoggle]").forEach((b) => b.onclick = () => { NP.state.ix.open = !NP.state.ix.open; NP.renderAll(); });
+    host.querySelectorAll("[data-ixbinby]").forEach((b) => b.onclick = () => { NP.state.ix.binBy = b.dataset.ixbinby; NP.state.ix.ncrc = ""; NP.renderAll(); });
+    host.querySelectorAll("[data-ixbin]").forEach((b) => b.onclick = () => { NP.state.ix.bin = b.dataset.ixbin; NP.state.ix.ncrc = ""; NP.renderAll(); });
+    host.querySelectorAll("[data-ixclear]").forEach((b) => b.onclick = () => { NP.state.ix.ncrc = ""; NP.renderAll(); });
+    const s = host.querySelector("#npIxSearch");
+    if (s) s.oninput = () => { NP.state.ix.ncrc = s.value; NP.renderAll(); const n = document.getElementById("npIxSearch"); if (n) { n.focus(); const v = n.value; try { n.setSelectionRange(v.length, v.length); } catch (e) {} } };
   }
-  function heatmap(name, form, weeks) {
-    const curve = NP.CURVE[form] || NP.CURVE.bar, max = Math.max.apply(null, curve);
-    const cells = curve.map((v, i) => { const a = (0.12 + 0.6 * (v / max)).toFixed(2), p = weeks.has(i); return '<span class="np-hm-cell' + (p ? " promoted" : "") + '" style="background:rgba(23,105,232,' + a + ')" title="Week ' + (i + 1) + (p ? " · promoted" : "") + '">' + (p ? "<i></i>" : "") + "</span>"; }).join("");
-    return '<div class="np-hm-row"><span class="np-hm-name">' + name + '</span><div class="np-hm-cells">' + cells + "</div></div>";
+  function ixItemLbl(o) { return '<span class="np-ix-item"><b>' + esc(o.item) + '</b><span class="np-ix-ncrc">' + o.ncrc + "</span></span>"; }
+  // reads the REAL optimised plan for both items — a literal readout of the grid below
+  function ixPair(a, b, kind, map) {
+    const wa = NP.weekPlan(a, map, false), wb = NP.weekPlan(b, map, false);
+    const dA = {}, dB = {};
+    let shared = 0, offset = false;
+    for (let w = 0; w < 52; w++) {
+      if (wa[w].promoted) dA[w] = wa[w].depth;
+      if (wb[w].promoted) dB[w] = wb[w].depth;
+      if (wa[w].promoted && wb[w].promoted) { shared++; if (Math.abs(wa[w].depth - wb[w].depth) > 0.12) offset = true; }
+    }
+    const eff = (kind === "halo" ? 1.6 : 0.9) + (NP.util.hashStr(a.uid + b.uid) % 24) / 10;
+    const effTxt = kind === "halo" ? "+" + eff.toFixed(1) + "% attach lift" : "−" + eff.toFixed(1) + "% switch loss";
+    const verdict = kind === "halo"
+      ? (shared ? shared + " weeks co-promoted" : "different windows")
+      : (shared ? shared + " shared wk" + (shared > 1 ? "s" : "") + (offset ? " · depths offset" : "") : "fully separated");
+    return '<div class="np-ix-pair"><div class="np-ix-pinfo">' +
+      '<i class="np-ix-dot a"></i>' + ixItemLbl(a) +
+      '<span class="np-ix-op">' + (kind === "halo" ? "+" : "⇔") + "</span>" +
+      '<i class="np-ix-dot b"></i>' + ixItemLbl(b) +
+      '<span class="np-ix-eff ' + (kind === "halo" ? "np-pos" : "np-ix-avoid") + '">' + effTxt + "</span>" +
+      '<span class="np-ix-verdict">' + verdict + "</span></div>" + ixLane(dA, dB) + "</div>";
+  }
+  function ixLane(dA, dB) {
+    let cells = "";
+    for (let w = 0; w < 52; w++) {
+      const da = dA[w] || 0, db = dB[w] || 0;
+      const ha = da ? Math.round(Math.max(0.4, Math.min(1, da / 0.4)) * 50) : 0;
+      const hb = db ? Math.round(Math.max(0.4, Math.min(1, db / 0.4)) * 50) : 0;
+      const tip = "Wk " + (w + 1) + (da ? " · top " + Math.round(da * 100) + "% off" : "") + (db ? " · bottom " + Math.round(db * 100) + "% off" : "");
+      cells += '<span class="np-ix-c' + (da && db ? " both" : "") + '" style="--ha:' + ha + "%;--hb:" + hb + '%" title="' + esc(tip) + '"></span>';
+    }
+    return '<div class="np-ix-lane">' + cells + "</div>";
+  }
+  // shared clickable week cell for both the 52-week plan (ctx 'plan') and counterfactual (ctx 'cf')
+  function weekCell(c, isEv, uid, ctx) {
+    const ev = isEv ? " np-wk-ev" : "";
+    if (!c.promoted) return '<span class="np-wk np-wk-none' + (c.locked ? " np-wk-locked" : "") + ev + '" title="Wk ' + c.week + ' · no promo"></span>';
+    const ap = NP.state.cf.approved[uid + ":" + c.week] ? " np-wk-lock" : "", lk = c.locked ? " np-wk-locked" : "";
+    const tip = "Wk " + c.week + " · " + c.offer.label + " · " + (c.depth * 100).toFixed(0) + "% off · " + c.store.name + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : ap ? " · locked into plan" : "") + " · click for detail";
+    return '<span class="np-wk np-wk-click tactic-' + c.store.className + lk + ev + ap + '" data-week="' + ctx + "|" + uid + "|" + c.week + '" title="' + esc(tip) + '">' + (c.digital.length ? '<i class="np-wk-dot"></i>' : "") + "</span>";
+  }
+  function apprBadge(o, wk) {
+    const events = wk.filter((c) => c.promoted).length, n = wk.filter((c) => c.promoted && NP.state.cf.approved[o.uid + ":" + c.week]).length;
+    return n ? '<span class="np-cw-rowlock' + (n === events ? " all" : "") + '" title="Locked weeks">' + (n === events ? "🔒 all locked" : "🔒 " + n + "/" + events + " locked") + "</span>" : "";
+  }
+  function placementSection(c, cf) {
+    const stratName = cfStratName(cf.strategy), tot = cfTotals(cf.strategy);
+    const evWeeks = new Set(NP.RETAIL_EVENTS.map((e) => e.wk));
+    const items = c.items.slice().sort((a, b) => a.vendor === b.vendor ? a.item.localeCompare(b.item) : a.vendor.localeCompare(b.vendor));
+    let body = "", lastVendor = null;
+    items.forEach((o) => { if (o.vendor !== lastVendor) { lastVendor = o.vendor; body += '<div class="np-rc-vendor">' + esc(o.vendor) + "</div>"; } body += cfRow(o, cf.strategy, evWeeks); });
+    const stat = (l, v) => '<span class="np-cf-stat"><small>' + l + "</small>" + v + "</span>";
+    return '<section class="panel np-results-panel"><div class="np-results-head np-cf-head">' +
+      '<div class="np-rhead-top"><h3 class="np-rhead-title">52-week placement — ' + stratName + "</h3>" +
+        '<div class="np-cf-headtot">' + stat("Revenue", fmt.m(tot.revenueM)) + stat("Units", fmt.u(tot.units)) + stat("AGP", fmt.m(tot.agpM)) + "</div>" +
+        '<div class="np-legend">' + legend() + "</div></div>" +
+        '<p class="np-cf-subnote">Click any week to see — and approve — its deal.</p>' +
+        '<div class="np-rhead-cal">' + monthScale() + eventBand() + "</div></div>" +
+      '<div class="np-rc-list">' + body + "</div></section>";
+  }
+  function cfRow(o, strategy, evWeeks) {
+    const wk = cfWeeks(o, strategy), res = cfResult(o, strategy), events = wk.filter((c) => c.promoted).length;
+    const cells = wk.map((c, w) => weekCell(c, evWeeks.has(w), o.uid, "cf")).join("");
+    const totals = '<span class="np-rc-kv"><small>Events</small>' + events + '</span><span class="np-rc-kv"><small>Units</small>' + fmt.u(res.units) + '</span><span class="np-rc-kv"><small>Revenue</small>' + fmt.m(res.revenueM) + '</span><span class="np-rc-kv"><small>AGP</small>' + fmt.m(res.agpM) + "</span>";
+    const appr = apprBadge(o, wk);
+    const nameFront = '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + '</b><span class="np-rc-id">' + o.ncrc + '</span><span class="np-tag np-tag-' + o.form + '">' + o.form + "</span>" + appr + "</div>";
+    const nameBack = '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + '</b><span class="np-rc-id">' + o.ncrc + '</span><span class="np-tag np-tag-' + o.form + '">' + o.form + '</span><span class="np-rc-backlbl">vs last year</span></div>';
+    return '<div class="np-rc-card np-cf-rowcard" data-uid="' + o.uid + '"><div class="np-rc-inner">' +
+      '<div class="np-rc-face np-rc-front"><div class="np-rc-info">' + nameFront +
+      '<div class="np-rc-totals">' + totals + '<button class="np-flip-btn" type="button" data-flip>Flip ⟳</button></div></div>' +
+      '<div class="np-rc-ribbon">' + cells + "</div></div>" +
+      '<div class="np-rc-face np-rc-back"><div class="np-rc-info">' + nameBack + '<button class="np-flip-btn" type="button" data-flip>⟲ Back</button></div>' +
+      backFace(o, NP.displayMap()) + "</div></div></div>";
+  }
+  // per-NCRC, per-week unified detail — works for both the 52-week plan (ctx 'plan') and counterfactual (ctx 'cf')
+  function openWeek(ctx, uid, week) {
+    const o = NP.cat().items.find((x) => x.uid === uid); if (!o) return;
+    const isCf = ctx === "cf";
+    const planLabel = isCf ? cfStratName(NP.state.cf.strategy)
+      : (NP.state.activeScenario === "base" ? "Optimised plan" : (NP.state.scenarios.find((s) => s.id === NP.state.activeScenario) || { name: "scenario" }).name);
+    const wk = isCf ? cfWeeks(o, NP.state.cf.strategy) : NP.weekPlan(o, NP.displayMap(), false);
+    const c = wk[week - 1]; if (!c || !c.promoted) return;
+    const locked = !!c.locked, akey = uid + ":" + week;
+    const e = NP.effective(o, NP.displayMap()), l = e.ladder, vlc = e.vlc;
+    const f = 1 + Math.sin((week / 52) * Math.PI * 3 + NP.util.hashStr(o.uid)) * 0.03 + Math.sin(week * 0.5) * 0.01;
+    const off = vlc * l.offInvoice * f, bb = vlc * l.billBack * f, pb = vlc * l.priceBreak * f, fr = vlc * l.freight * f, tx = vlc * l.transaction * f, fl = vlc * l.flat * f;
+    const totBuy = off + bb + pb, net = vlc * f - totBuy - fr, totRet = tx + fl, dead = net - totRet;
+    const res = isCf ? cfResult(o, NP.state.cf.strategy) : NP.resultFor(o, NP.displayMap());
+    const lyR = NP.lyResult(o), curve = NP.CURVE[o.form] || NP.CURVE.bar, psum = wk.filter((x) => x.promoted).reduce((s, x) => s + curve[x.week - 1], 0) || 1, share = curve[week - 1] / psum;
+    const dig = c.digital && c.digital.length ? c.digital.map((d) => NP.DIGITAL_NAMES[d]).join(", ") : "—", m = (v) => "$" + v.toFixed(2);
+    const base = o.basePrice, promo = NP.promoPriceOf(o, c.depth), mb = (c.offer && c.offer.store === "BXGX") ? "1/2" : "1/6";
+    const dpresent = c.digital && c.digital.length, digName = dpresent ? dig : "—", digDepth = Math.min(0.5, c.depth + 0.06), digPromo = NP.promoPriceOf(o, digDepth);
+    const trow = (lab, s, d) => '<tr><td class="np-l">' + lab + "</td><td>" + s + "</td><td>" + d + "</td></tr>";
+    const kU = (v) => Math.round(v).toLocaleString() + "K", kM = (v) => "$" + Math.round(v * 1000).toLocaleString() + "K";
+    const lrow = (a, v, cls) => '<div class="np-cw-lrow' + (cls ? " " + cls : "") + '"><span>' + a + "</span><span>" + m(v) + "</span></div>";
+    const d2 = (p, suf) => '<span class="np-cw-d ' + (p >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(p) + " " + suf + "</span>";
+    const card = (a, big, s1, s2) => '<div class="np-cw-stat"><small>' + a + '</small><b>' + big + "</b>" + s1 + s2 + "</div>";
+    const noise = (k) => ((NP.util.hashStr(o.uid) + week * 13 + k) % 7 - 3) / 100;
+    const uF = res.units * share, sF = res.revenueM * share, aF = res.agpM * share, uL = lyR.units * share, sL = lyR.revenueM * share, aL = lyR.agpM * share;
+    let fc;
+    if (locked) {
+      const uA = uF * (1 + noise(1)), sA = sF * (1 + noise(2)), aA = aF * (1 + noise(3));
+      fc = card("Units", kU(uA), d2(uF ? (uA - uF) / uF : 0, "vs forecast"), d2(uL ? (uA - uL) / uL : 0, "vs LY")) +
+        card("Sales", kM(sA), d2(sF ? (sA - sF) / sF : 0, "vs forecast"), d2(sL ? (sA - sL) / sL : 0, "vs LY")) +
+        card("AGP", kM(aA), d2(aF ? (aA - aF) / aF : 0, "vs forecast"), d2(aL ? (aA - aL) / aL : 0, "vs LY"));
+    } else {
+      fc = card("Units", kU(uF), d2(uL ? (uF - uL) / uL : 0, "vs LY"), '<span class="np-cw-ly">LY ' + kU(uL) + "</span>") +
+        card("Sales", kM(sF), d2(sL ? (sF - sL) / sL : 0, "vs LY"), '<span class="np-cw-ly">LY ' + kM(sL) + "</span>") +
+        card("AGP", kM(aF), d2(aL ? (aF - aL) / aL : 0, "vs LY"), '<span class="np-cw-ly">LY ' + kM(aL) + "</span>");
+    }
+    const foot = locked
+      ? '<div class="np-cw-foot np-cw-foot-locked"><span class="np-cw-lockmsg">🔒 Locked actual — already run, can’t be changed</span></div>'
+      : '<div class="np-cw-foot">' + (NP.state.cf.approved[akey]
+        ? '<span class="np-cw-lockedmsg">🔒 Week ' + week + ' locked into the plan</span><button class="np-cw-undo" type="button" data-cfapprove>Unlock</button>'
+        : '<span class="np-cw-foothint">Lock week ' + week + " into the plan?</span><button class=\"np-cw-lock-btn\" type=\"button\" data-cfapprove>Lock deal</button>") + "</div>";
+    const drawer = document.getElementById("npDrawer"), scrim = document.getElementById("npDrawerScrim");
+    drawer.innerHTML =
+      '<div class="np-ask-head"><div><span class="np-ask-eyebrow">' + o.ncrc + " · " + planLabel + (locked ? " · ACTUALS" : "") + '</span><h3>' + esc(o.item) + " — Week " + week + '</h3><small>' + esc(o.vendor) + " · " + c.offer.label + '</small></div><button class="np-ask-close" type="button">×</button></div>' +
+      '<div class="np-cw-sec np-cw-forecast"><div class="np-cw-out">' + fc + "</div></div>" +
+      '<div class="np-cw-sec np-cw-ladder-sec"><h4>Cost ladder</h4><div class="np-cw-ladder">' +
+        lrow("Vendor list cost", vlc * f, "head") + '<div class="np-cw-grp">Buying allowances</div>' + lrow("Off-invoice", off) + lrow("Bill back", bb) + lrow("Price break", pb) + lrow("Total buying", totBuy, "sub") + lrow("Freight", fr) + lrow("Net cost", net, "sub") +
+        '<div class="np-cw-grp">Retail allowances</div>' + lrow("Transaction", tx) + lrow("Flat", fl) + lrow("Total retail", totRet, "sub") + lrow("Dead-net cost", dead, "tot") + "</div></div>" +
+      '<div class="np-cw-sec np-cw-tactic"><h4>Tactic</h4><table class="np-cw-tactbl"><thead><tr><th class="np-l"></th><th>Store</th><th>Digital</th></tr></thead><tbody>' +
+        trow("Tactic", c.store.name, digName) + trow("Base price", m(base), m(base)) + trow("Promo price", m(promo), dpresent ? m(digPromo) : "—") +
+        trow("Depth", (c.depth * 100).toFixed(0) + "%", dpresent ? (digDepth * 100).toFixed(0) + "%" : "—") + trow("MB / limit", mb, dpresent ? mb : "—") + trow("Ad / display", "Y / Y", dpresent ? "Y / N" : "—") +
+        "</tbody></table></div>" +
+      '<div class="np-cw-sec np-cw-history"><h4>Promo history</h4>' + promoHistory(o) + "</div>" + foot;
+    drawer.hidden = false; scrim.hidden = false; drawer.classList.add("is-open"); document.body.classList.add("np-noscroll");
+    drawer.querySelector(".np-ask-close").onclick = NP.closeOverlays; scrim.onclick = NP.closeOverlays;
+    const ab = drawer.querySelector("[data-cfapprove]"); if (ab) ab.onclick = () => { NP.state.cf.approved[akey] = !NP.state.cf.approved[akey]; NP.renderAll(); openWeek(ctx, uid, week); };
+  }
+  function cfDetail(o) {
+    const tab = NP.state.cf.tab[o.uid] || "ladder";
+    const tabs = [["ladder", "Cost ladder"], ["tactic", "Promo plan"], ["history", "Promo history"]];
+    const nav = '<div class="np-cf-tabs">' + tabs.map((t) => '<button type="button" class="np-cf-tab' + (tab === t[0] ? " is-active" : "") + '" data-cftab="' + o.uid + ":" + t[0] + '">' + t[1] + "</button>").join("") + "</div>";
+    const body = tab === "tactic" ? promoPlanTable(o) : tab === "history" ? promoHistory(o) : costLadder(o);
+    return nav + '<div class="np-cf-detbody">' + body + "</div>";
+  }
+  function promoPlanTable(o) {
+    const strat = NP.state.cf.strategy, wk = cfWeeks(o, strat).filter((c) => c.promoted), res = cfResult(o, strat);
+    if (!wk.length) return '<p class="np-foot">No promoted weeks under this strategy.</p>';
+    const curve = NP.CURVE[o.form] || NP.CURVE.bar, sum = wk.reduce((s, c) => s + curve[c.week - 1], 0) || 1;
+    const kM = (v) => "$" + Math.round(v * 1000).toLocaleString() + "K", kU = (v) => Math.round(v).toLocaleString() + "K";
+    const rows = wk.map((c) => { const share = curve[c.week - 1] / sum, dig = c.digital && c.digital.length ? c.digital.map((d) => NP.DIGITAL_NAMES[d]).join(", ") : "—";
+      return '<tr><td class="np-l">Wk ' + c.week + '</td><td class="np-l">' + (c.offer ? c.offer.label : "—") + '</td><td class="np-l">' + c.store.name + '</td><td class="np-l">' + dig + "</td><td>" + (c.depth * 100).toFixed(0) + "%</td><td>" + kM(res.revenueM * share) + "</td><td>" + kU(res.units * share) + "</td><td>" + kM(res.agpM * share) + "</td></tr>"; }).join("");
+    return '<div class="np-cf-scroll"><table class="np-cf-mini"><thead><tr><th class="np-l">Week</th><th class="np-l">Offer</th><th class="np-l">Store tactic</th><th class="np-l">Digital</th><th>Depth</th><th>Sales</th><th>Units</th><th>AGP</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
+  }
+  function promoHistory(o) {
+    const dates = ["10/22/25", "09/24/25", "08/27/25", "07/30/25", "07/02/25", "06/04/25"], tac = ["PP", "Digital", "BxGx", "PP", "Digital", "BxGx"];
+    const h = NP.util.hashStr(o.uid), base = Math.round(o.baseUnitsK * 1000 / 52);
+    const rows = dates.map((d, i) => { const r = ((h + i * 37) % 50) / 100, units = Math.round(base * (1.35 + r)), aiv = o.basePrice * (0.7 + (i % 3) * 0.18), sales = Math.round(units * aiv);
+      return '<tr><td class="np-l">' + d + "</td><td>" + units.toLocaleString() + "</td><td>$" + sales.toLocaleString() + '</td><td class="np-l">' + tac[i] + "</td><td>$" + aiv.toFixed(2) + "</td></tr>"; }).join("");
+    return '<table class="np-cf-mini np-cw-hist"><thead><tr><th class="np-l">Ad break</th><th>Units</th><th>Sales</th><th class="np-l">Tactic</th><th>AIV</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  }
+  function costLadder(o) {
+    const e = NP.effective(o, NP.displayMap()), l = e.ladder, vlc = e.vlc;
+    const wk = cfWeeks(o, NP.state.cf.strategy).filter((c) => c.promoted);
+    if (!wk.length) return '<p class="np-foot">No promoted weeks under this strategy.</p>';
+    const wob = (w) => 1 + Math.sin((w / 52) * Math.PI * 3 + NP.util.hashStr(o.uid)) * 0.03 + Math.sin(w * 0.5) * 0.01, m = (v) => "$" + v.toFixed(2);
+    const rows = wk.map((c) => { const w = c.week, f = wob(w), off = vlc * l.offInvoice * f, bb = vlc * l.billBack * f, pb = vlc * l.priceBreak * f, fr = vlc * l.freight * f, tx = vlc * l.transaction * f, fl = vlc * l.flat * f, net = vlc * f - off - bb - pb - fr, dead = net - tx - fl;
+      return '<tr><td class="np-l">Wk ' + w + "</td><td>" + m(vlc * f) + "</td><td>" + m(off) + "</td><td>" + m(bb) + "</td><td>" + m(pb) + "</td><td>" + m(fr) + '</td><td class="np-cf-subc">' + m(net) + "</td><td>" + m(tx) + "</td><td>" + m(fl) + '</td><td class="np-cf-totc">' + m(dead) + "</td></tr>"; }).join("");
+    return '<div class="np-cf-scroll"><table class="np-cf-mini"><thead><tr><th class="np-l">Week</th><th>VLC</th><th>Off-inv</th><th>Bill back</th><th>P/brk</th><th>Freight</th><th>Net cost</th><th>Txn</th><th>Flat</th><th>Dead-net</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
+  }
+  function bindCounterfactual(host) {
+    host.querySelectorAll("[data-clust]").forEach((b) => b.onclick = () => { NP.state.cf.clustersOpen = !NP.state.cf.clustersOpen; renderCounterfactual(); });
+    host.querySelectorAll("[data-strat]").forEach((b) => b.onclick = () => { NP.state.cf.strategy = b.dataset.strat; renderCounterfactual(); });
+    host.querySelectorAll("[data-week]").forEach((el) => el.onclick = () => { const p = el.dataset.week.split("|"); openWeek(p[0], p[1], +p[2]); });
+    host.querySelectorAll(".np-rc-card").forEach((card) => card.querySelectorAll("[data-flip]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); card.classList.toggle("is-flipped"); }));
+    bindInteractions(host);
+    host.addEventListener("mousemove", exTip); host.addEventListener("mouseleave", clearSpark);
   }
 
   window.NPViews = { renderGrid, renderResults, renderExplain, renderCounterfactual };
