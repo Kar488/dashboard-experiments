@@ -1,0 +1,5 @@
+server.out.log
+server.err.log
+*.zip
+_pdf_extract.txt
+_pdfx.js
