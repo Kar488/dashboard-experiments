@@ -6,15 +6,36 @@
   const clamp = util.clamp;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   function el(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
-  function objShort(obj) { const o = NP.OBJECTIVES.find((x) => x.id === (obj || NP.state.objective)); return o ? o.short : "Rev"; }
+  function objShort(obj) { const o = NP.OBJECTIVES.find((x) => x.id === (obj || NP.state.objective)); return o ? o.short : "Sales"; }
   const ALW_GROUPS = [
     { group: "Buying allowances", cls: "buy", items: [["offInvoice", "Off-inv"], ["billBack", "B/back"], ["priceBreak", "P/brk"]] },
     { group: "Freight", cls: "frt", items: [["freight", "Frt"]] },
-    { group: "Retail allowances", cls: "ret", items: [["transaction", "Txn"], ["flat", "Flat"]] }
+    { group: "Retail allowances", cls: "ret", items: [["scan", "Scan"], ["shipToStore", "Ship-to-store"], ["headerFlat", "Hdr flat"], ["newItem", "New item"]] }
   ];
   const ALW = ALW_GROUPS.reduce((a, g) => a.concat(g.items), []);
+  const RETAIL_LABEL = { scan: "Scan", shipToStore: "Ship to store", headerFlat: "Header flat", newItem: "New item" };
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   let compareHidden = false;
+
+  /* Dead-net versions — the allowance breakup can be viewed against two negotiated
+     postures of the same deal:
+       v1 "Standard"  — the optimised base ladder (editable).
+       v2 "Deep-deal" — a second, more deeply funded version (richer off-invoice,
+                        bill-back & price-break) → a lower dead-net per unit. Read-only;
+                        it is an alternative the optimiser also priced, not your scenario. */
+  const DEEP_BUY_MULT = { offInvoice: 1.22, billBack: 1.18, priceBreak: 1.15 };
+  function isDeep() { return NP.state.deadNetVersion === "v2"; }
+  function deepLadder(l) { const o = Object.assign({}, l); Object.keys(DEEP_BUY_MULT).forEach((k) => { o[k] = util.round((l[k] || 0) * DEEP_BUY_MULT[k], 4); }); return o; }
+  function deadNetFrom(vlc, l) { return util.round(vlc * (1 - NP.LADDER_KEYS.reduce((s, k) => s + (l[k] || 0), 0)), 3); }
+  function deepView(e) { const dl = deepLadder(e.ladder); return Object.assign({}, e, { ladder: dl, deadNet: deadNetFrom(e.vlc, dl) }); }
+  // the editable Deep-deal posture: defaults to the deeper-funded ladder, overlaid with
+  // any user edits stored in ov.deepLadder (driven by the "Dead-net · deep" main-grid column).
+  function deepEffective(o, map) {
+    const e = NP.effective(o, map), base = deepLadder(e.ladder);
+    const ov = (map && map[o.uid]) || {};
+    const dl = ov.deepLadder ? Object.assign({}, base, ov.deepLadder) : base;
+    return { vlc: e.vlc, events: e.events, ladder: dl, deadNet: deadNetFrom(e.vlc, dl) };
+  }
 
   /* ===== context menu (Ask Assistant) ===== */
   function showCtx(x, y, uid) {
@@ -51,7 +72,23 @@
 
   /* ============================================================ VIEW 2: GRID */
   function renderGrid() {
-    renderScenarioStrip(); bindTools(); renderCompare(); renderSpreadsheet(); updateDirtyUI();
+    renderScenarioStrip(); bindTools(); renderCompare(); renderGridFilter(); renderSpreadsheet(); updateDirtyUI();
+  }
+  /* vendor filter — right-aligned above the grid header */
+  function renderGridFilter() {
+    const host = document.getElementById("npGridFilter"); if (!host) return;
+    const vendors = [...new Set(NP.cat().items.map((o) => o.vendor))].sort();
+    const rogs = [...new Set(NP.cat().items.map((o) => o.rog))].sort();
+    if (NP.state.grid.vendor !== "all" && !vendors.includes(NP.state.grid.vendor)) NP.state.grid.vendor = "all";
+    if (NP.state.grid.rog !== "all" && !rogs.includes(NP.state.grid.rog)) NP.state.grid.rog = "all";
+    host.innerHTML = '<label class="np-grid-vfilter">Vendor <select id="npGridVendor" class="np-res-select"><option value="all">All vendors</option>' +
+      vendors.map((v) => '<option' + (NP.state.grid.vendor === v ? " selected" : "") + ">" + esc(v) + "</option>").join("") + "</select></label>" +
+      '<label class="np-grid-vfilter">ROG <select id="npGridRog" class="np-res-select np-rog-select"><option value="all">All ROGs</option>' +
+      rogs.map((r) => '<option' + (NP.state.grid.rog === r ? " selected" : "") + ">" + esc(r) + "</option>").join("") + "</select></label>";
+    const sel = document.getElementById("npGridVendor");
+    sel.onchange = () => { NP.state.grid.vendor = sel.value; renderGrid(); };
+    const rsel = document.getElementById("npGridRog");
+    rsel.onchange = () => { NP.state.grid.rog = rsel.value; renderGrid(); };
   }
   function scenarioChips() {
     const st = NP.state;
@@ -91,7 +128,7 @@
     wrap.hidden = false;
     const objM = NP.objMeta();
     const scs = [{ id: "base", name: "Base plan", sub: "optimised, no edits", ov: {} }].concat(NP.state.scenarios.map((s) => ({ id: s.id, name: s.name, sub: "your edits", ov: s.ov })));
-    const cols = [["Revenue", (t) => fmt.m(t.revenueM), "revenueM"], ["Units", (t) => fmt.u(t.units), "units"], ["AGP", (t) => fmt.m(t.agpM), "agpM"], ["HHs", (t) => fmt.u(t.hhK), "hhK"]];
+    const cols = [["Sales", (t) => fmt.m(t.revenueM), "revenueM"], ["Units", (t) => fmt.u(t.units), "units"], ["AGP", (t) => fmt.m(t.agpM), "agpM"], ["HHs", (t) => fmt.u(t.hhK), "hhK"]];
     const tots = scs.map((s) => totals(s.ov)), best = {};
     cols.forEach(([, , k]) => { best[k] = Math.max.apply(null, tots.map((t) => t[k])); });
     const head = '<div class="plan-compare-corner"></div>' + cols.map(([l, , k]) => '<div class="plan-compare-col-head' + (objM.metric === k ? " is-obj" : "") + '">' + l + "</div>").join("");
@@ -101,6 +138,28 @@
     const cl = document.getElementById("npCompareClose"); if (cl) cl.onclick = () => { compareHidden = true; renderCompare(); };
   }
 
+  /* pinned totals footer — sums across the (filtered) rows + average Δ vs LY */
+  function gridTotals(items, map) {
+    let units = 0, revenueM = 0, agpM = 0, dsum = 0;
+    items.forEach((o) => {
+      const res = NP.resultFor(o, map), ly = NP.lyResult(o), lyv = NP.objVal(ly);
+      units += res.units; revenueM += res.revenueM; agpM += res.agpM;
+      dsum += lyv ? (NP.objVal(res) - lyv) / lyv : 0;
+    });
+    return { units, revenueM, agpM, avgDelta: items.length ? dsum / items.length : 0 };
+  }
+  function footRow(cols, items, map) {
+    const t = gridTotals(items, map);
+    const metricKeys = ["units", "revenue", "agp", "delta"];
+    const lead = cols.filter((c) => metricKeys.indexOf(c.k) === -1).length;
+    const n = items.length;
+    let html = '<td class="np-ss-foot-label" colspan="' + lead + '">Total · ' + n + " NCRC" + (n === 1 ? "" : "s") + (NP.state.grid.vendor !== "all" ? " · " + esc(NP.state.grid.vendor) : "") + (NP.state.grid.rog !== "all" ? " · ROG " + esc(NP.state.grid.rog) : "") + "</td>";
+    html += '<td class="np-ss-res np-ss-res-start np-ss-foot-val">' + fmt.u(t.units) + "</td>";
+    html += '<td class="np-ss-res np-ss-foot-val">' + fmt.m(t.revenueM) + "</td>";
+    html += '<td class="np-ss-res np-ss-foot-val">' + fmt.m(t.agpM) + "</td>";
+    html += '<td class="np-ss-res np-ss-foot-val ' + (t.avgDelta >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(t.avgDelta) + "</td>";
+    return '<tfoot class="np-ss-foot"><tr>' + html + "</tr></tfoot>";
+  }
   function columns() {
     const allow = NP.state.showAllow;
     const cols = [{ k: "rownum", label: "", cls: "np-ss-rownum" }];
@@ -111,14 +170,17 @@
     cols.push({ k: "vlc", label: "VLC", edit: "money" });
     if (!allow) cols.push({ k: "price", label: "Price", cls: "" });
     if (allow) ALW_GROUPS.forEach((g) => {
-      g.items.forEach(([key, label]) => { cols.push({ k: "alwpct:" + key, label: label + " %", edit: "pct", group: "alw" }); cols.push({ k: "alwusd:" + key, label: label + " $", edit: "money", group: "alw" }); });
+      g.items.forEach(([key, label]) => { cols.push({ k: "alwusd:" + key, label: label, edit: "money", group: "alw" }); });
       if (g.group === "Freight") cols.push({ k: "netCost", label: "Net cost", cls: "np-ss-net" });
     });
     cols.push({ k: "deadNet", label: "Dead-net", edit: "money" });
     if (!allow) {
-      cols.push({ k: "events", label: "Events", edit: "int" });
+      cols.push({ k: "deepDeadNet", label: "Dead-net · deep", edit: "money" });
+      cols.push({ k: "events", label: "Store events", edit: "int" });
+      cols.push({ k: "digEvents", label: "Digital events", edit: "int" });
+      cols.push({ k: "bothEvents", label: "Store & digital", edit: "int" });
       cols.push({ k: "units", label: "Units", cls: "np-ss-res np-ss-res-start" });
-      cols.push({ k: "revenue", label: "Revenue", cls: "np-ss-res" });
+      cols.push({ k: "revenue", label: "Sales", cls: "np-ss-res" });
       cols.push({ k: "agp", label: "AGP", cls: "np-ss-res" });
       cols.push({ k: "delta", label: "Δ " + objShort(), cls: "np-ss-res" });
     }
@@ -126,18 +188,23 @@
   }
   function renderSpreadsheet() {
     const wrap = document.getElementById("npGridWrap");
-    const items = NP.cat().items.slice().sort((a, b) => a.vendor === b.vendor ? a.item.localeCompare(b.item) : a.vendor.localeCompare(b.vendor));
+    let items = NP.cat().items.slice().sort((a, b) => a.vendor === b.vendor ? a.item.localeCompare(b.item) : a.vendor.localeCompare(b.vendor));
+    if (NP.state.grid.vendor !== "all") items = items.filter((o) => o.vendor === NP.state.grid.vendor);
+    if (NP.state.grid.rog !== "all") items = items.filter((o) => o.rog === NP.state.grid.rog);
     const cols = columns(), map = NP.displayMap();
     const thead = buildHead(cols);
     let rows = "", lastVendor = null;
+    const deepAllow = NP.state.showAllow && isDeep();
     items.forEach((o, i) => {
-      const e = NP.effective(o, NP.state.draft), res = NP.resultFor(o, map), ly = NP.lyResult(o);
+      const eRaw = NP.effective(o, NP.state.draft), e = deepAllow ? deepEffective(o, NP.state.draft) : eRaw;
+      const res = NP.resultFor(o, map), ly = NP.lyResult(o);
       const vstart = o.vendor !== lastVendor && i; lastVendor = o.vendor;
       rows += '<tr class="np-ss-row' + (vstart ? " np-ss-vstart" : "") + '" data-uid="' + o.uid + '">' + cols.map((c) => cell(c, o, e, res, ly, i)).join("") + "</tr>";
     });
-    if (NP.state.showAllow) wrap.innerHTML = '<div class="np-allow-note">Editing <b>Dead-net</b> redistributes the allowance breakup automatically; edit any allowance to override. Other columns hidden to focus on cost build-up.</div>';
+    if (NP.state.showAllow) wrap.innerHTML = allowHeader();
     else wrap.innerHTML = "";
-    wrap.insertAdjacentHTML("beforeend", '<table class="projection-table np-ss' + (NP.state.showAllow ? " np-ss-compact" : "") + '"><thead>' + thead + "</thead><tbody>" + rows + "</tbody></table>");
+    const foot = NP.state.showAllow ? "" : footRow(cols, items, map);
+    wrap.insertAdjacentHTML("beforeend", '<table class="projection-table np-ss' + (NP.state.showAllow ? " np-ss-compact" : "") + '"><thead>' + thead + "</thead><tbody>" + rows + "</tbody>" + foot + "</table>");
     wrap.querySelectorAll("input.np-cell-input").forEach((inp) => {
       inp.addEventListener("input", onGridInput);
       const uid = inp.dataset.uid, o = NP.cat().items.find((x) => x.uid === uid);
@@ -146,24 +213,47 @@
     });
     wrap.querySelectorAll(".np-ss-row").forEach((tr) => bindCtx(tr, tr.dataset.uid));
     wrap.querySelectorAll("[data-fc]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openForecast(b.dataset.fc, b); });
+    wrap.querySelectorAll("[data-dnver]").forEach((b) => b.onclick = () => { NP.state.deadNetVersion = b.dataset.dnver; renderGrid(); });
+  }
+  /* allowance-view header: dead-net version selector + contextual note */
+  function allowHeader() {
+    const deep = isDeep();
+    const seg = '<div class="np-dnver">' +
+      '<span class="np-dnver-lab">Dead-net version</span>' +
+      '<div class="np-dnver-seg">' +
+        '<button type="button" class="np-dnver-opt' + (!deep ? " is-active" : "") + '" data-dnver="v1">Standard<small>negotiated base</small></button>' +
+        '<button type="button" class="np-dnver-opt' + (deep ? " is-active" : "") + '" data-dnver="v2">Deep-deal<small>deeper funding</small></button>' +
+      "</div>" + allowDelta() + "</div>";
+    const note = deep
+      ? '<div class="np-allow-note np-allow-note-deep">Editing the <b>Deep-deal</b> dead-net — a second, more deeply funded version (richer off-invoice, bill-back &amp; price-break). Edit any allowance or the dead-net; changes save to <b>Your scenario</b> and carry over to the deal-inputs grid (VLC &amp; <b>Dead-net · deep</b>).</div>'
+      : '<div class="np-allow-note">Editing <b>Dead-net</b> redistributes the allowance breakup automatically; edit any allowance to override. Switch to <b>Deep-deal</b> to edit the deeper-funded version. Other columns hidden to focus on cost build-up.</div>';
+    return seg + note;
+  }
+  // average dead-net under each version, to quantify how much deeper the deep deal runs
+  function allowDelta() {
+    const items = NP.cat().items; if (!items.length) return "";
+    let s = 0, d = 0;
+    items.forEach((o) => { const e = NP.effective(o, NP.state.draft); s += e.deadNet; d += deadNetFrom(e.vlc, deepLadder(e.ladder)); });
+    s /= items.length; d /= items.length;
+    const pct = s ? (d - s) / s : 0;
+    return '<span class="np-dnver-delta">avg dead-net <b>' + fmt.price(d) + '</b> vs Standard <b>' + fmt.price(s) + '</b> <i class="np-pos">' + fmt.pct(pct) + "</i></span>";
   }
   const FC_ICON = (m, uid) => '<button class="np-fc-btn" type="button" data-fc="' + m + '" data-uid="' + uid + '" title="Model vs actual & 52-week forecast for this NCRC"><svg viewBox="0 0 16 12" width="12" height="9"><polyline points="1,9 5,5 8,7 12,2 15,4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
   function buildHead(cols) {
     if (!NP.state.showAllow) return "<tr>" + cols.map((c) => '<th class="' + (c.cls || "") + (c.edit ? " np-ss-edithead" : "") + '">' + esc(c.label) + "</th>").join("") + "</tr>";
-    // 3-row grouped header: top group (Buying / Freight / Retail) → name → % / $
+    // 2-row grouped header: top group (Buying / Freight / Retail) → allowance ($ only)
     let r0 = "<tr>" +
-      '<th class="np-ss-rownum" rowspan="3"></th>' +
-      '<th class="np-ss-l np-ss-mono" rowspan="3">NCRC</th>' +
-      '<th class="np-ss-l" rowspan="3">Item</th>' +
-      '<th class="np-ss-edithead" rowspan="3">VLC</th>';
+      '<th class="np-ss-rownum" rowspan="2"></th>' +
+      '<th class="np-ss-l np-ss-mono" rowspan="2">NCRC</th>' +
+      '<th class="np-ss-l" rowspan="2">Item</th>' +
+      '<th class="np-ss-edithead" rowspan="2">VLC</th>';
     ALW_GROUPS.forEach((g) => {
-      r0 += '<th class="np-ss-grp np-grp-' + g.cls + '" colspan="' + (g.items.length * 2) + '">' + esc(g.group) + "</th>";
-      if (g.group === "Freight") r0 += '<th class="np-ss-net np-ss-nethead" rowspan="3">Net cost</th>';
+      r0 += '<th class="np-ss-grp np-grp-' + g.cls + '" colspan="' + g.items.length + '">' + esc(g.group) + "</th>";
+      if (g.group === "Freight") r0 += '<th class="np-ss-net np-ss-nethead" rowspan="2">Net cost</th>';
     });
-    r0 += '<th class="np-ss-edithead" rowspan="3">Dead-net</th></tr>';
-    const r1 = "<tr>" + ALW.map(([k, l]) => '<th class="np-ss-alwhead np-ss-alwgrp" colspan="2">' + esc(l) + "</th>").join("") + "</tr>";
-    const r2 = "<tr>" + ALW.map(() => '<th class="np-ss-alwhead np-ss-sub">%</th><th class="np-ss-alwhead np-ss-sub">$</th>').join("") + "</tr>";
-    return r0 + r1 + r2;
+    r0 += '<th class="np-ss-edithead" rowspan="2">Dead-net</th></tr>';
+    const r1 = "<tr>" + ALW.map(([k, l]) => '<th class="np-ss-alwhead">' + esc(l) + " $</th>").join("") + "</tr>";
+    return r0 + r1;
   }
   /* forecast popover — per-NCRC: past actual vs model + forward forecast with bands */
   function fcSeries(metric, o) {
@@ -228,14 +318,16 @@
     if (k === "rownum") return '<td class="np-ss-rownum">' + (i + 1) + "</td>";
     if (k === "vendor") return '<td class="np-ss-l np-ss-vendor">' + esc(o.vendor) + "</td>";
     if (k === "ncrc") return '<td class="np-ss-l np-ss-mono">' + esc(o.ncrc) + "</td>";
-    if (k === "item") return '<td class="np-ss-l">' + esc(o.item) + ' <span class="np-tag np-tag-' + o.form + '">' + o.form + "</span></td>";
+    if (k === "item") return '<td class="np-ss-l">' + esc(o.item) + "</td>";
     if (k === "aws") return '<td class="np-ss-ro">$' + Math.round(o.baseUnitsK * 1000 / 52 * o.basePrice).toLocaleString() + "</td>";
     if (k === "price") return '<td class="np-ss-ro">' + fmt.price(o.basePrice) + "</td>";
     if (k === "vlc") return editCell(o, "vlc", e.vlc.toFixed(2));
     if (k === "netCost") { const l = e.ladder; return '<td class="np-ss-net np-ss-ro" id="nc-' + o.uid + '">' + fmt.price(e.vlc * (1 - l.offInvoice - l.billBack - l.priceBreak - l.freight)) + "</td>"; }
     if (k === "deadNet") return editCell(o, "deadNet", e.deadNet.toFixed(2));
+    if (k === "deepDeadNet") return editCell(o, "deepDeadNet", deepEffective(o, NP.state.draft).deadNet.toFixed(2));
     if (k === "events") return editCell(o, "events", String(e.events));
-    if (k.indexOf("alwpct:") === 0) { const key = k.slice(7); return editAlw(o, key, "pct", (e.ladder[key] * 100).toFixed(1)); }
+    if (k === "digEvents") return editCell(o, "digEvents", String(e.digEvents));
+    if (k === "bothEvents") return editCell(o, "bothEvents", String(e.bothEvents));
     if (k.indexOf("alwusd:") === 0) { const key = k.slice(7); return editAlw(o, key, "usd", (e.ladder[key] * e.vlc).toFixed(2)); }
     if (k === "units") return '<td class="np-ss-res np-ss-res-start">' + fmt.u(res.units) + "</td>";
     if (k === "revenue") return '<td class="np-ss-res">' + fmt.m(res.revenueM) + "</td>";
@@ -243,64 +335,85 @@
     if (k === "delta") { const d = NP.objVal(res) - NP.objVal(ly), p = NP.objVal(ly) ? d / NP.objVal(ly) : 0; return '<td class="np-ss-res ' + (d >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(p) + "</td>"; }
     return "<td></td>";
   }
+  // Both Standard and Deep allowance views are fully editable; which ladder an edit
+  // targets (ov.ladder vs ov.deepLadder) is decided in onGridInput by the active version.
   function editCell(o, field, val) {
-    const input = '<input class="np-cell-input" type="text" inputmode="' + (field === "events" ? "numeric" : "decimal") + '" data-uid="' + o.uid + '" data-field="' + field + '" value="' + val + '">';
+    const isInt = field === "events" || field === "digEvents" || field === "bothEvents";
+    const input = '<input class="np-cell-input" type="text" inputmode="' + (isInt ? "numeric" : "decimal") + '" data-uid="' + o.uid + '" data-field="' + field + '" value="' + val + '">';
     const inner = (field === "vlc" || field === "deadNet") ? '<div class="np-cellrow">' + FC_ICON(field, o.uid) + input + "</div>" : input;
     return '<td class="np-ss-edit' + (NP.isEdited(o, field) ? " is-edited" : "") + '" data-cell="' + o.uid + ":" + field + '">' + inner + "</td>";
   }
-  function editAlw(o, key, kind, val) { return '<td class="np-ss-edit np-ss-alw' + (NP.isEdited(o, "alw:" + key) ? " is-edited" : "") + '" data-cell="' + o.uid + ":alw:" + key + ":" + kind + '"><input class="np-cell-input" type="text" inputmode="decimal" data-uid="' + o.uid + '" data-alw="' + key + '" data-kind="' + kind + '" value="' + val + '"></td>'; }
+  function editAlw(o, key, kind, val) {
+    return '<td class="np-ss-edit np-ss-alw' + (NP.isEdited(o, "alw:" + key) ? " is-edited" : "") + '" data-cell="' + o.uid + ":alw:" + key + ":" + kind + '"><input class="np-cell-input" type="text" inputmode="decimal" data-uid="' + o.uid + '" data-alw="' + key + '" data-kind="' + kind + '" value="' + val + '"></td>'; }
 
   function onGridInput(ev) {
     const inp = ev.target, uid = inp.dataset.uid, o = NP.cat().items.find((x) => x.uid === uid); if (!o) return;
-    const ov = NP.draftOf(uid);
+    const ov = NP.draftOf(uid), deep = NP.state.showAllow && isDeep();
     if (inp.dataset.alw) {
       const key = inp.dataset.alw, kind = inp.dataset.kind, val = parseFloat(inp.value) || 0;
       const vlc = ov.vlc != null ? ov.vlc : o.vlc;
       const pct = kind === "pct" ? val / 100 : (vlc > 0 ? val / vlc : 0);
-      ov.ladder = ov.ladder || {}; ov.ladder[key] = pct; ov.deadNetTouched = false; syncRow(o);
+      if (deep) { ov.deepLadder = ov.deepLadder || {}; ov.deepLadder[key] = pct; }
+      else { ov.ladder = ov.ladder || {}; ov.ladder[key] = pct; ov.deadNetTouched = false; }
+      syncRow(o);
     } else {
       const field = inp.dataset.field; let val = parseFloat(inp.value) || 0;
-      if (field === "events") { val = Math.round(clamp(val, 0, 40)); ov.events = val; }
-      else if (field === "deadNet") { distributeDeadNet(o, val); }
+      if (field === "events") { ov.events = Math.round(clamp(val, 0, 40)); }
+      else if (field === "digEvents") { ov.digEvents = Math.round(clamp(val, 0, 40)); }
+      else if (field === "bothEvents") { ov.bothEvents = Math.round(clamp(val, 0, 40)); }
+      else if (field === "deadNet") { deep ? distributeDeepDeadNet(o, val) : distributeDeadNet(o, val); }
+      else if (field === "deepDeadNet") { distributeDeepDeadNet(o, val); }
       else if (field === "vlc") { ov.vlc = val; ov.deadNetTouched = false; syncRow(o); }
     }
     showHint(inp, o); markEdited(o); updateDirtyUI();
   }
   function distributeDeadNet(o, target) {
     const e = NP.effective(o, NP.state.draft), vlc = e.vlc; if (vlc <= 0) return;
-    const keys = ["offInvoice", "billBack", "priceBreak", "freight", "transaction", "flat"];
-    const cur = keys.reduce((s, k) => s + e.ladder[k], 0);
+    const keys = NP.LADDER_KEYS;
+    const cur = keys.reduce((s, k) => s + (e.ladder[k] || 0), 0);
     const targetSum = clamp(1 - target / vlc, 0.02, 0.9), scale = cur > 0 ? targetSum / cur : 0;
     const ov = NP.draftOf(o.uid); ov.ladder = ov.ladder || {}; ov.deadNetTouched = false;
-    keys.forEach((k) => { ov.ladder[k] = e.ladder[k] * scale; });
+    keys.forEach((k) => { ov.ladder[k] = (e.ladder[k] || 0) * scale; });
+    syncRow(o);
+  }
+  // editing the Deep dead-net redistributes the (current) deeper-funded ladder to hit the target
+  function distributeDeepDeadNet(o, target) {
+    const ed = deepEffective(o, NP.state.draft), vlc = ed.vlc; if (vlc <= 0) return;
+    const keys = NP.LADDER_KEYS, cur = keys.reduce((s, k) => s + (ed.ladder[k] || 0), 0);
+    const targetSum = clamp(1 - target / vlc, 0.02, 0.95), scale = cur > 0 ? targetSum / cur : 0;
+    const ov = NP.draftOf(o.uid); ov.deepLadder = ov.deepLadder || {};
+    keys.forEach((k) => { ov.deepLadder[k] = (ed.ladder[k] || 0) * scale; });
     syncRow(o);
   }
   function syncRow(o) {
-    const e = NP.effective(o, NP.state.draft), active = document.activeElement;
+    const active = document.activeElement, deep = NP.state.showAllow && isDeep();
+    const eStd = NP.effective(o, NP.state.draft), eDeep = deepEffective(o, NP.state.draft), eDisp = deep ? eDeep : eStd;
+    // dead-net column reflects the active version (deep in Deep view, standard otherwise)
     const dn = document.querySelector('input[data-uid="' + o.uid + '"][data-field="deadNet"]');
-    if (dn && dn !== active) dn.value = e.deadNet.toFixed(2);
-    const nc = document.getElementById("nc-" + o.uid); if (nc) { const l = e.ladder; nc.textContent = fmt.price(e.vlc * (1 - l.offInvoice - l.billBack - l.priceBreak - l.freight)); }
+    if (dn && dn !== active) dn.value = eDisp.deadNet.toFixed(2);
+    const ddn = document.querySelector('input[data-uid="' + o.uid + '"][data-field="deepDeadNet"]');
+    if (ddn && ddn !== active) ddn.value = eDeep.deadNet.toFixed(2);
+    const nc = document.getElementById("nc-" + o.uid); if (nc) { const l = eDisp.ladder; nc.textContent = fmt.price(eDisp.vlc * (1 - l.offInvoice - l.billBack - l.priceBreak - l.freight)); }
     if (NP.state.showAllow) ALW.forEach(([key]) => {
       const usd = document.querySelector('input[data-uid="' + o.uid + '"][data-alw="' + key + '"][data-kind="usd"]');
-      const pctI = document.querySelector('input[data-uid="' + o.uid + '"][data-alw="' + key + '"][data-kind="pct"]');
-      if (usd && usd !== active) usd.value = (e.ladder[key] * e.vlc).toFixed(2);
-      if (pctI && pctI !== active) pctI.value = (e.ladder[key] * 100).toFixed(1);
+      if (usd && usd !== active) usd.value = (eDisp.ladder[key] * eDisp.vlc).toFixed(2);
     });
   }
   function markEdited(o) {
-    ["vlc", "deadNet", "events"].forEach((f) => { const td = document.querySelector('[data-cell="' + o.uid + ":" + f + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, f)); });
+    ["vlc", "deadNet", "deepDeadNet", "events", "digEvents", "bothEvents"].forEach((f) => { const td = document.querySelector('[data-cell="' + o.uid + ":" + f + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, f)); });
     ALW.forEach(([key]) => ["pct", "usd"].forEach((kind) => { const td = document.querySelector('[data-cell="' + o.uid + ":alw:" + key + ":" + kind + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, "alw:" + key)); }));
   }
 
   /* ===================================================== VIEW 3: RESULTS ===== */
-  const BIN_BASIS = { sales: "Sales", units: "Units", agp: "AGP", velocity: "Velocity" };
+  const BIN_BASIS = { sales: "Sales", units: "Units", agp: "AGP" };
   function renderResults() {
-    const host = document.getElementById("npStep3"), map = NP.displayMap(), res = NP.state.res;
+    const host = document.getElementById("npStep4"), map = NP.displayMap(), res = NP.state.res;
     const bins = NP.binsFor(), objId = NP.state.objective;
     const binBy = res.binBy || (["sales", "units", "agp"].includes(objId) ? objId : "sales");
     const all = NP.cat().items, vendors = [...new Set(all.map((o) => o.vendor))];
     let items = all.slice().sort((a, b) => a.vendor === b.vendor ? a.item.localeCompare(b.item) : a.vendor.localeCompare(b.vendor));
     if (res.vendor !== "all") items = items.filter((o) => o.vendor === res.vendor);
+    if (res.rog !== "all") items = items.filter((o) => o.rog === res.rog);
     if (res.bin !== "all") items = items.filter((o) => bins[o.uid][binBy] === +res.bin);
     let lastVendor = null, body = "";
     if (!items.length) body = '<div class="np-empty">No NCRCs match these filters.</div>';
@@ -312,20 +425,21 @@
         '<div class="np-rhead-top"><h2 class="np-rhead-title">52-week plan — store &amp; digital tactics</h2>' +
           resultsControls(vendors, binBy) + '<div class="np-legend">' + legend() + "</div></div>" +
         exPinStrip(sd) +
-        '<p class="np-rhead-sub">The optimised deal each NCRC runs, week by week. Weeks 1–' + (NP.CURRENT_WEEK - 1) + ' are locked actuals. <strong>Flip</strong> a row for sales / units / AGP / allowance sparklines vs last year; <strong>right-click</strong> to ask the assistant.</p>' +
         resultsSummary(map) +
         '<div class="np-rhead-cal">' + monthScale() + eventBand() + "</div>" +
       "</div>" +
-      '<div class="np-rc-list">' + body + "</div></section>";
+      mlegend() + '<div class="np-rc-list">' + body + "</div></section>";
     bindResults(host, binBy);
   }
   function bindResults(host, binBy) {
     host.querySelectorAll(".np-rc-card").forEach((card) => { const uid = card.dataset.uid; bindCtx(card, uid); card.querySelectorAll("[data-flip]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); card.classList.toggle("is-flipped"); }); });
     bindScenarioChips(host);
     const v = host.querySelector("#npResVendor"); if (v) v.onchange = () => { NP.state.res.vendor = v.value; NP.renderAll(); };
+    const rg = host.querySelector("#npResRog"); if (rg) rg.onchange = () => { NP.state.res.rog = rg.value; NP.renderAll(); };
     host.querySelectorAll("[data-binby]").forEach((b) => b.onclick = () => { NP.state.res.binBy = b.dataset.binby; NP.renderAll(); });
     host.querySelectorAll("[data-bin]").forEach((b) => b.onclick = () => { NP.state.res.bin = b.dataset.bin; NP.renderAll(); });
     bindInteractions(host);
+    bindMonthZoom(host);
     host.querySelectorAll("[data-week]").forEach((el) => el.onclick = (e) => { e.stopPropagation(); const p = el.dataset.week.split("|"); openWeek(p[0], p[1], +p[2]); });
     host.addEventListener("mousemove", onSparkMove);
     host.addEventListener("mouseleave", clearSpark);
@@ -340,20 +454,27 @@
   }
   let resObserver = null;
   function legend() {
-    return '<span class="np-lg"><i class="np-lg-sw tactic-item"></i>Item Discount</span><span class="np-lg"><i class="np-lg-sw tactic-bxgx"></i>Buy X Get X</span><span class="np-lg"><i class="np-lg-dot"></i>+ digital</span><span class="np-lg"><i class="np-lg-sw np-lg-locked"></i>locked actual</span>';
+    return '<span class="np-lg"><i class="np-lg-sw tactic-item"></i>Item Discount</span>' +
+      '<span class="np-lg"><i class="np-lg-sw tactic-bxgx"></i>Buy X Get X</span>' +
+      '<span class="np-lg"><i class="np-lg-sw tactic-mb"></i>Must Buy</span>' +
+      '<span class="np-lg np-lg-mech">Offer <b>%</b> off · <b>$</b> off · <b>@$</b> price point · <b>FREE</b></span>' +
+      '<span class="np-lg"><i class="np-lg-d">D</i>digital</span>' +
+      '<span class="np-lg"><i class="np-lg-sw np-lg-locked"></i>locked actual</span>';
   }
   function resultsControls(vendors, binBy) {
     const res = NP.state.res;
     const vsel = '<label class="np-res-ctl">Vendor <select id="npResVendor" class="np-res-select"><option value="all">All vendors</option>' + vendors.map((v) => '<option' + (res.vendor === v ? " selected" : "") + ">" + esc(v) + "</option>").join("") + "</select></label>";
+    const rogs = [...new Set(NP.cat().items.map((o) => o.rog))].sort();
+    const rsel = '<label class="np-res-ctl">ROG <select id="npResRog" class="np-res-select np-rog-select"><option value="all">All ROGs</option>' + rogs.map((r) => '<option' + (res.rog === r ? " selected" : "") + ">" + esc(r) + "</option>").join("") + "</select></label>";
     const binByCap = '<span class="np-res-ctl">Bin by <span class="plan-obj-capsule">' + Object.keys(BIN_BASIS).map((k) => '<button type="button" class="plan-obj-opt' + (binBy === k ? " active" : "") + '" data-binby="' + k + '">' + BIN_BASIS[k] + "</button>").join("") + "</span></span>";
-    const binCap = '<span class="plan-obj-capsule np-bincap">' + ["all", "1", "2", "3", "4", "5"].map((b) => '<button type="button" class="plan-obj-opt' + (String(res.bin) === b ? " active" : "") + '" data-bin="' + b + '">' + (b === "all" ? "All" : b) + "</button>").join("") + "</span>";
-    return '<div class="np-rhead-controls">' + vsel + binByCap + binCap + "</div>";
+    const binCap = '<span class="np-res-ctl">Velocity <span class="plan-obj-capsule np-bincap">' + ["all", "1", "2", "3", "4", "5"].map((b) => '<button type="button" class="plan-obj-opt' + (String(res.bin) === b ? " active" : "") + '" data-bin="' + b + '">' + (b === "all" ? "All" : b) + "</button>").join("") + "</span></span>";
+    return '<div class="np-rhead-controls">' + vsel + rsel + binByCap + binCap + "</div>";
   }
   function resultsSummary(map) {
     if (!NP.state.scenarios.length) return "";
     const base = totals({}), cur = totals(map), view = NP.state.activeScenario === "base" ? "Base plan" : (NP.state.scenarios.find((s) => s.id === NP.state.activeScenario) || { name: "scenario" }).name;
     const pill = (lab, b, c, money) => { const d = b ? (c - b) / b : 0; return '<span class="np-res-pill"><small>' + lab + '</small><b>' + (money ? fmt.m(c) : fmt.u(c)) + '</b><i class="' + (d >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(d) + "</i></span>"; };
-    return '<div class="np-res-summary"><div class="scenario-strip np-res-scen">' + scenarioChips() + '</div><span class="np-res-viewing">Viewing <b>' + view + "</b> · vs base:</span>" + pill("Revenue", base.revenueM, cur.revenueM, 1) + pill("Units", base.units, cur.units, 0) + pill("AGP", base.agpM, cur.agpM, 1) + "</div>";
+    return '<div class="np-res-summary"><div class="scenario-strip np-res-scen">' + scenarioChips() + '</div><span class="np-res-viewing">Viewing <b>' + view + "</b> · vs base:</span>" + pill("Sales", base.revenueM, cur.revenueM, 1) + pill("Units", base.units, cur.units, 0) + pill("AGP", base.agpM, cur.agpM, 1) + "</div>";
   }
   // summary numbers: plan outcomes vs LY + promo discipline (store/digital/overall)
   function exSummaryData(items, map) {
@@ -369,7 +490,7 @@
   function exBandHTML(sd) {
     const obj = NP.objMeta(), plan = sd.plan, ly = sd.ly, D = sd.D, L = sd.L;
     const oc = (id, lab, vStr, cur, base) => { const p = base ? (cur - base) / base : 0; return '<div class="np-sum-stat' + (id === obj.id ? " is-obj" : "") + '"><span class="np-sum-lab">' + lab + (id === obj.id ? ' <em>objective</em>' : "") + '</span><span class="np-sum-val">' + vStr + '</span><span class="np-sum-d ' + (p >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(p) + ' vs LY</span><span class="np-sum-ly">LY ' + (id === "units" ? fmt.u(base) : fmt.m(base)) + "</span></div>"; };
-    const stats = oc("sales", "Revenue", fmt.m(plan.r), plan.r, ly.r) + oc("units", "Units", fmt.u(plan.u), plan.u, ly.u) + oc("agp", "AGP", fmt.m(plan.a), plan.a, ly.a);
+    const stats = oc("sales", "Sales", fmt.m(plan.r), plan.r, ly.r) + oc("units", "Units", fmt.u(plan.u), plan.u, ly.u) + oc("agp", "AGP", fmt.m(plan.a), plan.a, ly.a);
     const cell = (cur, lyv, pct) => '<td><b>' + (pct ? fmt.pctPlain(cur) : Math.round(cur).toLocaleString()) + '</b><small>LY ' + (pct ? fmt.pctPlain(lyv) : Math.round(lyv).toLocaleString()) + "</small></td>";
     const row = (label, fn, pct) => '<tr><td class="np-sum-mlab">' + label + "</td>" + cell(fn(D.store), fn(L.store), pct) + cell(fn(D.dig), fn(L.dig), pct) + cell(fn(D.all), fn(L.all), pct) + "</tr>";
     const tbl = '<table class="np-sum-tbl"><thead><tr><th></th><th>Store</th><th>Digital</th><th>Overall</th></tr></thead><tbody>' +
@@ -380,28 +501,107 @@
   function exPinStrip(sd) {
     const obj = NP.objMeta();
     const m = (id, lab, vStr, cur, base) => { const p = base ? (cur - base) / base : 0; return '<span class="np-pin-m' + (id === obj.id ? " is-obj" : "") + '"><b>' + lab + "</b>" + vStr + ' <i class="' + (p >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(p) + "</i></span>"; };
-    return '<div class="np-pin-out" id="npPinOut">' + m("sales", "Rev", fmt.m(sd.plan.r), sd.plan.r, sd.ly.r) + m("units", "Units", fmt.u(sd.plan.u), sd.plan.u, sd.ly.u) + m("agp", "AGP", fmt.m(sd.plan.a), sd.plan.a, sd.ly.a) + '<span class="np-pin-vs">vs last year</span></div>';
+    return '<div class="np-pin-out" id="npPinOut">' + m("sales", "Sales", fmt.m(sd.plan.r), sd.plan.r, sd.ly.r) + m("units", "Units", fmt.u(sd.plan.u), sd.plan.u, sd.ly.u) + m("agp", "AGP", fmt.m(sd.plan.a), sd.plan.a, sd.ly.a) + '<span class="np-pin-vs">vs last year</span></div>';
   }
   function eventBand() {
     let cells = "";
     for (let w = 0; w < 52; w++) { const ev = NP.RETAIL_EVENTS.find((e) => e.wk === w); cells += ev ? '<span class="np-ev" title="' + esc(ev.label) + '"><i></i><b>' + ev.short + "</b></span>" : '<span class="np-ev-empty"></span>'; }
     return '<div class="np-ev-band">' + cells + "</div>";
   }
-  function monthScale() { return '<div class="np-rc-months"><div class="np-rc-monthrow">' + MONTHS.map((mo) => "<span>" + mo + "</span>").join("") + "</div></div>"; }
+  function monthScale() { return '<div class="np-rc-months"><div class="np-rc-monthrow">' + MONTHS.map((mo, i) => '<span class="np-rc-month" data-month="' + i + '" role="button" tabindex="0" title="Zoom into ' + mo + '">' + mo + "</span>").join("") + "</div></div>"; }
+
+  /* ===== month zoom overlay (click a month label) — self-contained; remove the
+     [data-month] bindings in bindResults/bindCounterfactual to turn it off ===== */
+  function monthWeeks(m) { const a = [], s = Math.round(m * 52 / 12), e = Math.round((m + 1) * 52 / 12); for (let w = s; w < e; w++) a.push(w); return { weeks: a, start: s, end: e }; }
+  let _zoom = { m: 0, vendor: "all" };
+  function zoomItems() {
+    const res = NP.state.res;
+    let items = NP.cat().items.slice().sort((a, b) => a.vendor === b.vendor ? a.item.localeCompare(b.item) : a.vendor.localeCompare(b.vendor));
+    if (res.rog !== "all") items = items.filter((o) => o.rog === res.rog);
+    if (_zoom.vendor !== "all") items = items.filter((o) => o.vendor === _zoom.vendor);
+    return items;
+  }
+  function zoomGridHTML() {
+    const map = NP.displayMap(), mw = monthWeeks(_zoom.m), weeks = mw.weeks, items = zoomItems();
+    const evOf = (w) => { const e = NP.RETAIL_EVENTS.find((x) => x.wk === w); return e ? '<small>' + esc(e.short) + "</small>" : ""; };
+    const km = (vM) => { const k = vM * 1000; return Math.abs(k) >= 1000 ? "$" + (k / 1000).toFixed(2) + "M" : "$" + Math.round(k) + "K"; };
+    const head = '<tr><th class="np-zm-ncrch">NCRC</th>' + weeks.map((w) => '<th class="np-zm-wkh">Wk ' + (w + 1) + evOf(w) + "</th>").join("") + "</tr>";
+    const metric = (lab, ty, ly, f) => { const d = ty - ly, p = ly ? d / ly : 0; return '<span class="np-zm-l">' + lab + '</span><b class="np-zm-v">' + f(ty) + '</b><span class="np-zm-d">LY ' + f(ly) + " · " + (d >= 0 ? "+" : "") + f(d) + " / " + fmt.pctPlain(p) + "</span>"; };
+    const cardCell = (s, wk, w, alwU) => {
+      const c = wk[w], alw = "alw " + fmt.price(alwU) + "/u";
+      const tac = c.promoted
+        ? '<span class="np-zoom-tac tactic-' + c.store.className + '">' + NP.displayTactic(c.store.code) + "</span>" + (c.offer ? " " + esc(c.offer.label) : "") + (c.digital && c.digital.length ? ' <span class="np-zoom-d">D</span>' : "") + " · " + fmt.pctPlain(c.depth, 0) + " off · " + alw
+        : '<span class="np-zm-na">no promo</span> · ' + alw;
+      return '<td class="np-zm-cell' + (c.promoted ? "" : " np-zm-off") + '"><div class="np-zm-card">' + metric("Sales", s.sales[w], s.lySales[w], km) + metric("Units", s.units[w], s.lyUnits[w], fmt.u) + metric("AGP", s.agp[w], s.lyAgp[w], km) + '<div class="np-zm-tac">' + tac + "</div></div></td>";
+    };
+    const rows = items.map((o) => {
+      const s = NP.weeklySeries(o, map), wk = NP.weekPlan(o, map, false), e = NP.effective(o, map), alwU = e.vlc - e.deadNet;
+      return '<tr><th class="np-zm-ncrch"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + "</span></th>" + weeks.map((w) => cardCell(s, wk, w, alwU)).join("") + "</tr>";
+    }).join("");
+    return '<table class="np-zm-grid"><thead>' + head + "</thead><tbody>" + rows + "</tbody></table>";
+  }
+  function renderZoomBody() { const b = document.querySelector("#npZoom .np-zoom-body"); if (b) b.innerHTML = zoomGridHTML(); }
+  function openMonthZoom(m) {
+    _zoom = { m: m, vendor: NP.state.res.vendor || "all" };
+    const mw = monthWeeks(m), vendors = [...new Set(NP.cat().items.map((o) => o.vendor))].sort();
+    const vsel = '<label class="np-zoom-vfilter">Vendor <select id="npZoomVendor"><option value="all">All vendors</option>' +
+      vendors.map((v) => "<option" + (_zoom.vendor === v ? " selected" : "") + ">" + esc(v) + "</option>").join("") + "</select></label>";
+    let scrim = document.getElementById("npZoomScrim"), panel = document.getElementById("npZoom");
+    if (!scrim) { scrim = document.createElement("div"); scrim.id = "npZoomScrim"; scrim.className = "np-zoom-scrim"; document.body.appendChild(scrim); }
+    if (!panel) { panel = document.createElement("div"); panel.id = "npZoom"; panel.className = "np-zoom"; document.body.appendChild(panel); }
+    panel.innerHTML = '<header class="np-zoom-head"><div><h3>' + MONTHS[m] + ' — zoom</h3><small>Weeks ' + (mw.start + 1) + "–" + mw.end + " · primary tactic, week by week</small></div>" +
+      '<div class="np-zoom-head-r">' + vsel + '<button class="np-zoom-close" type="button" aria-label="Close">×</button></div></header>' +
+      '<div class="np-zoom-body">' + zoomGridHTML() + "</div>";
+    scrim.hidden = false; panel.hidden = false; document.body.classList.add("np-noscroll");
+    requestAnimationFrame(() => panel.classList.add("is-open"));
+    panel.querySelector(".np-zoom-close").onclick = closeMonthZoom;
+    panel.querySelector("#npZoomVendor").onchange = (e) => { _zoom.vendor = e.target.value; renderZoomBody(); };
+    scrim.onclick = closeMonthZoom;
+    document.addEventListener("keydown", zoomKey);
+  }
+  function zoomKey(e) { if (e.key === "Escape") closeMonthZoom(); }
+  function closeMonthZoom() {
+    const scrim = document.getElementById("npZoomScrim"), panel = document.getElementById("npZoom");
+    if (panel) { panel.classList.remove("is-open"); panel.hidden = true; }
+    if (scrim) scrim.hidden = true;
+    document.body.classList.remove("np-noscroll");
+    document.removeEventListener("keydown", zoomKey);
+  }
+  function bindMonthZoom(host) { host.querySelectorAll("[data-month]").forEach((el) => el.onclick = () => openMonthZoom(+el.dataset.month)); }
   function binBadge(o, bins, binBy) { const b = bins[o.uid][binBy]; return '<span class="np-bin np-bin-' + b + '" title="' + BIN_BASIS[binBy] + " bin " + b + ' (1 = top)">Bin ' + b + "</span>"; }
   function roleOf(o) { if (o.hero) return ["Headline", "head"]; if (o.form === "tub") return ["Seasonal", "seas"]; if (o.bin === 1) return ["KVI", "kvi"]; if (o.bin === 2) return ["Traffic", "traf"]; if (o.bin === 3) return ["Profit", "prof"]; return ["Background", "bg"]; }
   function roleBadge(o) { const r = roleOf(o); return '<span class="np-role np-role-' + r[1] + '" title="Item role">' + r[0] + "</span>"; }
-  function nameBlock(o, bins, binBy, trailing) { return '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + '</b><span class="np-rc-id">' + o.ncrc + '</span><span class="np-tag np-tag-' + o.form + '">' + o.form + "</span>" + binBadge(o, bins, binBy) + roleBadge(o) + (trailing || "") + "</div>"; }
+  function nameBlock(o, bins, binBy, trailing, mid) { return '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + "</span>" + (mid || "") + binBadge(o, bins, binBy) + roleBadge(o) + (trailing || "") + "</div>"; }
+  // inline Units / Revenue / AGP values (order fixed; labels shown once via mlegend()).
+  // Each: value (LY value · Δ#/$ / Δ%) — no "+" signs, "/" divides the Δ amount and Δ%.
+  function inlineMetrics(plan, ly) {
+    const u = fmt.u, m = fmt.m, pp = fmt.pctPlain;
+    const dU = plan.units - ly.units, dR = plan.revenueM - ly.revenueM, dA = plan.agpM - ly.agpM;
+    const pU = ly.units ? dU / ly.units : 0, pR = ly.revenueM ? dR / ly.revenueM : 0, pA = ly.agpM ? dA / ly.agpM : 0;
+    const cell = (val, lyv, dStr, p) => '<span class="np-rc-m"><b class="np-rc-m-v">' + val + '</b> <span class="np-rc-m-ly">(LY ' + lyv + " · " + dStr + " / " + pp(p) + ")</span></span>";
+    return '<div class="np-rc-inline">' +
+      cell(u(plan.units), u(ly.units), u(dU), pU) +
+      cell(m(plan.revenueM), m(ly.revenueM), m(dR), pR) +
+      cell(m(plan.agpM), m(ly.agpM), m(dA), pA) + "</div>";
+  }
+  // labels shown once above the list (not repeated per card)
+  function mlegend() {
+    return '<div class="np-rc-mlegend">Per NCRC vs LY · <b>Units</b> · <b>Sales</b> · <b>AGP</b> — value <span class="np-rc-mleg-mut">(LY · Δ / Δ%)</span></div>';
+  }
+  // single column header — Units/Revenue/AGP labels once, aligned over the card totals
+  function colHead() {
+    return '<div class="np-rc-colhead"><span class="np-rc-colhead-name"></span>' +
+      '<div class="np-rc-totals"><span class="np-rc-kv-h">Units</span><span class="np-rc-kv-h">Revenue</span><span class="np-rc-kv-h">AGP</span><span class="np-rc-flip-sp" aria-hidden="true"></span></div></div>';
+  }
   function resultCard(o, map, bins, binBy) {
-    const plan = NP.resultFor(o, map);
+    const plan = NP.resultFor(o, map), ly = NP.lyResult(o);
     const wk = NP.weekPlan(o, map, false), evWeeks = new Set(NP.RETAIL_EVENTS.map((e) => e.wk));
     const cells = wk.map((c, w) => weekCell(c, evWeeks.has(w), o.uid, "plan")).join("");
-    const totalsHtml = '<span class="np-rc-kv"><small>Units</small>' + fmt.u(plan.units) + '</span><span class="np-rc-kv"><small>Revenue</small>' + fmt.m(plan.revenueM) + '</span><span class="np-rc-kv"><small>AGP</small>' + fmt.m(plan.agpM) + "</span>";
     return '<div class="np-rc-card" data-uid="' + o.uid + '"><div class="np-rc-inner">' +
-      '<div class="np-rc-face np-rc-front"><div class="np-rc-info">' + nameBlock(o, bins, binBy, apprBadge(o, wk)) +
-      '<div class="np-rc-totals">' + totalsHtml + '<button class="np-flip-btn" type="button" data-flip>Flip ⟳</button></div></div>' +
+      '<div class="np-rc-face np-rc-front"><div class="np-rc-info"><div class="np-rc-headline">' + nameBlock(o, bins, binBy, apprBadge(o, wk), inlineMetrics(plan, ly)) +
+      '</div><button class="np-flip-btn" type="button" data-flip title="Flip — sparklines vs last year" aria-label="Flip card">⟳</button></div>' +
       '<div class="np-rc-ribbon">' + cells + "</div></div>" +
-      '<div class="np-rc-face np-rc-back"><div class="np-rc-info">' + nameBlock(o, bins, binBy, '<span class="np-rc-backlbl">vs last year</span>') + '<button class="np-flip-btn" type="button" data-flip>⟲ Back</button></div>' +
+      '<div class="np-rc-face np-rc-back"><div class="np-rc-info">' + nameBlock(o, bins, binBy, '<span class="np-rc-backlbl">vs last year</span>') + '<button class="np-flip-btn" type="button" data-flip title="Back to plan" aria-label="Flip back">⟲</button></div>' +
       backFace(o, map) + "</div></div></div>";
   }
   const SPARK_COLOR = { units: "#0aa985", sales: "#1769e8", agp: "#7c4dcc", allow: "#f36b12" };
@@ -414,7 +614,7 @@
     };
     return '<div class="np-rc-backwrap"><div class="np-rc-metrics">' +
       block("units", "Units", s.units, s.lyUnits, "units", s.plan.units, s.ly.units, SPARK_COLOR.units) +
-      block("sales", "Revenue", s.sales, s.lySales, "money", s.plan.revenueM, s.ly.revenueM, SPARK_COLOR.sales) +
+      block("sales", "Sales", s.sales, s.lySales, "money", s.plan.revenueM, s.ly.revenueM, SPARK_COLOR.sales) +
       block("agp", "AGP", s.agp, s.lyAgp, "money", s.plan.agpM, s.ly.agpM, SPARK_COLOR.agp) +
       '<div class="np-rc-metric np-rc-allowmetric"><div class="np-rc-mhead"><span class="np-rc-mlabel">Allowance %</span><span class="np-rc-mthis">' + fmt.pctPlain(s.allow[0]) + '</span></div>' + sparkChart(s.allow, null, "alw", SPARK_COLOR.allow, o.uid) + '</div>' +
       '<div class="np-rc-metric"><div class="np-rc-mhead"><span class="np-rc-mlabel">VLC</span><span class="np-rc-mthis">' + fmt.price(s.vlc[0]) + '</span></div>' + sparkChart(s.vlc, null, "price", "#8a96a8") + '</div>' +
@@ -467,12 +667,12 @@
   function alwBreak(uid, idx, total) {
     const o = NP.cat().items.find((x) => x.uid === uid); if (!o) return "Wk " + (idx + 1) + " · " + (total * 100).toFixed(1) + "%";
     const l = NP.effective(o, NP.displayMap()).ladder;
-    const base = l.offInvoice + l.billBack + l.priceBreak + l.freight + l.transaction + l.flat, wob = base ? total / base : 1;
+    const base = NP.LADDER_KEYS.reduce((s, k) => s + (l[k] || 0), 0), wob = base ? total / base : 1;
     const pf = (v) => v > 0.0005 ? (v * 100).toFixed(1) + "%" : "—";
     const grp = (title, rows) => '<div class="np-tip-g">' + title + "</div>" + rows.map(([n, v]) => '<div class="np-tip-row"><span>' + n + "</span><span>" + pf(v * wob) + "</span></div>").join("");
     return '<div class="np-tip-h">Wk ' + (idx + 1) + " · allowance % of VLC</div>" +
       grp("Buying", [["Off-invoice", l.offInvoice], ["Bill back", l.billBack], ["Price break", l.priceBreak], ["Freight", l.freight]]) +
-      grp("Retail", [["Transaction", l.transaction], ["Flat", l.flat]]) +
+      grp("Retail", NP.RETAIL_KEYS.map((k) => [RETAIL_LABEL[k], l[k] || 0])) +
       '<div class="np-tip-row np-tip-tot"><span>Total allowance</span><span>' + (total * 100).toFixed(1) + "%</span></div>";
   }
 
@@ -499,7 +699,7 @@
   }
 
   function renderExplain() {
-    const host = document.getElementById("npStep5"), ds = window.NP_EXPLAIN;
+    const host = document.getElementById("npStep6"), ds = window.NP_EXPLAIN;
     const M = exM(), B = NP.state.explain.b, weeks = exWeeks(), A = exAgg(weeks);
     const bench = A.tot[B], benchName = B === "plan" ? "the LY plan" : "last year";
     const gain = A.tot.opt[M] - bench[M];
@@ -734,11 +934,11 @@
   function totObj(t) { const m = NP.objMeta().id; return m === "units" ? t.units : m === "agp" ? t.agpM : t.revenueM; }
 
   function renderCounterfactual() {
-    const host = document.getElementById("npStep4"), c = NP.cat(), cf = NP.state.cf;
+    const host = document.getElementById("npStep5"), c = NP.cat(), cf = NP.state.cf;
     host.innerHTML =
       '<section class="panel"><div class="panel-heading"><div><h2>Counterfactuals — how events distribute across the year</h2>' +
       '<p>Pick a distribution strategy: see its category outcome and where every vendor/NCRC promotes. Items in a cluster <strong>cannibalise</strong> and share <strong>halo</strong>, so timing changes the result.</p></div></div>' +
-      clustersCollapsible(c, cf) + stratCards(cf) + "</section>" +
+      stratCards(cf) + "</section>" +
       (cf.strategy === "optimized" ? interactionsPanel(c) : "") +
       placementSection(c, cf);
     bindCounterfactual(host);
@@ -858,8 +1058,9 @@
     const ev = isEv ? " np-wk-ev" : "";
     if (!c.promoted) return '<span class="np-wk np-wk-none' + (c.locked ? " np-wk-locked" : "") + ev + '" title="Wk ' + c.week + ' · no promo"></span>';
     const ap = NP.state.cf.approved[uid + ":" + c.week] ? " np-wk-lock" : "", lk = c.locked ? " np-wk-locked" : "";
-    const tip = "Wk " + c.week + " · " + c.offer.label + " · " + (c.depth * 100).toFixed(0) + "% off · " + c.store.name + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : ap ? " · locked into plan" : "") + " · click for detail";
-    return '<span class="np-wk np-wk-click tactic-' + c.store.className + lk + ev + ap + '" data-week="' + ctx + "|" + uid + "|" + c.week + '" title="' + esc(tip) + '">' + (c.digital.length ? '<i class="np-wk-dot"></i>' : "") + "</span>";
+    const mechL = c.mech ? NP.MECH_LABEL[c.mech] : "";
+    const tip = "Wk " + c.week + " · " + c.store.name + " · " + c.offer.label + (mechL ? " (" + mechL + " " + c.val + ")" : "") + " · " + (c.depth * 100).toFixed(0) + "% off" + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : ap ? " · locked into plan" : "") + " · click for detail";
+    return '<span class="np-wk np-wk-click tactic-' + c.store.className + lk + ev + ap + '" data-week="' + ctx + "|" + uid + "|" + c.week + '" title="' + esc(tip) + '">' + (c.val ? '<span class="np-wk-val">' + esc(c.val) + "</span>" : "") + (c.digital.length ? '<i class="np-wk-d">D</i>' : "") + "</span>";
   }
   function apprBadge(o, wk) {
     const events = wk.filter((c) => c.promoted).length, n = wk.filter((c) => c.promoted && NP.state.cf.approved[o.uid + ":" + c.week]).length;
@@ -874,24 +1075,23 @@
     const stat = (l, v) => '<span class="np-cf-stat"><small>' + l + "</small>" + v + "</span>";
     return '<section class="panel np-results-panel"><div class="np-results-head np-cf-head">' +
       '<div class="np-rhead-top"><h3 class="np-rhead-title">52-week placement — ' + stratName + "</h3>" +
-        '<div class="np-cf-headtot">' + stat("Revenue", fmt.m(tot.revenueM)) + stat("Units", fmt.u(tot.units)) + stat("AGP", fmt.m(tot.agpM)) + "</div>" +
+        '<div class="np-cf-headtot">' + stat("Sales", fmt.m(tot.revenueM)) + stat("Units", fmt.u(tot.units)) + stat("AGP", fmt.m(tot.agpM)) + "</div>" +
         '<div class="np-legend">' + legend() + "</div></div>" +
         '<p class="np-cf-subnote">Click any week to see — and approve — its deal.</p>' +
         '<div class="np-rhead-cal">' + monthScale() + eventBand() + "</div></div>" +
-      '<div class="np-rc-list">' + body + "</div></section>";
+      mlegend() + '<div class="np-rc-list">' + body + "</div></section>";
   }
   function cfRow(o, strategy, evWeeks) {
-    const wk = cfWeeks(o, strategy), res = cfResult(o, strategy), events = wk.filter((c) => c.promoted).length;
+    const wk = cfWeeks(o, strategy), res = cfResult(o, strategy), ly = NP.lyResult(o);
     const cells = wk.map((c, w) => weekCell(c, evWeeks.has(w), o.uid, "cf")).join("");
-    const totals = '<span class="np-rc-kv"><small>Events</small>' + events + '</span><span class="np-rc-kv"><small>Units</small>' + fmt.u(res.units) + '</span><span class="np-rc-kv"><small>Revenue</small>' + fmt.m(res.revenueM) + '</span><span class="np-rc-kv"><small>AGP</small>' + fmt.m(res.agpM) + "</span>";
-    const appr = apprBadge(o, wk);
-    const nameFront = '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + '</b><span class="np-rc-id">' + o.ncrc + '</span><span class="np-tag np-tag-' + o.form + '">' + o.form + "</span>" + appr + "</div>";
-    const nameBack = '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + '</b><span class="np-rc-id">' + o.ncrc + '</span><span class="np-tag np-tag-' + o.form + '">' + o.form + '</span><span class="np-rc-backlbl">vs last year</span></div>';
+    const appr = apprBadge(o, wk), sizeTag = '<span class="np-rc-size">' + esc(o.pack) + "</span>";
+    const nameFront = '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + "</b>" + sizeTag + '<span class="np-rc-id">' + o.ncrc + "</span>" + inlineMetrics(res, ly) + appr + "</div>";
+    const nameBack = '<div class="np-rc-name"><b class="np-rc-item">' + esc(o.item) + "</b>" + sizeTag + '<span class="np-rc-id">' + o.ncrc + '</span><span class="np-rc-backlbl">vs last year</span></div>';
     return '<div class="np-rc-card np-cf-rowcard" data-uid="' + o.uid + '"><div class="np-rc-inner">' +
-      '<div class="np-rc-face np-rc-front"><div class="np-rc-info">' + nameFront +
-      '<div class="np-rc-totals">' + totals + '<button class="np-flip-btn" type="button" data-flip>Flip ⟳</button></div></div>' +
+      '<div class="np-rc-face np-rc-front"><div class="np-rc-info"><div class="np-rc-headline">' + nameFront +
+      '</div><button class="np-flip-btn" type="button" data-flip title="Flip — sparklines vs last year" aria-label="Flip card">⟳</button></div>' +
       '<div class="np-rc-ribbon">' + cells + "</div></div>" +
-      '<div class="np-rc-face np-rc-back"><div class="np-rc-info">' + nameBack + '<button class="np-flip-btn" type="button" data-flip>⟲ Back</button></div>' +
+      '<div class="np-rc-face np-rc-back"><div class="np-rc-info">' + nameBack + '<button class="np-flip-btn" type="button" data-flip title="Back to plan" aria-label="Flip back">⟲</button></div>' +
       backFace(o, NP.displayMap()) + "</div></div></div>";
   }
   // per-NCRC, per-week unified detail — works for both the 52-week plan (ctx 'plan') and counterfactual (ctx 'cf')
@@ -905,8 +1105,9 @@
     const locked = !!c.locked, akey = uid + ":" + week;
     const e = NP.effective(o, NP.displayMap()), l = e.ladder, vlc = e.vlc;
     const f = 1 + Math.sin((week / 52) * Math.PI * 3 + NP.util.hashStr(o.uid)) * 0.03 + Math.sin(week * 0.5) * 0.01;
-    const off = vlc * l.offInvoice * f, bb = vlc * l.billBack * f, pb = vlc * l.priceBreak * f, fr = vlc * l.freight * f, tx = vlc * l.transaction * f, fl = vlc * l.flat * f;
-    const totBuy = off + bb + pb, net = vlc * f - totBuy - fr, totRet = tx + fl, dead = net - totRet;
+    const off = vlc * l.offInvoice * f, bb = vlc * l.billBack * f, pb = vlc * l.priceBreak * f, fr = vlc * l.freight * f;
+    const retRows = NP.RETAIL_KEYS.map((k) => [RETAIL_LABEL[k], vlc * (l[k] || 0) * f]);
+    const totBuy = off + bb + pb, net = vlc * f - totBuy - fr, totRet = retRows.reduce((s, r) => s + r[1], 0), dead = net - totRet;
     const res = isCf ? cfResult(o, NP.state.cf.strategy) : NP.resultFor(o, NP.displayMap());
     const lyR = NP.lyResult(o), curve = NP.CURVE[o.form] || NP.CURVE.bar, psum = wk.filter((x) => x.promoted).reduce((s, x) => s + curve[x.week - 1], 0) || 1, share = curve[week - 1] / psum;
     const dig = c.digital && c.digital.length ? c.digital.map((d) => NP.DIGITAL_NAMES[d]).join(", ") : "—", m = (v) => "$" + v.toFixed(2);
@@ -941,7 +1142,7 @@
       '<div class="np-cw-sec np-cw-forecast"><div class="np-cw-out">' + fc + "</div></div>" +
       '<div class="np-cw-sec np-cw-ladder-sec"><h4>Cost ladder</h4><div class="np-cw-ladder">' +
         lrow("Vendor list cost", vlc * f, "head") + '<div class="np-cw-grp">Buying allowances</div>' + lrow("Off-invoice", off) + lrow("Bill back", bb) + lrow("Price break", pb) + lrow("Total buying", totBuy, "sub") + lrow("Freight", fr) + lrow("Net cost", net, "sub") +
-        '<div class="np-cw-grp">Retail allowances</div>' + lrow("Transaction", tx) + lrow("Flat", fl) + lrow("Total retail", totRet, "sub") + lrow("Dead-net cost", dead, "tot") + "</div></div>" +
+        '<div class="np-cw-grp">Retail allowances</div>' + retRows.map((r) => lrow(r[0], r[1])).join("") + lrow("Total retail", totRet, "sub") + lrow("Dead-net cost", dead, "tot") + "</div></div>" +
       '<div class="np-cw-sec np-cw-tactic"><h4>Tactic</h4><table class="np-cw-tactbl"><thead><tr><th class="np-l"></th><th>Store</th><th>Digital</th></tr></thead><tbody>' +
         trow("Tactic", c.store.name, digName) + trow("Base price", m(base), m(base)) + trow("Promo price", m(promo), dpresent ? m(digPromo) : "—") +
         trow("Depth", (c.depth * 100).toFixed(0) + "%", dpresent ? (digDepth * 100).toFixed(0) + "%" : "—") + trow("MB / limit", mb, dpresent ? mb : "—") + trow("Ad / display", "Y / Y", dpresent ? "Y / N" : "—") +
@@ -979,9 +1180,9 @@
     const wk = cfWeeks(o, NP.state.cf.strategy).filter((c) => c.promoted);
     if (!wk.length) return '<p class="np-foot">No promoted weeks under this strategy.</p>';
     const wob = (w) => 1 + Math.sin((w / 52) * Math.PI * 3 + NP.util.hashStr(o.uid)) * 0.03 + Math.sin(w * 0.5) * 0.01, m = (v) => "$" + v.toFixed(2);
-    const rows = wk.map((c) => { const w = c.week, f = wob(w), off = vlc * l.offInvoice * f, bb = vlc * l.billBack * f, pb = vlc * l.priceBreak * f, fr = vlc * l.freight * f, tx = vlc * l.transaction * f, fl = vlc * l.flat * f, net = vlc * f - off - bb - pb - fr, dead = net - tx - fl;
-      return '<tr><td class="np-l">Wk ' + w + "</td><td>" + m(vlc * f) + "</td><td>" + m(off) + "</td><td>" + m(bb) + "</td><td>" + m(pb) + "</td><td>" + m(fr) + '</td><td class="np-cf-subc">' + m(net) + "</td><td>" + m(tx) + "</td><td>" + m(fl) + '</td><td class="np-cf-totc">' + m(dead) + "</td></tr>"; }).join("");
-    return '<div class="np-cf-scroll"><table class="np-cf-mini"><thead><tr><th class="np-l">Week</th><th>VLC</th><th>Off-inv</th><th>Bill back</th><th>P/brk</th><th>Freight</th><th>Net cost</th><th>Txn</th><th>Flat</th><th>Dead-net</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
+    const rows = wk.map((c) => { const w = c.week, f = wob(w), off = vlc * l.offInvoice * f, bb = vlc * l.billBack * f, pb = vlc * l.priceBreak * f, fr = vlc * l.freight * f, ret = NP.RETAIL_KEYS.reduce((s, k) => s + vlc * (l[k] || 0) * f, 0), net = vlc * f - off - bb - pb - fr, dead = net - ret;
+      return '<tr><td class="np-l">Wk ' + w + "</td><td>" + m(vlc * f) + "</td><td>" + m(off) + "</td><td>" + m(bb) + "</td><td>" + m(pb) + "</td><td>" + m(fr) + '</td><td class="np-cf-subc">' + m(net) + "</td><td>" + m(ret) + '</td><td class="np-cf-totc">' + m(dead) + "</td></tr>"; }).join("");
+    return '<div class="np-cf-scroll"><table class="np-cf-mini"><thead><tr><th class="np-l">Week</th><th>VLC</th><th>Off-inv</th><th>Bill back</th><th>P/brk</th><th>Freight</th><th>Net cost</th><th>Retail</th><th>Dead-net</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
   }
   function bindCounterfactual(host) {
     host.querySelectorAll("[data-clust]").forEach((b) => b.onclick = () => { NP.state.cf.clustersOpen = !NP.state.cf.clustersOpen; renderCounterfactual(); });
@@ -989,8 +1190,89 @@
     host.querySelectorAll("[data-week]").forEach((el) => el.onclick = () => { const p = el.dataset.week.split("|"); openWeek(p[0], p[1], +p[2]); });
     host.querySelectorAll(".np-rc-card").forEach((card) => card.querySelectorAll("[data-flip]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); card.classList.toggle("is-flipped"); }));
     bindInteractions(host);
+    bindMonthZoom(host);
     host.addEventListener("mousemove", exTip); host.addEventListener("mouseleave", clearSpark);
   }
 
-  window.NPViews = { renderGrid, renderResults, renderExplain, renderCounterfactual };
+  /* ============================================== VIEW: CONSTRAINTS (step 2) ===
+     Reframes the "constraints requested" list into how the optimiser actually works:
+     agreed-once global locks · learned values · per-category inputs · scenarios ·
+     pruned tactics — with the original asks answered, in grey, "below the line". */
+  function conRow(title, desc, right) {
+    return '<div class="np-c3-row"><div class="np-c3-rmain"><span class="np-c3-rt">' + title + "</span>" + (desc ? '<span class="np-c3-rd">' + desc + "</span>" : "") + "</div>" + (right ? '<span class="np-c3-rv">' + right + "</span>" : "") + "</div>";
+  }
+  function conSec(label, blurb, rows, foot) {
+    return '<section class="np-c3-sec"><header class="np-c3-head"><span class="np-c3-label">' + label + "</span>" + (blurb ? '<span class="np-c3-blurb">' + blurb + "</span>" : "") + "</header>" + rows + (foot || "") + "</section>";
+  }
+  function tolItem(title, value, desc) {
+    return '<div class="np-c3-tol"><div class="np-c3-tol-h"><span class="np-c3-tol-t">' + title + '</span><span class="np-c3-tol-v">' + value + "</span></div><p class=\"np-c3-tol-d\">" + desc + "</p></div>";
+  }
+  // highlighted, clickable reference to another step (like the Deal inputs treatment)
+  function glink(step, label) { return '<a class="np-c3-glink" data-goto="' + step + '">' + label + "</a>"; }
+  // last-year promotion discipline (store / digital / overall) — same basis as the results LY column
+  function disciplineLYTable() {
+    const D = { store: { n: 0, ds: 0, deep: 0 }, dig: { n: 0, ds: 0, deep: 0 } };
+    NP.cat().items.forEach((o) => NP.weekPlan(o, null, true).forEach((c) => {
+      if (!c.promoted) return; const sd = c.depth;
+      D.store.n++; D.store.ds += sd; if (sd >= 0.3) D.store.deep++;
+      if (c.digital && c.digital.length) { const dd = Math.min(0.5, c.depth + 0.06); D.dig.n++; D.dig.ds += dd; if (dd >= 0.3) D.dig.deep++; }
+    }));
+    const all = { n: D.store.n + D.dig.n, ds: D.store.ds + D.dig.ds, deep: D.store.deep + D.dig.deep };
+    const pct = (x) => (x * 100).toFixed(1) + "%";
+    const active = activeNCRCsCount();
+    const c = (g, k) => k === "n" ? Math.round(g.n) + ' <span class="np-c3-pct">· ' + (active ? Math.round(g.n / active * 100) : 0) + "%</span>" : g.n ? pct((k === "ds" ? g.ds : g.deep) / g.n) : "—";
+    const row = (lab, k) => "<tr><td>" + lab + "</td><td>" + c(D.store, k) + "</td><td>" + c(D.dig, k) + "</td><td>" + c(all, k) + "</td></tr>";
+    return '<table class="np-c3-floors np-c3-disc"><thead><tr><th>Promotion discipline · LY</th><th>Store</th><th>Digital</th><th>Overall</th></tr></thead><tbody>' +
+      row("Items on promo", "n") + row("Avg discount", "ds") + row("Items &gt; 30% off", "deep") + "</tbody></table>" +
+      '<p class="np-c3-active">Active NCRCs: <b>' + activeNCRCsCount().toLocaleString() + "</b>.</p>";
+  }
+  // illustrative active-NCRC count for the scope (the on-screen sample rolls up to the full active set)
+  const ACTIVE_NCRC = { confectionery: 433, softdrinks: 156 };
+  function activeNCRCsCount() {
+    const base = ACTIVE_NCRC[NP.state.categoryId] || NP.cat().items.length;
+    return Math.round(base * NP.divisionFactor());
+  }
+  function renderConstraints() {
+    const host = document.getElementById("npStep2"); if (!host) return;
+    const div = NP.divMeta().short, cn = NP.cat().name.split(" — ")[0];
+
+    // the only hard, agreed-once rules — tolerances beside the protection floors
+    const tols =
+      tolItem("Over-funding tolerance", "+5%", "Up to 5% over plan — never below committed.") +
+      tolItem("Promo-intensity headroom", "±20% / wk", "How much more / less promotional than LY.") +
+      tolItem("Depth headroom", "±20% / wk", "How far average discount depth may drift.");
+    const floors = '<table class="np-c3-floors"><thead><tr><th>Protection floor vs LY</th><th>Non-holiday</th><th>Holiday</th></tr></thead><tbody>' +
+      '<tr><td>Units</td><td>≥ 80%</td><td>≥ 70%</td></tr>' +
+      '<tr><td>Sales</td><td>≥ 85%</td><td>≥ 78%</td></tr>' +
+      '<tr><td>Margin (AGP)</td><td>≥ 85%</td><td>≥ 75%</td></tr></tbody></table>';
+    const secA = conSec("Agreed globally · locked at design",
+      "Set once with your team, applied to every category.",
+      '<div class="np-c3-split"><div class="np-c3-split-l">' + tols + '</div><div class="np-c3-split-r">' + floors + '</div><div class="np-c3-split-r">' + disciplineLYTable() + "</div></div>");
+
+    // everything else: their asks, answered with where / how it's handled (grey, soft)
+    const asks = [
+      ["Maximum margin $ investment vs LY", "You enter this as allowances by sub-type on " + glink(3, "Deal inputs") + " — it's an input, not a cap, so the spend stays visible."],
+      ["Units ID % vs LY floor (e.g. −2%)", "Not a goal-seek. Held as the learned holiday / non-holiday <b>floors above</b>, which shift as forecasting variance falls."],
+      ["LY promo cost &amp; frequency to negotiate", "Cost buckets plus per-NCRC store / digital / combined event counts live on " + glink(3, "Deal inputs") + "."],
+      ["Min deep-promo frequency · front-cover (4 retail buckets)", "Front cover is a gap today; deep-promo frequency shows as learned and output values on the " + glink(4, "52-week plan") + "."],
+      ["Complex promotions allowed (yes / no)", "Learned digital caps that flex weekly with seasonality — not an on / off switch, or the forecast breaks."],
+      ["Hard-lock off double hoops", "Exposed as a <b>pruned</b> tactic — digital won't stack on a must-buy."],
+      ["Own Brands shielding &amp; exceptions", "Run as an OB-specific scenario on " + glink(5, "Counterfactuals") + ", not a hard constraint."],
+      ["Promoted minimum discount % vs white tag", "Covered with deep-promo frequency — learned and output values on the " + glink(4, "52-week plan") + " above."],
+      ["Overall plan confidence score", "Reported after the run on the " + glink(4, "52-week plan") + " — the optimiser maximises it; you can't set a target like 89.5%."]
+    ];
+    const choices = '<div class="np-c3-choices"><h4>On the constraints you asked for</h4>' +
+      '<p class="np-c3-choices-intro">Everything you raised is here — most are handled as inputs, learned values or scenarios rather than hard limits, so the plan stays grounded in the forecast. Where each one lives:</p><dl>' +
+      asks.map((a) => "<dt>" + a[0] + "</dt><dd>" + a[1] + "</dd>").join("") + "</dl></div>";
+
+    host.innerHTML =
+      '<section class="panel np-c3">' +
+        '<div class="panel-heading"><div><h2>Constraints &amp; guardrails</h2>' +
+          "<p>For <b>" + esc(div) + " · " + esc(cn) + "</b>, the only hard rules are the globally-agreed tolerances below. Everything else you asked for is handled as an input, a learned value, or a scenario.</p></div></div>" +
+        secA + choices +
+      "</section>";
+    host.querySelectorAll("[data-goto]").forEach((b) => b.onclick = () => NP.goStep(+b.dataset.goto));
+  }
+
+  window.NPViews = { renderGrid, renderResults, renderExplain, renderCounterfactual, renderConstraints };
 })();

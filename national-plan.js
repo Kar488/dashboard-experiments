@@ -71,9 +71,30 @@
   ];
   const CLUSTER_LABEL = { singles: "Singles / impulse bars", sharingbag: "Sharing bags & pouches", tubs: "Sharing tubs", cola: "Cola & dark sodas", lemonlime: "Lemon-lime & flavours" };
 
+  /* Divisions — the national plan is built for a division (or the national roll-up).
+     Each division is a share of national demand; selecting one scopes every forecast
+     proportionally (bins, deltas and tactics are unchanged — only the absolute scale). */
+  const DIVISIONS = [
+    { id: "national", name: "National roll-up (all divisions)", short: "National", factor: 1.0 },
+    { id: "northeast", name: "Northeast Division", short: "Northeast", factor: 0.225 },
+    { id: "southeast", name: "Southeast Division", short: "Southeast", factor: 0.205 },
+    { id: "midwest", name: "Midwest Division", short: "Midwest", factor: 0.24 },
+    { id: "southwest", name: "Southwest Division", short: "Southwest", factor: 0.155 },
+    { id: "west", name: "West Division", short: "West", factor: 0.205 }
+  ];
+
+  // ROG = Receiver of Goods — 4-letter receiving-location codes (a filter peer to vendor).
+  const ROGS = ["NCAL", "SCAL", "PNWE", "INMT", "DNVR", "EAST"];
+
   const BIN_UNITS = { 1: 1180, 2: 690, 3: 380, 4: 210 };
   const FORM_LIFT = { bar: 0.62, bag: 0.74, tub: 1.55 };
   const FORM_HHRATE = { bar: 0.34, bag: 0.52, tub: 0.78 };
+
+  // allowance ladder build-up (fractions of VLC): VLC = Σ allowances + dead-net.
+  const BUY_KEYS = ["offInvoice", "billBack", "priceBreak"];
+  const FREIGHT_KEYS = ["freight"];
+  const RETAIL_KEYS = ["scan", "shipToStore", "headerFlat", "newItem"];
+  const LADDER_KEYS = BUY_KEYS.concat(FREIGHT_KEYS, RETAIL_KEYS);
 
   function enrich(cat) {
     const rng = mulberry32(cat.seed); let ncrcSeq = 30000;
@@ -85,21 +106,21 @@
       const recDepth = round(clamp(lyDepth - (0.02 + rng() * 0.06), 0.12, 0.38), 3);
       const lyEvents = Math.round(it.form === "tub" ? 6 + rng() * 4 : 10 + rng() * 10);
       const recEvents = Math.round(clamp(lyEvents - (it.form === "tub" ? 0 : 2) + (rng() * 4 - 2), it.form === "tub" ? 4 : 6, it.form === "tub" ? 12 : 22));
-      const ladder = { offInvoice: round(0.22 + rng() * 0.12, 3), billBack: round(0.015 + rng() * 0.02, 3), priceBreak: round(rng() * 0.02, 3), freight: round(0.012 + rng() * 0.008, 3), transaction: round(0.05 + rng() * 0.05, 3), flat: round(0.01 + rng() * 0.03, 3) };
-      return { uid: cat.id + "-" + idx, ncrc: "NCRC " + (ncrcSeq += 7 + Math.floor(rng() * 5)), item: it.n, brand: it.brand, vendor: it.v, form: it.form, pack: it.pack, cluster: it.cluster, hero: !!it.hero, bin: it.bin, baseUnitsK, basePrice, vlc, lyDepth, recDepth, lyEvents, recEvents, ladder, liftCoef: FORM_LIFT[it.form] * (0.85 + rng() * 0.3), hhRate: FORM_HHRATE[it.form] * (0.9 + rng() * 0.2) };
+      const ladder = { offInvoice: round(0.22 + rng() * 0.12, 3), billBack: round(0.015 + rng() * 0.02, 3), priceBreak: round(rng() * 0.02, 3), freight: round(0.012 + rng() * 0.008, 3), scan: round(0.03 + rng() * 0.03, 3), shipToStore: round(0.01 + rng() * 0.02, 3), headerFlat: round(0.005 + rng() * 0.015, 3), newItem: round(0.005 + rng() * 0.015, 3) };
+      return { uid: cat.id + "-" + idx, ncrc: "NCRC " + (ncrcSeq += 7 + Math.floor(rng() * 5)), item: it.n, brand: it.brand, vendor: it.v, rog: ROGS[hashStr(cat.id + "-" + idx) % ROGS.length], form: it.form, pack: it.pack, cluster: it.cluster, hero: !!it.hero, bin: it.bin, baseUnitsK, basePrice, vlc, lyDepth, recDepth, lyEvents, recEvents, ladder, liftCoef: FORM_LIFT[it.form] * (0.85 + rng() * 0.3), hhRate: FORM_HHRATE[it.form] * (0.9 + rng() * 0.2) };
     });
     return { id: cat.id, name: cat.name, items };
   }
   const DATA = {}; CATEGORIES.forEach((c) => { DATA[c.id] = enrich(c); });
 
   /* --------------------------------------------------------- response model */
-  function deadNetOf(o) { const l = o.ladder; return round(o.vlc * (1 - l.offInvoice - l.billBack - l.priceBreak - l.freight - l.transaction - l.flat), 3); }
+  function deadNetOf(o) { const l = o.ladder; return round(o.vlc * (1 - LADDER_KEYS.reduce((s, k) => s + (l[k] || 0), 0)), 3); }
   function promoPriceOf(o, depth) { return round(o.basePrice * (1 - depth), 2); }
   function respond(o, opts) {
     const events = clamp(opts.events, 0, 40), depth = clamp(opts.depth, 0, 0.6);
     const deadNet = opts.deadNet != null ? opts.deadNet : deadNetOf(o);
     const seasonGain = opts.seasonGain != null ? opts.seasonGain : 1.0, cannib = opts.cannib != null ? opts.cannib : 0, halo = opts.halo != null ? opts.halo : 0;
-    const baseWeeklyK = o.baseUnitsK / 52, pull = 1 - 0.004 * events, dip = 1 - 0.0032 * events;
+    const baseWeeklyK = o.baseUnitsK / 52 * divisionFactor(), pull = 1 - 0.004 * events, dip = 1 - 0.0032 * events;
     const lift = o.liftCoef * depth * pull * seasonGain;
     const promoUnits = events * baseWeeklyK * (1 + lift), baseUnits = (52 - events) * baseWeeklyK * dip;
     const units = (promoUnits + baseUnits) * (1 - cannib) * (1 + halo);
@@ -109,24 +130,42 @@
     return { units, revenueM: revenue / 1000, agpM: agp / 1000, hhK: units * o.hhRate, promoPrice, deadNet };
   }
   function applyLadder(o, ov) { if (!ov || (!ov.ladder && ov.vlc == null)) return o; return Object.assign({}, o, { vlc: ov.vlc != null ? ov.vlc : o.vlc, ladder: Object.assign({}, o.ladder, ov.ladder) }); }
-  function effective(o, map) { const ov = (map && map[o.uid]) || {}; const merged = applyLadder(o, ov); return { events: ov.events != null ? ov.events : o.recEvents, deadNet: ov.deadNetTouched ? ov.deadNet : deadNetOf(merged), depth: o.recDepth, vlc: merged.vlc, ladder: merged.ladder }; }
+  function defDigEvents(o) { return Math.round(o.recEvents * 0.65); }
+  function defBothEvents(o) { return Math.round(o.recEvents * 0.40); }
+  function effective(o, map) { const ov = (map && map[o.uid]) || {}; const merged = applyLadder(o, ov); return { events: ov.events != null ? ov.events : o.recEvents, digEvents: ov.digEvents != null ? ov.digEvents : defDigEvents(o), bothEvents: ov.bothEvents != null ? ov.bothEvents : defBothEvents(o), deadNet: ov.deadNetTouched ? ov.deadNet : deadNetOf(merged), depth: o.recDepth, vlc: merged.vlc, ladder: merged.ladder }; }
   function resultFor(o, map) { const e = effective(o, map); return respond(o, { events: e.events, depth: e.depth, deadNet: e.deadNet, seasonGain: 1.06, cannib: 0.05, halo: 0.064 }); }
   function lyResult(o) { return respond(o, { events: o.lyEvents, depth: o.lyDepth, seasonGain: 0.93, cannib: 0.14, halo: 0 }); }
   function noPromoResult(o) { return respond(o, { events: 0, depth: 0, seasonGain: 1.0, cannib: 0, halo: 0 }); }
 
   /* ----------------------------------------------------- tactics / offers */
-  const STORE_TACTICS = { ID: { name: "Item Discount", code: "ID", className: "item" }, BXGX: { name: "Buy X Get X", code: "BXGX", className: "bxgx" }, NONE: { name: "No store promo", code: "~", className: "none" } };
+  const STORE_TACTICS = { ID: { name: "Item Discount", code: "ID", className: "item" }, BXGX: { name: "Buy X Get X", code: "BXGX", className: "bxgx" }, MB: { name: "Must Buy", code: "MB", className: "mb" }, NONE: { name: "No store promo", code: "~", className: "none" } };
   const DIGITAL_NAMES = { ID: "Item Discount", MB: "Must Buy", BXGX: "Buy X Get X", BXGY: "Buy X Get Y", F5: "Fab 5", MD: "Meal Deal", WOD: "WOD/POD", CONT: "Continuity", PERS: "Personalized" };
+  // offer "mechanic" = how the deal is expressed. Per tactic (a→d order matches the legend):
+  //   ID:   $ off, % off, $ price point        BXGX/MB: % off, $ off, free, $ price point
+  const MECH_LABEL = { poff: "% off", doff: "$ off", pp: "price point", free: "Free" };
   const OFFERS = [
-    { id: "id-1off", label: "$1 Off", store: "ID", digital: "ID", depth: 0.18 },
-    { id: "bxgx-bogo50", label: "BOGO 50%", store: "BXGX", digital: "MB", depth: 0.25 },
-    { id: "bxgx-b1g1", label: "B1G1", store: "BXGX", digital: "F5", depth: 0.40 },
-    { id: "id-2for5", label: "2 for $5", store: "ID", digital: "MD", depth: 0.20 },
-    { id: "bxgx-bogofree", label: "BOGO Free", store: "BXGX", digital: null, depth: 0.30 }
+    { id: "id-doff", label: "$1 Off", store: "ID", mech: "doff", digital: "ID", depth: 0.18 },
+    { id: "id-poff", label: "20% Off", store: "ID", mech: "poff", digital: "PERS", depth: 0.20 },
+    { id: "id-pp", label: "2 for $5", store: "ID", mech: "pp", digital: "MD", depth: 0.20 },
+    { id: "bxgx-poff", label: "BOGO 50%", store: "BXGX", mech: "poff", digital: "MB", depth: 0.25 },
+    { id: "bxgx-free", label: "B1G1 Free", store: "BXGX", mech: "free", digital: "F5", depth: 0.40 },
+    { id: "bxgx-doff", label: "B1G1 $1 Off", store: "BXGX", mech: "doff", digital: null, depth: 0.30 },
+    { id: "mb-poff", label: "Buy 2 Save 20%", store: "MB", mech: "poff", digital: "MB", depth: 0.22 },
+    { id: "mb-doff", label: "Buy 2 Save $2", store: "MB", mech: "doff", digital: null, depth: 0.24 },
+    { id: "mb-pp", label: "3 for $6", store: "MB", mech: "pp", digital: "CONT", depth: 0.20 }
   ];
   const DEPTH_LADDER = [0, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40];
   function snapDepth(d) { let best = DEPTH_LADDER[0], bd = 9; DEPTH_LADDER.forEach((x) => { const e = Math.abs(x - d); if (e < bd) { bd = e; best = x; } }); return best; }
-  function displayTactic(code) { return code === "ID" ? "Id" : code === "BXGX" ? "BxGx" : ""; }
+  function displayTactic(code) { return code === "ID" ? "Id" : code === "BXGX" ? "BxGx" : code === "MB" ? "MB" : ""; }
+  // compact in-cell token for an offer's mechanic (full label lives in the tooltip / drawer)
+  function offerValueShort(o, offer, depth) {
+    if (!offer) return "";
+    if (offer.mech === "poff") return Math.round(depth * 100) + "%";
+    if (offer.mech === "free") return "FREE";
+    if (offer.mech === "doff") { const d = o.basePrice * depth; return d < 1 ? Math.round(d * 100) + "¢" : "$" + (d < 3 ? d.toFixed(1) : Math.round(d)); }
+    if (offer.mech === "pp") { const p = promoPriceOf(o, depth); return p < 1 ? "@$" + p.toFixed(1).slice(1) : "@$" + Math.round(p); }
+    return "";
+  }
 
   function rankedWeeks(form) { const c = CURVE[form] || CURVE.bar; return c.map((v, i) => [i, v]).sort((a, b) => b[1] - a[1]).map((p) => p[0]); }
   function pickWeeks(form, events, phase) {
@@ -216,7 +255,7 @@
         if (!ly && offer.digital && ((w + o.bin) % 2 === 0)) { digital = [offer.digital]; if ((w + h) % 3 === 0) digital.push("PERS"); }
         if (ly && (w % 2 === 0)) digital = ["ID"];
       }
-      arr.push({ week: w + 1, locked, promoted, store, digital, offer, depth });
+      arr.push({ week: w + 1, locked, promoted, store, digital, offer, depth, mech: promoted && offer ? offer.mech : null, val: promoted ? offerValueShort(o, offer, depth) : "" });
     }
     return arr;
   }
@@ -230,7 +269,7 @@
       const wob = 1 + Math.sin((w / 52) * Math.PI * 4 + hashStr(o.uid)) * 0.06;
       rows.push({
         week: w + 1,
-        offInvoice: l.offInvoice * wob, totalBuying: (l.offInvoice + l.billBack + l.priceBreak) * wob, totalRetail: (l.transaction + l.flat) * wob,
+        offInvoice: l.offInvoice * wob, totalBuying: (l.offInvoice + l.billBack + l.priceBreak) * wob, totalRetail: RETAIL_KEYS.reduce((s, k) => s + (l[k] || 0), 0) * wob,
         deadNet: deadNetOf(applyLadder(o, { vlc, ladder: { offInvoice: l.offInvoice * wob } })),
         units: plan.units * (curve[w] / sumC), lyUnits: ly.units * (curve[w] / sumC)
       });
@@ -275,7 +314,7 @@
       lU.push(ly.units * frac * (wkLy[w].promoted ? 1.5 : 0.9));
       lS.push(ly.revenueM * frac * (wkLy[w].promoted ? 1.45 : 0.92));
       lA.push(ly.agpM * frac * (wkLy[w].promoted ? 1.3 : 0.94));
-      al.push((l.offInvoice + l.billBack + l.priceBreak + l.freight + l.transaction + l.flat) * (1 + Math.sin((w / 52) * Math.PI * 4 + ph) * 0.06));
+      al.push(LADDER_KEYS.reduce((s, k) => s + (l[k] || 0), 0) * (1 + Math.sin((w / 52) * Math.PI * 4 + ph) * 0.06));
       vc.push(e.vlc * (1 + Math.sin((w / 52) * Math.PI * 3 + ph) * 0.03 + Math.sin(w * 0.6) * 0.012));
       dc.push(e.deadNet * (1 + Math.sin((w / 52) * Math.PI * 3.5 + ph) * 0.04 + Math.sin(w * 0.5) * 0.014));
     }
@@ -351,28 +390,32 @@
 
   /* --------------------------------------------------------------- state */
   const OBJECTIVES = [
-    { id: "sales", label: "Sales", short: "Revenue", metric: "revenueM", fmtName: "Revenue" },
+    { id: "sales", label: "Sales", short: "Sales", metric: "revenueM", fmtName: "Sales" },
     { id: "units", label: "Units", short: "Units", metric: "units", fmtName: "Units" },
     { id: "agp", label: "AGP", short: "AGP", metric: "agpM", fmtName: "AGP" },
     { id: "hh", label: "HHs", short: "HHs", metric: "hhK", fmtName: "Households" }
   ];
   const STEPS = [
     { n: 1, title: "Scope & objective" },
-    { n: 2, title: "Deal inputs" },
-    { n: 3, title: "52-week plan" },
-    { n: 4, title: "Counterfactuals" },
-    { n: 5, title: "Why it beats LY" }
+    { n: 2, title: "Constraints" },
+    { n: 3, title: "Deal inputs" },
+    { n: 4, title: "52-week plan" },
+    { n: 5, title: "Counterfactuals" },
+    { n: 6, title: "Why it beats LY" }
   ];
   const state = {
-    step: 1, generated: false, categoryId: "confectionery", objective: "sales",
+    step: 1, generated: false, division: "national", categoryId: "confectionery", objective: "sales",
     draft: {}, scenarios: [], scnSeq: 0, activeScenario: "base",
-    showAllow: false, flip: {},
-    res: { vendor: "all", binBy: null, bin: "all" },
+    showAllow: false, deadNetVersion: "v1", flip: {},
+    grid: { vendor: "all", rog: "all" },
+    res: { vendor: "all", rog: "all", binBy: null, bin: "all" },
     ix: { binBy: "sales", bin: "1", ncrc: "", open: false },
     explain: { m: null, b: "plan", scope: "all" },
     cf: { strategy: "optimized", clustersOpen: false, expanded: {}, tab: {}, approved: {}, molOpen: false, focal: null }
   };
   function cat() { return DATA[state.categoryId]; }
+  function divMeta() { return DIVISIONS.find((d) => d.id === state.division) || DIVISIONS[0]; }
+  function divisionFactor() { return divMeta().factor; }
   function draftOf(uid) { return state.draft[uid] || (state.draft[uid] = {}); }
   function activeOv() { if (state.activeScenario === "base") return {}; const s = state.scenarios.find((x) => x.id === state.activeScenario); return s ? s.ov : {}; }
   function displayMap() { return activeOv(); }
@@ -383,8 +426,11 @@
   function isEdited(o, field) {
     const ov = state.draft[o.uid]; if (!ov) return false;
     if (field === "events") return ov.events != null && ov.events !== o.recEvents;
+    if (field === "digEvents") return ov.digEvents != null && ov.digEvents !== defDigEvents(o);
+    if (field === "bothEvents") return ov.bothEvents != null && ov.bothEvents !== defBothEvents(o);
     if (field === "vlc") return ov.vlc != null && Math.abs(ov.vlc - o.vlc) > 1e-9;
     if (field === "deadNet") return ov.deadNetTouched || (ov.ladder && Object.keys(ov.ladder).length > 0);
+    if (field === "deepDeadNet") return ov.deepLadder && Object.keys(ov.deepLadder).length > 0;
     if (field.indexOf("alw:") === 0) { const k = field.slice(4); return ov.ladder && ov.ladder[k] != null && Math.abs(ov.ladder[k] - o.ladder[k]) > 1e-9; }
     return false;
   }
@@ -395,7 +441,9 @@
     return {
       vlc: { def: o.vlc, lo: round(o.vlc * 0.93, 2), hi: round(o.vlc * 1.07, 2), unit: "$" },
       deadNet: { def: dn, lo: round(dn * 0.90, 2), hi: round(dn * 1.08, 2), unit: "$" },
-      events: { def: o.recEvents, lo: Math.max(o.form === "tub" ? 4 : 6, o.recEvents - 3), hi: Math.min(o.form === "tub" ? 14 : 24, o.recEvents + 4), unit: "" }
+      events: { def: o.recEvents, lo: Math.max(o.form === "tub" ? 4 : 6, o.recEvents - 3), hi: Math.min(o.form === "tub" ? 14 : 24, o.recEvents + 4), unit: "" },
+      digEvents: { def: defDigEvents(o), lo: Math.max(0, defDigEvents(o) - 3), hi: defDigEvents(o) + 4, unit: "" },
+      bothEvents: { def: defBothEvents(o), lo: Math.max(0, defBothEvents(o) - 2), hi: defBothEvents(o) + 3, unit: "" }
     };
   }
 
@@ -416,10 +464,10 @@
   }
 
   window.NP = {
-    state, DATA, CATEGORIES, OBJECTIVES, STEPS, GUARDRAIL_GROUPS, CLUSTER_LABEL, CURVE, SEASON, OFFERS, STORE_TACTICS, DIGITAL_NAMES, DEPTH_LADDER, CURRENT_WEEK,
-    cat, draftOf, displayMap, isDirty, isEdited, objMeta, objVal, ranges, askContext,
+    state, DATA, CATEGORIES, DIVISIONS, ROGS, OBJECTIVES, STEPS, GUARDRAIL_GROUPS, CLUSTER_LABEL, CURVE, SEASON, OFFERS, STORE_TACTICS, DIGITAL_NAMES, DEPTH_LADDER, CURRENT_WEEK, LADDER_KEYS, BUY_KEYS, RETAIL_KEYS,
+    cat, divMeta, divisionFactor, draftOf, displayMap, isDirty, isEdited, objMeta, objVal, ranges, askContext,
     effective, resultFor, lyResult, noPromoResult, respond, deadNetOf, promoPriceOf, applyLadder,
-    weekPlan, weeklyTrend, weeklySeries, binsFor, displayTactic, snapDepth, RETAIL_EVENTS, rankedClusters,
+    weekPlan, weeklyTrend, weeklySeries, binsFor, displayTactic, snapDepth, offerValueShort, MECH_LABEL, RETAIL_EVENTS, rankedClusters,
     guardrailCount, findGuardrail, flaggedFor,
     fmt: { m: fmtM, u: fmtU, price: fmtPrice, pct: fmtPct, pctPlain: fmtPctPlain },
     util: { clamp, round, clone, hashStr },
@@ -430,17 +478,18 @@
   function renderStepper() {
     const host = document.getElementById("npStepper");
     const tabs = STEPS.map((s) => {
-      const locked = s.n > 1 && !state.generated, active = state.step === s.n, done = state.generated && s.n < state.step;
-      return '<button type="button" class="np-step-tab' + (active ? " is-active" : "") + (locked ? " is-locked" : "") + (done ? " is-done" : "") + '" data-step="' + s.n + '"' + (locked ? " disabled" : "") + '>' +
+      const disabled = s.n === 6; // "Why it beats LY" — greyed out / not selectable for now
+      const locked = !disabled && s.n > 1 && !state.generated, active = state.step === s.n, done = state.generated && s.n < state.step;
+      return '<button type="button" class="np-step-tab' + (active ? " is-active" : "") + (locked ? " is-locked" : "") + (disabled ? " is-disabled" : "") + (done ? " is-done" : "") + '" data-step="' + s.n + '"' + (locked || disabled ? " disabled" : "") + '>' +
         '<span class="np-step-circ">' + (locked ? "🔒" : done ? "✓" : s.n) + '</span><span class="np-step-name">' + s.title + "</span></button>";
     }).join('<span class="np-step-line" aria-hidden="true"></span>');
     const obj = objMeta();
     host.innerHTML = '<div class="np-stepper-inner">' + tabs + "</div>" +
-      '<div class="np-stepper-obj">' + (state.generated ? '<span>Category</span><b>' + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimising for</span><b class=\"np-obj-pill\">" + obj.fmtName + "</b>" : '<span class="np-stepper-hint">Pick a category &amp; objective to begin</span>') + "</div>";
+      '<div class="np-stepper-obj">' + (state.generated ? '<span>Division</span><b>' + divMeta().short + "</b><span class=\"np-obj-sep\"></span><span>Category</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimising for</span><b class=\"np-obj-pill\">" + obj.fmtName + "</b>" : '<span class="np-stepper-hint">Pick a division, category &amp; objective to begin</span>') + "</div>";
     host.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => { const n = +b.dataset.step; if (n === 1 || state.generated) goStep(n); });
   }
   function goStep(n) { state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.step = 2; renderAll(); }
+  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.grid = { vendor: "all", rog: "all" }; state.step = 2; renderAll(); }
   function rerun() { state.scnSeq++; const id = "scn" + state.scnSeq; state.scenarios.push({ id: id, name: "Scenario " + state.scnSeq, ov: clone(state.draft) }); state.activeScenario = id; renderAll(); }
   function revert() { state.draft = clone(activeOv()); renderAll(); }
   function setScenario(which) { state.activeScenario = which; state.draft = clone(activeOv()); renderAll(); }
@@ -448,6 +497,11 @@
 
   /* --------------------------------------------------------------- scope */
   function renderScope() {
+    const dsel = document.getElementById("npDivision");
+    if (dsel) {
+      dsel.innerHTML = DIVISIONS.map((d) => '<option value="' + d.id + '"' + (d.id === state.division ? " selected" : "") + ">" + d.name + "</option>").join("");
+      dsel.onchange = () => { state.division = dsel.value; state.generated = false; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.step = 1; renderAll(); };
+    }
     const sel = document.getElementById("npCategory");
     sel.innerHTML = CATEGORIES.map((c) => '<option value="' + c.id + '"' + (c.id === state.categoryId ? " selected" : "") + ">" + c.name + "</option>").join("");
     sel.onchange = () => { state.categoryId = sel.value; state.generated = false; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.step = 1; renderAll(); };
@@ -474,8 +528,9 @@
       }).join("") + "</div></div>").join("") +
       '<p class="np-foot">Around twenty guardrails, learned from your data and locked. Each adds a charge the solver must overcome; the displayed Units / Sales / AGP stay the raw forecast — charges only steer which tactic is recommended.</p>';
     const btn = document.getElementById("npGuardToggle");
-    if (btn) btn.onclick = () => { const open = body.hasAttribute("hidden"); body.toggleAttribute("hidden", !open); btn.setAttribute("aria-expanded", open ? "true" : "false"); btn.classList.toggle("is-open", open); };
-    if (body) body.querySelectorAll("[data-gr]").forEach((b) => b.onclick = () => openGuardModal(b.dataset.gr));
+    // "what the optimiser solved for" expansion is hidden — ribbon is a static summary.
+    if (btn) { btn.classList.add("is-static"); btn.onclick = null; btn.setAttribute("aria-expanded", "false"); }
+    if (body) { body.setAttribute("hidden", ""); body.querySelectorAll("[data-gr]").forEach((b) => b.onclick = () => openGuardModal(b.dataset.gr)); }
   }
 
   /* --------------------------------------------------- guardrail drilldown */
@@ -520,11 +575,12 @@
   /* ------------------------------------------------------------- render all */
   function renderAll() {
     renderStepper(); renderScope();
-    for (let i = 1; i <= 5; i++) { const el = document.getElementById("npStep" + i); if (el) el.toggleAttribute("hidden", state.step !== i); }
-    if (state.step === 2) { renderGuardRibbon(); if (window.NPViews) window.NPViews.renderGrid(); }
-    else if (state.step === 3 && window.NPViews) window.NPViews.renderResults();
-    else if (state.step === 4 && window.NPViews) window.NPViews.renderCounterfactual();
-    else if (state.step === 5 && window.NPViews) window.NPViews.renderExplain();
+    for (let i = 1; i <= 6; i++) { const el = document.getElementById("npStep" + i); if (el) el.toggleAttribute("hidden", state.step !== i); }
+    if (state.step === 2) { if (window.NPViews) window.NPViews.renderConstraints(); }
+    else if (state.step === 3) { renderGuardRibbon(); if (window.NPViews) window.NPViews.renderGrid(); }
+    else if (state.step === 4 && window.NPViews) window.NPViews.renderResults();
+    else if (state.step === 5 && window.NPViews) window.NPViews.renderCounterfactual();
+    else if (state.step === 6 && window.NPViews) window.NPViews.renderExplain();
     if (state.generated && state.step >= 2) appendStepNav(state.step);
     syncTopbar();
   }
