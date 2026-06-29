@@ -132,7 +132,19 @@
   function applyLadder(o, ov) { if (!ov || (!ov.ladder && ov.vlc == null)) return o; return Object.assign({}, o, { vlc: ov.vlc != null ? ov.vlc : o.vlc, ladder: Object.assign({}, o.ladder, ov.ladder) }); }
   function defDigEvents(o) { return Math.round(o.recEvents * 0.65); }
   function defBothEvents(o) { return Math.round(o.recEvents * 0.40); }
-  function effective(o, map) { const ov = (map && map[o.uid]) || {}; const merged = applyLadder(o, ov); return { events: ov.events != null ? ov.events : o.recEvents, digEvents: ov.digEvents != null ? ov.digEvents : defDigEvents(o), bothEvents: ov.bothEvents != null ? ov.bothEvents : defBothEvents(o), deadNet: ov.deadNetTouched ? ov.deadNet : deadNetOf(merged), depth: o.recDepth, vlc: merged.vlc, ladder: merged.ladder }; }
+  function defDeepEvents(o) { return Math.round(o.recEvents * 0.35); }
+  function defDeepDigEvents(o) { return Math.round(defDigEvents(o) * 0.5); }
+  function defDeepBothEvents(o) { return Math.round(defBothEvents(o) * 0.5); }
+  function effective(o, map) {
+    const ov = (map && map[o.uid]) || {}; const merged = applyLadder(o, ov);
+    const deadNet = ov.deadNetTouched ? ov.deadNet : deadNetOf(merged);
+    return {
+      events: ov.events != null ? ov.events : o.recEvents, digEvents: ov.digEvents != null ? ov.digEvents : defDigEvents(o), bothEvents: ov.bothEvents != null ? ov.bothEvents : defBothEvents(o),
+      deepEvents: ov.deepEvents != null ? ov.deepEvents : defDeepEvents(o), deepDigEvents: ov.deepDigEvents != null ? ov.deepDigEvents : defDeepDigEvents(o), deepBothEvents: ov.deepBothEvents != null ? ov.deepBothEvents : defDeepBothEvents(o),
+      deadNet: deadNet, deepDeadNet: ov.deepDeadNet != null ? ov.deepDeadNet : round(deadNet * 0.86, 3),
+      depth: o.recDepth, vlc: merged.vlc, ladder: merged.ladder
+    };
+  }
   function resultFor(o, map) { const e = effective(o, map); return respond(o, { events: e.events, depth: e.depth, deadNet: e.deadNet, seasonGain: 1.06, cannib: 0.05, halo: 0.064 }); }
   function lyResult(o) { return respond(o, { events: o.lyEvents, depth: o.lyDepth, seasonGain: 0.93, cannib: 0.14, halo: 0 }); }
   function noPromoResult(o) { return respond(o, { events: 0, depth: 0, seasonGain: 1.0, cannib: 0, halo: 0 }); }
@@ -406,7 +418,7 @@
   const state = {
     step: 1, generated: false, division: "national", categoryId: "confectionery", objective: "sales",
     draft: {}, scenarios: [], scnSeq: 0, activeScenario: "base",
-    showAllow: false, deadNetVersion: "v1", flip: {},
+    showAllow: false, deadNetVersion: "v1", flip: {}, v2: true, v2plan: false, v2ix: false, v2evMode: "reg",
     grid: { vendor: "all", rog: "all" },
     res: { vendor: "all", rog: "all", binBy: null, bin: "all" },
     ix: { binBy: "sales", bin: "1", ncrc: "", open: false },
@@ -428,6 +440,10 @@
     if (field === "events") return ov.events != null && ov.events !== o.recEvents;
     if (field === "digEvents") return ov.digEvents != null && ov.digEvents !== defDigEvents(o);
     if (field === "bothEvents") return ov.bothEvents != null && ov.bothEvents !== defBothEvents(o);
+    if (field === "deepEvents") return ov.deepEvents != null && ov.deepEvents !== defDeepEvents(o);
+    if (field === "deepDigEvents") return ov.deepDigEvents != null && ov.deepDigEvents !== defDeepDigEvents(o);
+    if (field === "deepBothEvents") return ov.deepBothEvents != null && ov.deepBothEvents !== defDeepBothEvents(o);
+    if (field === "deepDeadNet") return ov.deepDeadNet != null;
     if (field === "vlc") return ov.vlc != null && Math.abs(ov.vlc - o.vlc) > 1e-9;
     if (field === "deadNet") return ov.deadNetTouched || (ov.ladder && Object.keys(ov.ladder).length > 0);
     if (field === "deepDeadNet") return ov.deepLadder && Object.keys(ov.deepLadder).length > 0;
@@ -443,7 +459,11 @@
       deadNet: { def: dn, lo: round(dn * 0.90, 2), hi: round(dn * 1.08, 2), unit: "$" },
       events: { def: o.recEvents, lo: Math.max(o.form === "tub" ? 4 : 6, o.recEvents - 3), hi: Math.min(o.form === "tub" ? 14 : 24, o.recEvents + 4), unit: "" },
       digEvents: { def: defDigEvents(o), lo: Math.max(0, defDigEvents(o) - 3), hi: defDigEvents(o) + 4, unit: "" },
-      bothEvents: { def: defBothEvents(o), lo: Math.max(0, defBothEvents(o) - 2), hi: defBothEvents(o) + 3, unit: "" }
+      bothEvents: { def: defBothEvents(o), lo: Math.max(0, defBothEvents(o) - 2), hi: defBothEvents(o) + 3, unit: "" },
+      deepEvents: { def: defDeepEvents(o), lo: Math.max(0, defDeepEvents(o) - 2), hi: defDeepEvents(o) + 4, unit: "" },
+      deepDigEvents: { def: defDeepDigEvents(o), lo: Math.max(0, defDeepDigEvents(o) - 2), hi: defDeepDigEvents(o) + 3, unit: "" },
+      deepBothEvents: { def: defDeepBothEvents(o), lo: Math.max(0, defDeepBothEvents(o) - 1), hi: defDeepBothEvents(o) + 3, unit: "" },
+      deepDeadNet: { def: round(dn * 0.86, 2), lo: round(dn * 0.78, 2), hi: round(dn * 0.95, 2), unit: "$" }
     };
   }
 
@@ -471,13 +491,17 @@
     guardrailCount, findGuardrail, flaggedFor,
     fmt: { m: fmtM, u: fmtU, price: fmtPrice, pct: fmtPct, pctPlain: fmtPctPlain },
     util: { clamp, round, clone, hashStr },
-    goStep, generate, rerun, revert, setScenario, deleteScenario, renderAll, openGuardModal, closeOverlays, openAsk
+    goStep, generate, rerun, revert, setScenario, deleteScenario, renderAll, renderStepper, openGuardModal, closeOverlays, openAsk,
+    applyEdit, inBand
   };
 
   /* --------------------------------------------------------------- stepper */
   function renderStepper() {
     const host = document.getElementById("npStepper");
-    const tabs = STEPS.map((s) => {
+    // V2 grid folds Deal inputs into the pinned area (hide the step); but when the
+    // swipe-up V1 52-week view is on, the V1 table has no inputs — so bring it back.
+    const steps = (state.v2 && !state.v2plan) ? STEPS.filter((s) => s.n !== 3) : STEPS;
+    const tabs = steps.map((s) => {
       const disabled = s.n === 6; // "Why it beats LY" — greyed out / not selectable for now
       const locked = !disabled && s.n > 1 && !state.generated, active = state.step === s.n, done = state.generated && s.n < state.step;
       return '<button type="button" class="np-step-tab' + (active ? " is-active" : "") + (locked ? " is-locked" : "") + (disabled ? " is-disabled" : "") + (done ? " is-done" : "") + '" data-step="' + s.n + '"' + (locked || disabled ? " disabled" : "") + '>' +
@@ -488,9 +512,37 @@
       '<div class="np-stepper-obj">' + (state.generated ? '<span>Division</span><b>' + divMeta().short + "</b><span class=\"np-obj-sep\"></span><span>Category</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimising for</span><b class=\"np-obj-pill\">" + obj.fmtName + "</b>" : '<span class="np-stepper-hint">Pick a division, category &amp; objective to begin</span>') + "</div>";
     host.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => { const n = +b.dataset.step; if (n === 1 || state.generated) goStep(n); });
   }
-  function goStep(n) { state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.grid = { vendor: "all", rog: "all" }; state.step = 2; renderAll(); }
+  function goStep(n) { if (state.v2 && !state.v2plan && n === 3) n = 4; state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.grid = { vendor: "all", rog: "all" }; state.step = 4; renderAll(); }
   function rerun() { state.scnSeq++; const id = "scn" + state.scnSeq; state.scenarios.push({ id: id, name: "Scenario " + state.scnSeq, ov: clone(state.draft) }); state.activeScenario = id; renderAll(); }
+  /* edit a single input into the draft (same field semantics as the V1 deal grid),
+     so V2's editable summary strip drives the identical scenario / reforecast flow. */
+  function distributeDeadNet(o, target) {
+    const e = effective(o, state.draft), vlc = e.vlc; if (vlc <= 0) return;
+    const keys = LADDER_KEYS, cur = keys.reduce((s, k) => s + (e.ladder[k] || 0), 0);
+    const targetSum = clamp(1 - target / vlc, 0.02, 0.9), scale = cur > 0 ? targetSum / cur : 0;
+    const ov = draftOf(o.uid); ov.ladder = ov.ladder || {}; ov.deadNetTouched = false;
+    keys.forEach((k) => { ov.ladder[k] = (e.ladder[k] || 0) * scale; });
+  }
+  function applyEdit(uid, field, raw) {
+    const o = cat().items.find((x) => x.uid === uid); if (!o) return;
+    const ov = draftOf(uid); let val = parseFloat(raw); if (isNaN(val)) val = 0;
+    if (field === "events") ov.events = Math.round(clamp(val, 0, 40));
+    else if (field === "digEvents") ov.digEvents = Math.round(clamp(val, 0, 40));
+    else if (field === "bothEvents") ov.bothEvents = Math.round(clamp(val, 0, 40));
+    else if (field === "deepEvents") ov.deepEvents = Math.round(clamp(val, 0, 40));
+    else if (field === "deepDigEvents") ov.deepDigEvents = Math.round(clamp(val, 0, 40));
+    else if (field === "deepBothEvents") ov.deepBothEvents = Math.round(clamp(val, 0, 40));
+    else if (field === "vlc") { ov.vlc = val; ov.deadNetTouched = false; }
+    else if (field === "deadNet") { distributeDeadNet(o, val); }
+    else if (field === "deepDeadNet") { ov.deepDeadNet = round(clamp(val, 0.02, o.vlc), 3); }
+  }
+  // is a candidate value inside the discovered band for this field? (band edits don't need a reforecast)
+  function inBand(o, field, raw) {
+    const r = ranges(o)[field]; if (!r) return true;
+    const v = parseFloat(raw); if (isNaN(v)) return true;
+    return v >= r.lo - 1e-9 && v <= r.hi + 1e-9;
+  }
   function revert() { state.draft = clone(activeOv()); renderAll(); }
   function setScenario(which) { state.activeScenario = which; state.draft = clone(activeOv()); renderAll(); }
   function deleteScenario(id) { state.scenarios = state.scenarios.filter((s) => s.id !== id); if (state.activeScenario === id) { state.activeScenario = state.scenarios.length ? state.scenarios[state.scenarios.length - 1].id : "base"; state.draft = clone(activeOv()); } renderAll(); }
@@ -575,6 +627,20 @@
   /* ------------------------------------------------------------- render all */
   function renderAll() {
     renderStepper(); renderScope();
+    if (window.NPV2 && NPV2.renderToggle) NPV2.renderToggle();
+
+    // V2 layout — the frozen-pane grid lives on step 4 (and on step 3 too while the
+    // grid integrates deal inputs). When the swipe-up V1 52-week view is active
+    // (v2plan), the "Deal inputs" step reappears and opens the classic spreadsheet,
+    // so step 3 falls through to the V1 deal-input grid instead of the V2 shell.
+    if (state.v2 && window.NPV2 && state.generated && (state.step === 4 || (state.step === 3 && !state.v2plan))) {
+      for (let i = 1; i <= 6; i++) { const el = document.getElementById("npStep" + i); if (el) el.toggleAttribute("hidden", true); }
+      NPV2.mount();
+      syncTopbar();
+      return;
+    }
+    if (window.NPV2 && NPV2.unmount) NPV2.unmount();
+
     for (let i = 1; i <= 6; i++) { const el = document.getElementById("npStep" + i); if (el) el.toggleAttribute("hidden", state.step !== i); }
     if (state.step === 2) { if (window.NPViews) window.NPViews.renderConstraints(); }
     else if (state.step === 3) { renderGuardRibbon(); if (window.NPViews) window.NPViews.renderGrid(); }
@@ -614,6 +680,8 @@
       const fp = document.getElementById("npFcPop"); if (fp && !fp.hidden && !fp.contains(e.target) && !e.target.closest("[data-fc]")) fp.hidden = true;
     });
   }
-  function boot() { initGlobal(); renderAll(); }
+  // V2 is the only layout — land straight on the loaded 52-week (V2) screen with the
+  // default scope; the Scope & objective step stays available in the stepper to change it.
+  function boot() { initGlobal(); generate(); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();

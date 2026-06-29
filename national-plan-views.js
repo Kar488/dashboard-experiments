@@ -173,12 +173,17 @@
       g.items.forEach(([key, label]) => { cols.push({ k: "alwusd:" + key, label: label, edit: "money", group: "alw" }); });
       if (g.group === "Freight") cols.push({ k: "netCost", label: "Net cost", cls: "np-ss-net" });
     });
-    cols.push({ k: "deadNet", label: "Dead-net", edit: "money" });
+    cols.push({ k: "deadNet", label: "Promo cost", edit: "money" });
     if (!allow) {
-      cols.push({ k: "deepDeadNet", label: "Dead-net · deep", edit: "money" });
-      cols.push({ k: "events", label: "Store events", edit: "int" });
-      cols.push({ k: "digEvents", label: "Digital events", edit: "int" });
-      cols.push({ k: "bothEvents", label: "Store & digital", edit: "int" });
+      cols.push({ k: "deepDeadNet", label: "Promo cost deep", edit: "money" });
+      // events columns sit under ONE "Events" group header carrying the Regular↔Deep
+      // toggle (so the toggle clearly governs all three) — same logic as the V2 grid
+      const deepEv = NP.state.v2evMode === "deep";
+      const evToggle = ' <button type="button" class="np-evtoggle" data-evtoggle title="Editing events for regular or deep-discount weeks — click to switch">' + (deepEv ? "DEEP" : "REG") + " ⇄</button>";
+      const evHead = "Events" + evToggle;
+      cols.push({ k: deepEv ? "deepEvents" : "events", label: "Store", edit: "int", evgroup: true, evhead: evHead });
+      cols.push({ k: deepEv ? "deepDigEvents" : "digEvents", label: "Digital", edit: "int", evgroup: true });
+      cols.push({ k: deepEv ? "deepBothEvents" : "bothEvents", label: "Store & digital", edit: "int", evgroup: true });
       cols.push({ k: "units", label: "Units", cls: "np-ss-res np-ss-res-start" });
       cols.push({ k: "revenue", label: "Sales", cls: "np-ss-res" });
       cols.push({ k: "agp", label: "AGP", cls: "np-ss-res" });
@@ -214,19 +219,21 @@
     wrap.querySelectorAll(".np-ss-row").forEach((tr) => bindCtx(tr, tr.dataset.uid));
     wrap.querySelectorAll("[data-fc]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openForecast(b.dataset.fc, b); });
     wrap.querySelectorAll("[data-dnver]").forEach((b) => b.onclick = () => { NP.state.deadNetVersion = b.dataset.dnver; renderGrid(); });
+    // events Regular↔Deep toggle (shared state with the V2 grid)
+    wrap.querySelectorAll("[data-evtoggle]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); NP.state.v2evMode = NP.state.v2evMode === "deep" ? "reg" : "deep"; renderGrid(); });
   }
   /* allowance-view header: dead-net version selector + contextual note */
   function allowHeader() {
     const deep = isDeep();
     const seg = '<div class="np-dnver">' +
-      '<span class="np-dnver-lab">Dead-net version</span>' +
+      '<span class="np-dnver-lab">Promo cost version</span>' +
       '<div class="np-dnver-seg">' +
         '<button type="button" class="np-dnver-opt' + (!deep ? " is-active" : "") + '" data-dnver="v1">Standard<small>negotiated base</small></button>' +
         '<button type="button" class="np-dnver-opt' + (deep ? " is-active" : "") + '" data-dnver="v2">Deep-deal<small>deeper funding</small></button>' +
       "</div>" + allowDelta() + "</div>";
     const note = deep
-      ? '<div class="np-allow-note np-allow-note-deep">Editing the <b>Deep-deal</b> dead-net — a second, more deeply funded version (richer off-invoice, bill-back &amp; price-break). Edit any allowance or the dead-net; changes save to <b>Your scenario</b> and carry over to the deal-inputs grid (VLC &amp; <b>Dead-net · deep</b>).</div>'
-      : '<div class="np-allow-note">Editing <b>Dead-net</b> redistributes the allowance breakup automatically; edit any allowance to override. Switch to <b>Deep-deal</b> to edit the deeper-funded version. Other columns hidden to focus on cost build-up.</div>';
+      ? '<div class="np-allow-note np-allow-note-deep">Editing the <b>Deep-deal</b> promo cost — a second, more deeply funded version (richer off-invoice, bill-back &amp; price-break). Edit any allowance or the promo cost; changes save to <b>Your scenario</b> and carry over to the deal-inputs grid (VLC &amp; <b>Promo cost deep</b>).</div>'
+      : '<div class="np-allow-note">Editing <b>Promo cost</b> redistributes the allowance breakup automatically; edit any allowance to override. Switch to <b>Deep-deal</b> to edit the deeper-funded version. Other columns hidden to focus on cost build-up.</div>';
     return seg + note;
   }
   // average dead-net under each version, to quantify how much deeper the deep deal runs
@@ -236,11 +243,25 @@
     items.forEach((o) => { const e = NP.effective(o, NP.state.draft); s += e.deadNet; d += deadNetFrom(e.vlc, deepLadder(e.ladder)); });
     s /= items.length; d /= items.length;
     const pct = s ? (d - s) / s : 0;
-    return '<span class="np-dnver-delta">avg dead-net <b>' + fmt.price(d) + '</b> vs Standard <b>' + fmt.price(s) + '</b> <i class="np-pos">' + fmt.pct(pct) + "</i></span>";
+    return '<span class="np-dnver-delta">avg promo cost <b>' + fmt.price(d) + '</b> vs Standard <b>' + fmt.price(s) + '</b> <i class="np-pos">' + fmt.pct(pct) + "</i></span>";
   }
   const FC_ICON = (m, uid) => '<button class="np-fc-btn" type="button" data-fc="' + m + '" data-uid="' + uid + '" title="Model vs actual & 52-week forecast for this NCRC"><svg viewBox="0 0 16 12" width="12" height="9"><polyline points="1,9 5,5 8,7 12,2 15,4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
   function buildHead(cols) {
-    if (!NP.state.showAllow) return "<tr>" + cols.map((c) => '<th class="' + (c.cls || "") + (c.edit ? " np-ss-edithead" : "") + '">' + esc(c.label) + "</th>").join("") + "</tr>";
+    if (!NP.state.showAllow) {
+      const evCols = cols.filter((c) => c.evgroup);
+      if (!evCols.length) return "<tr>" + cols.map((c) => '<th class="' + (c.cls || "") + (c.edit ? " np-ss-edithead" : "") + '">' + esc(c.label) + "</th>").join("") + "</tr>";
+      // 2-row header: the events trio spans a single "Events" group (carrying the toggle)
+      let r0 = "<tr>", r1 = "<tr>", evDone = false;
+      cols.forEach((c) => {
+        if (c.evgroup) {
+          if (!evDone) { evDone = true; r0 += '<th class="np-ss-edithead np-ss-evgrp" colspan="' + evCols.length + '">' + (cols.find((x) => x.evhead) || {}).evhead + "</th>"; }
+          r1 += '<th class="np-ss-edithead np-ss-evsub">' + esc(c.label) + "</th>";
+        } else {
+          r0 += '<th class="' + (c.cls || "") + (c.edit ? " np-ss-edithead" : "") + '" rowspan="2">' + esc(c.label) + "</th>";
+        }
+      });
+      return r0 + "</tr>" + r1 + "</tr>";
+    }
     // 2-row grouped header: top group (Buying / Freight / Retail) → allowance ($ only)
     let r0 = "<tr>" +
       '<th class="np-ss-rownum" rowspan="2"></th>' +
@@ -251,7 +272,7 @@
       r0 += '<th class="np-ss-grp np-grp-' + g.cls + '" colspan="' + g.items.length + '">' + esc(g.group) + "</th>";
       if (g.group === "Freight") r0 += '<th class="np-ss-net np-ss-nethead" rowspan="2">Net cost</th>';
     });
-    r0 += '<th class="np-ss-edithead" rowspan="2">Dead-net</th></tr>';
+    r0 += '<th class="np-ss-edithead" rowspan="2">Promo cost</th></tr>';
     const r1 = "<tr>" + ALW.map(([k, l]) => '<th class="np-ss-alwhead">' + esc(l) + " $</th>").join("") + "</tr>";
     return r0 + r1;
   }
@@ -301,7 +322,7 @@
   function openForecast(metric, anchor) {
     const pop = document.getElementById("npFcPop"); if (!pop) return;
     const o = NP.cat().items.find((x) => x.uid === anchor.dataset.uid); if (!o) return;
-    const s = fcSeries(metric, o), label = (metric === "vlc" ? "VLC" : "Dead-net cost") + " · " + o.item;
+    const s = fcSeries(metric, o), label = (metric === "vlc" ? "VLC" : "Promo cost") + " · " + o.item;
     pop.innerHTML = '<div class="np-fc-head"><div><h4>' + esc(label) + ' — model vs actual</h4><small>' + o.ncrc + " · last 52 weeks &amp; 52-week forecast</small></div><button class=\"np-fc-close\" type=\"button\">×</button></div>" +
       fcChart(s) +
       '<div class="np-fc-legend"><span><i class="np-fc-lg-actual"></i>Actual</span><span><i class="np-fc-lg-pred"></i>Model</span><span><i class="np-fc-lg-band"></i>Forecast band</span></div>' +
@@ -328,6 +349,9 @@
     if (k === "events") return editCell(o, "events", String(e.events));
     if (k === "digEvents") return editCell(o, "digEvents", String(e.digEvents));
     if (k === "bothEvents") return editCell(o, "bothEvents", String(e.bothEvents));
+    if (k === "deepEvents") return editCell(o, "deepEvents", String(e.deepEvents));
+    if (k === "deepDigEvents") return editCell(o, "deepDigEvents", String(e.deepDigEvents));
+    if (k === "deepBothEvents") return editCell(o, "deepBothEvents", String(e.deepBothEvents));
     if (k.indexOf("alwusd:") === 0) { const key = k.slice(7); return editAlw(o, key, "usd", (e.ladder[key] * e.vlc).toFixed(2)); }
     if (k === "units") return '<td class="np-ss-res np-ss-res-start">' + fmt.u(res.units) + "</td>";
     if (k === "revenue") return '<td class="np-ss-res">' + fmt.m(res.revenueM) + "</td>";
@@ -338,7 +362,7 @@
   // Both Standard and Deep allowance views are fully editable; which ladder an edit
   // targets (ov.ladder vs ov.deepLadder) is decided in onGridInput by the active version.
   function editCell(o, field, val) {
-    const isInt = field === "events" || field === "digEvents" || field === "bothEvents";
+    const isInt = ["events", "digEvents", "bothEvents", "deepEvents", "deepDigEvents", "deepBothEvents"].indexOf(field) !== -1;
     const input = '<input class="np-cell-input" type="text" inputmode="' + (isInt ? "numeric" : "decimal") + '" data-uid="' + o.uid + '" data-field="' + field + '" value="' + val + '">';
     const inner = (field === "vlc" || field === "deadNet") ? '<div class="np-cellrow">' + FC_ICON(field, o.uid) + input + "</div>" : input;
     return '<td class="np-ss-edit' + (NP.isEdited(o, field) ? " is-edited" : "") + '" data-cell="' + o.uid + ":" + field + '">' + inner + "</td>";
@@ -361,6 +385,9 @@
       if (field === "events") { ov.events = Math.round(clamp(val, 0, 40)); }
       else if (field === "digEvents") { ov.digEvents = Math.round(clamp(val, 0, 40)); }
       else if (field === "bothEvents") { ov.bothEvents = Math.round(clamp(val, 0, 40)); }
+      else if (field === "deepEvents") { ov.deepEvents = Math.round(clamp(val, 0, 40)); }
+      else if (field === "deepDigEvents") { ov.deepDigEvents = Math.round(clamp(val, 0, 40)); }
+      else if (field === "deepBothEvents") { ov.deepBothEvents = Math.round(clamp(val, 0, 40)); }
       else if (field === "deadNet") { deep ? distributeDeepDeadNet(o, val) : distributeDeadNet(o, val); }
       else if (field === "deepDeadNet") { distributeDeepDeadNet(o, val); }
       else if (field === "vlc") { ov.vlc = val; ov.deadNetTouched = false; syncRow(o); }
@@ -400,7 +427,7 @@
     });
   }
   function markEdited(o) {
-    ["vlc", "deadNet", "deepDeadNet", "events", "digEvents", "bothEvents"].forEach((f) => { const td = document.querySelector('[data-cell="' + o.uid + ":" + f + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, f)); });
+    ["vlc", "deadNet", "deepDeadNet", "events", "digEvents", "bothEvents", "deepEvents", "deepDigEvents", "deepBothEvents"].forEach((f) => { const td = document.querySelector('[data-cell="' + o.uid + ":" + f + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, f)); });
     ALW.forEach(([key]) => ["pct", "usd"].forEach((kind) => { const td = document.querySelector('[data-cell="' + o.uid + ":alw:" + key + ":" + kind + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, "alw:" + key)); }));
   }
 
@@ -527,16 +554,19 @@
     const km = (vM) => { const k = vM * 1000; return Math.abs(k) >= 1000 ? "$" + (k / 1000).toFixed(2) + "M" : "$" + Math.round(k) + "K"; };
     const head = '<tr><th class="np-zm-ncrch">NCRC</th>' + weeks.map((w) => '<th class="np-zm-wkh">Wk ' + (w + 1) + evOf(w) + "</th>").join("") + "</tr>";
     const metric = (lab, ty, ly, f) => { const d = ty - ly, p = ly ? d / ly : 0; return '<span class="np-zm-l">' + lab + '</span><b class="np-zm-v">' + f(ty) + '</b><span class="np-zm-d">LY ' + f(ly) + " · " + (d >= 0 ? "+" : "") + f(d) + " / " + fmt.pctPlain(p) + "</span>"; };
-    const cardCell = (s, wk, w, alwU) => {
+    // a couple of exception NCRCs hold allowance but no promo is planned — flag those
+    const wasted = new Set(NP.cat().items.slice().sort((a, b) => a.recEvents - b.recEvents).slice(0, 2).map((o) => o.uid));
+    const cardCell = (s, wk, w, alwU, isWasted) => {
       const c = wk[w], alw = "alw " + fmt.price(alwU) + "/u";
-      const tac = c.promoted
-        ? '<span class="np-zoom-tac tactic-' + c.store.className + '">' + NP.displayTactic(c.store.code) + "</span>" + (c.offer ? " " + esc(c.offer.label) : "") + (c.digital && c.digital.length ? ' <span class="np-zoom-d">D</span>' : "") + " · " + fmt.pctPlain(c.depth, 0) + " off · " + alw
-        : '<span class="np-zm-na">no promo</span> · ' + alw;
-      return '<td class="np-zm-cell' + (c.promoted ? "" : " np-zm-off") + '"><div class="np-zm-card">' + metric("Sales", s.sales[w], s.lySales[w], km) + metric("Units", s.units[w], s.lyUnits[w], fmt.u) + metric("AGP", s.agp[w], s.lyAgp[w], km) + '<div class="np-zm-tac">' + tac + "</div></div></td>";
+      let tac, cls;
+      if (c.promoted) { tac = '<span class="np-zoom-tac tactic-' + c.store.className + '">' + NP.displayTactic(c.store.code) + "</span>" + (c.offer ? " " + esc(c.offer.label) : "") + (c.digital && c.digital.length ? ' <span class="np-zoom-d">D</span>' : "") + " · " + fmt.pctPlain(c.depth, 0) + " off · " + alw; cls = ""; }
+      else if (isWasted) { tac = '<span class="np-zm-warn" title="Allowance committed but no promotion planned">⚠</span> <span class="np-zm-na">no promo</span> · ' + alw; cls = " np-zm-warncell"; }
+      else { tac = '<span class="np-zm-na">no promo</span>'; cls = " np-zm-off"; }
+      return '<td class="np-zm-cell' + cls + '"><div class="np-zm-card">' + metric("Sales", s.sales[w], s.lySales[w], km) + metric("Units", s.units[w], s.lyUnits[w], fmt.u) + metric("AGP", s.agp[w], s.lyAgp[w], km) + '<div class="np-zm-tac">' + tac + "</div></div></td>";
     };
     const rows = items.map((o) => {
-      const s = NP.weeklySeries(o, map), wk = NP.weekPlan(o, map, false), e = NP.effective(o, map), alwU = e.vlc - e.deadNet;
-      return '<tr><th class="np-zm-ncrch"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + "</span></th>" + weeks.map((w) => cardCell(s, wk, w, alwU)).join("") + "</tr>";
+      const s = NP.weeklySeries(o, map), wk = NP.weekPlan(o, map, false), e = NP.effective(o, map), alwU = e.vlc - e.deadNet, iw = wasted.has(o.uid);
+      return '<tr><th class="np-zm-ncrch"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + "</span></th>" + weeks.map((w) => cardCell(s, wk, w, alwU, iw)).join("") + "</tr>";
     }).join("");
     return '<table class="np-zm-grid"><thead>' + head + "</thead><tbody>" + rows + "</tbody></table>";
   }
@@ -1274,5 +1304,5 @@
     host.querySelectorAll("[data-goto]").forEach((b) => b.onclick = () => NP.goStep(+b.dataset.goto));
   }
 
-  window.NPViews = { renderGrid, renderResults, renderExplain, renderCounterfactual, renderConstraints };
+  window.NPViews = { renderGrid, renderResults, renderExplain, renderCounterfactual, renderConstraints, openWeek, cfWeeks, cfResult, cfStrategies, cfStratName, cfTotals };
 })();
