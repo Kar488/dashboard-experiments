@@ -1425,6 +1425,9 @@
     host.querySelectorAll("[data-goto]").forEach((b) => b.onclick = () => NP.goStep(+b.dataset.goto));
     const tg = host.querySelector("#npC3Learnt"), sec = host.querySelector(".np-c3");
     if (tg) tg.onchange = () => { c3Learnt = tg.checked; sec.classList.toggle("show-learnt", c3Learnt); };
+    // Each tab switch rewrites this step's innerHTML, dropping the step nav — re-add it
+    // so "Continue to 52-week plan" stays on every tab and across step navigation.
+    if (NP.state.generated && NP.appendStepNav) NP.appendStepNav(2);
   }
 
   window.NPViews = { renderGrid, renderResults, renderExplain, renderConstraints, openWeek, cfWeeks, cfResult, cfStrategies, cfStratName, cfTotals, deepEffective };

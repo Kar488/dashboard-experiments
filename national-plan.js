@@ -493,7 +493,7 @@
     guardrailCount, findGuardrail, flaggedFor,
     fmt: { m: fmtM, u: fmtU, price: fmtPrice, pct: fmtPct, pctPlain: fmtPctPlain },
     util: { clamp, round, clone, hashStr },
-    goStep, generate, rerun, revert, setScenario, deleteScenario, renderAll, renderStepper, openGuardModal, closeOverlays, openAsk,
+    goStep, generate, rerun, revert, setScenario, deleteScenario, renderAll, renderStepper, appendStepNav, openGuardModal, closeOverlays, openAsk,
     applyEdit, applyAllow, inBand
   };
 
