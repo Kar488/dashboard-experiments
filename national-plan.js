@@ -93,7 +93,7 @@
   // allowance ladder build-up (fractions of VLC): VLC = Σ allowances + dead-net.
   const BUY_KEYS = ["offInvoice", "billBack", "priceBreak"];
   const FREIGHT_KEYS = ["freight"];
-  const RETAIL_KEYS = ["scan", "shipToStore", "headerFlat", "newItem"];
+  const RETAIL_KEYS = ["scan", "shipToStore", "newItem"];   // header flat is NOT here — it's a separate flat fee, not part of the per-unit promo cost
   const LADDER_KEYS = BUY_KEYS.concat(FREIGHT_KEYS, RETAIL_KEYS);
 
   function enrich(cat) {
@@ -106,8 +106,9 @@
       const recDepth = round(clamp(lyDepth - (0.02 + rng() * 0.06), 0.12, 0.38), 3);
       const lyEvents = Math.round(it.form === "tub" ? 6 + rng() * 4 : 10 + rng() * 10);
       const recEvents = Math.round(clamp(lyEvents - (it.form === "tub" ? 0 : 2) + (rng() * 4 - 2), it.form === "tub" ? 4 : 6, it.form === "tub" ? 12 : 22));
-      const ladder = { offInvoice: round(0.22 + rng() * 0.12, 3), billBack: round(0.015 + rng() * 0.02, 3), priceBreak: round(rng() * 0.02, 3), freight: round(0.012 + rng() * 0.008, 3), scan: round(0.03 + rng() * 0.03, 3), shipToStore: round(0.01 + rng() * 0.02, 3), headerFlat: round(0.005 + rng() * 0.015, 3), newItem: round(0.005 + rng() * 0.015, 3) };
-      return { uid: cat.id + "-" + idx, ncrc: "NCRC " + (ncrcSeq += 7 + Math.floor(rng() * 5)), item: it.n, brand: it.brand, vendor: it.v, rog: ROGS[hashStr(cat.id + "-" + idx) % ROGS.length], form: it.form, pack: it.pack, cluster: it.cluster, hero: !!it.hero, bin: it.bin, baseUnitsK, basePrice, vlc, lyDepth, recDepth, lyEvents, recEvents, ladder, liftCoef: FORM_LIFT[it.form] * (0.85 + rng() * 0.3), hhRate: FORM_HHRATE[it.form] * (0.9 + rng() * 0.2) };
+      const ladder = { offInvoice: round(0.22 + rng() * 0.12, 3), billBack: round(0.015 + rng() * 0.02, 3), priceBreak: round(rng() * 0.02, 3), freight: round(0.012 + rng() * 0.008, 3), scan: round(0.03 + rng() * 0.03, 3), shipToStore: round(0.01 + rng() * 0.02, 3), newItem: round(0.005 + rng() * 0.015, 3) };
+      const headerFlat = round(0.5 + rng() * 2, 2);   // flat $ per store/week — separate from the per-unit promo cost
+      return { uid: cat.id + "-" + idx, ncrc: "NCRC " + (ncrcSeq += 7 + Math.floor(rng() * 5)), item: it.n, brand: it.brand, vendor: it.v, rog: ROGS[hashStr(cat.id + "-" + idx) % ROGS.length], form: it.form, pack: it.pack, cluster: it.cluster, hero: !!it.hero, bin: it.bin, baseUnitsK, basePrice, vlc, lyDepth, recDepth, lyEvents, recEvents, ladder, headerFlat, liftCoef: FORM_LIFT[it.form] * (0.85 + rng() * 0.3), hhRate: FORM_HHRATE[it.form] * (0.9 + rng() * 0.2) };
     });
     return { id: cat.id, name: cat.name, items };
   }
@@ -142,6 +143,7 @@
       events: ov.events != null ? ov.events : o.recEvents, digEvents: ov.digEvents != null ? ov.digEvents : defDigEvents(o), bothEvents: ov.bothEvents != null ? ov.bothEvents : defBothEvents(o),
       deepEvents: ov.deepEvents != null ? ov.deepEvents : defDeepEvents(o), deepDigEvents: ov.deepDigEvents != null ? ov.deepDigEvents : defDeepDigEvents(o), deepBothEvents: ov.deepBothEvents != null ? ov.deepBothEvents : defDeepBothEvents(o),
       deadNet: deadNet, deepDeadNet: ov.deepDeadNet != null ? ov.deepDeadNet : round(deadNet * 0.86, 3),
+      headerFlat: ov.headerFlat != null ? ov.headerFlat : o.headerFlat,
       depth: o.recDepth, vlc: merged.vlc, ladder: merged.ladder
     };
   }
@@ -412,13 +414,12 @@
     { n: 2, title: "Constraints" },
     { n: 3, title: "Deal inputs" },
     { n: 4, title: "52-week plan" },
-    { n: 5, title: "Counterfactuals" },
     { n: 6, title: "Why it beats LY" }
   ];
   const state = {
     step: 1, generated: false, division: "national", categoryId: "confectionery", objective: "sales",
     draft: {}, scenarios: [], scnSeq: 0, activeScenario: "base",
-    showAllow: false, deadNetVersion: "v1", flip: {}, v2: true, v2plan: false, v2ix: false, v2evMode: "reg",
+    showAllow: false, deadNetVersion: "v1", flip: {}, v2: true, v2plan: false, v2period: null, v2ix: false, v2evMode: "reg", v2allowMode: "reg",
     grid: { vendor: "all", rog: "all" },
     res: { vendor: "all", rog: "all", binBy: null, bin: "all" },
     ix: { binBy: "sales", bin: "1", ncrc: "", open: false },
@@ -444,6 +445,7 @@
     if (field === "deepDigEvents") return ov.deepDigEvents != null && ov.deepDigEvents !== defDeepDigEvents(o);
     if (field === "deepBothEvents") return ov.deepBothEvents != null && ov.deepBothEvents !== defDeepBothEvents(o);
     if (field === "deepDeadNet") return ov.deepDeadNet != null;
+    if (field === "headerFlat") return ov.headerFlat != null && Math.abs(ov.headerFlat - o.headerFlat) > 1e-9;
     if (field === "vlc") return ov.vlc != null && Math.abs(ov.vlc - o.vlc) > 1e-9;
     if (field === "deadNet") return ov.deadNetTouched || (ov.ladder && Object.keys(ov.ladder).length > 0);
     if (field === "deepDeadNet") return ov.deepLadder && Object.keys(ov.deepLadder).length > 0;
@@ -492,7 +494,7 @@
     fmt: { m: fmtM, u: fmtU, price: fmtPrice, pct: fmtPct, pctPlain: fmtPctPlain },
     util: { clamp, round, clone, hashStr },
     goStep, generate, rerun, revert, setScenario, deleteScenario, renderAll, renderStepper, openGuardModal, closeOverlays, openAsk,
-    applyEdit, inBand
+    applyEdit, applyAllow, inBand
   };
 
   /* --------------------------------------------------------------- stepper */
@@ -501,11 +503,13 @@
     // V2 grid folds Deal inputs into the pinned area (hide the step); but when the
     // swipe-up V1 52-week view is on, the V1 table has no inputs — so bring it back.
     const steps = (state.v2 && !state.v2plan) ? STEPS.filter((s) => s.n !== 3) : STEPS;
-    const tabs = steps.map((s) => {
+    // Circle numbers are positional (1,2,3,4) — the underlying step ids (s.n) are
+    // non-contiguous now that Deal inputs is folded in and Counterfactuals removed.
+    const tabs = steps.map((s, i) => {
       const disabled = s.n === 6; // "Why it beats LY" — greyed out / not selectable for now
       const locked = !disabled && s.n > 1 && !state.generated, active = state.step === s.n, done = state.generated && s.n < state.step;
       return '<button type="button" class="np-step-tab' + (active ? " is-active" : "") + (locked ? " is-locked" : "") + (disabled ? " is-disabled" : "") + (done ? " is-done" : "") + '" data-step="' + s.n + '"' + (locked || disabled ? " disabled" : "") + '>' +
-        '<span class="np-step-circ">' + (locked ? "🔒" : done ? "✓" : s.n) + '</span><span class="np-step-name">' + s.title + "</span></button>";
+        '<span class="np-step-circ">' + (locked ? "🔒" : done ? "✓" : (i + 1)) + '</span><span class="np-step-name">' + s.title + "</span></button>";
     }).join('<span class="np-step-line" aria-hidden="true"></span>');
     const obj = objMeta();
     host.innerHTML = '<div class="np-stepper-inner">' + tabs + "</div>" +
@@ -513,7 +517,7 @@
     host.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => { const n = +b.dataset.step; if (n === 1 || state.generated) goStep(n); });
   }
   function goStep(n) { if (state.v2 && !state.v2plan && n === 3) n = 4; state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.grid = { vendor: "all", rog: "all" }; state.step = 4; renderAll(); }
+  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.grid = { vendor: "all", rog: "all" }; state.v2period = null; state.step = 2; renderAll(); }
   function rerun() { state.scnSeq++; const id = "scn" + state.scnSeq; state.scenarios.push({ id: id, name: "Scenario " + state.scnSeq, ov: clone(state.draft) }); state.activeScenario = id; renderAll(); }
   /* edit a single input into the draft (same field semantics as the V1 deal grid),
      so V2's editable summary strip drives the identical scenario / reforecast flow. */
@@ -536,6 +540,15 @@
     else if (field === "vlc") { ov.vlc = val; ov.deadNetTouched = false; }
     else if (field === "deadNet") { distributeDeadNet(o, val); }
     else if (field === "deepDeadNet") { ov.deepDeadNet = round(clamp(val, 0.02, o.vlc), 3); }
+  }
+  // edit one allowance ($/u) that builds the promo cost — regular (ov.ladder) or deep (ov.deepLadder)
+  function applyAllow(uid, key, raw, deep) {
+    const o = cat().items.find((x) => x.uid === uid); if (!o) return;
+    const ov = draftOf(uid); let val = parseFloat(raw); if (isNaN(val)) val = 0;
+    const vlc = ov.vlc != null ? ov.vlc : o.vlc;
+    const pct = vlc > 0 ? clamp(val / vlc, 0, 0.9) : 0;
+    if (deep) { ov.deepLadder = ov.deepLadder || {}; ov.deepLadder[key] = pct; }
+    else { ov.ladder = ov.ladder || {}; ov.ladder[key] = pct; ov.deadNetTouched = false; }
   }
   // is a candidate value inside the discovered band for this field? (band edits don't need a reforecast)
   function inBand(o, field, raw) {
@@ -645,7 +658,6 @@
     if (state.step === 2) { if (window.NPViews) window.NPViews.renderConstraints(); }
     else if (state.step === 3) { renderGuardRibbon(); if (window.NPViews) window.NPViews.renderGrid(); }
     else if (state.step === 4 && window.NPViews) window.NPViews.renderResults();
-    else if (state.step === 5 && window.NPViews) window.NPViews.renderCounterfactual();
     else if (state.step === 6 && window.NPViews) window.NPViews.renderExplain();
     if (state.generated && state.step >= 2) appendStepNav(state.step);
     syncTopbar();
@@ -654,7 +666,12 @@
   function appendStepNav(n) {
     const host = document.getElementById("npStep" + n); if (!host) return;
     host.querySelectorAll(".np-stepnav").forEach((e) => e.remove());
-    const prev = n > 1 ? STEPS[n - 2] : null, next = n < 5 ? STEPS[n] : null;
+    // Derive prev/next from the navigable steps (same filter as the stepper, and
+    // never auto-advance into the disabled "Why it beats LY"), so the flow ends on
+    // the 52-week plan now that Counterfactuals is folded in.
+    const nav0 = ((state.v2 && !state.v2plan) ? STEPS.filter((s) => s.n !== 3) : STEPS).filter((s) => s.n !== 6);
+    const idx = nav0.findIndex((s) => s.n === n);
+    const prev = idx > 0 ? nav0[idx - 1] : null, next = (idx >= 0 && idx < nav0.length - 1) ? nav0[idx + 1] : null;
     const nav = document.createElement("div");
     nav.className = "np-stepnav";
     nav.innerHTML = (prev ? '<button class="np-nav-back" data-go="' + prev.n + '">← ' + prev.title + "</button>" : "<span></span>") +
@@ -680,8 +697,9 @@
       const fp = document.getElementById("npFcPop"); if (fp && !fp.hidden && !fp.contains(e.target) && !e.target.closest("[data-fc]")) fp.hidden = true;
     });
   }
-  // V2 is the only layout — land straight on the loaded 52-week (V2) screen with the
-  // default scope; the Scope & objective step stays available in the stepper to change it.
-  function boot() { initGlobal(); generate(); }
+  // Land on the Scope & objective step with nothing generated yet, so the downstream steps
+  // (Constraints, 52-week plan, Counterfactuals) stay locked until the merchant confirms scope
+  // & objective via "Generate plan". generate() is what unlocks them.
+  function boot() { initGlobal(); renderAll(); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();

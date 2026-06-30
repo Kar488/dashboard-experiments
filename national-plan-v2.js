@@ -64,10 +64,37 @@
   ];
   // pinned inputs: VLC · Promo cost (Reg / Deep) · Events (Store / Dig / S+D, toggled Reg↔Deep)
   const VLCCOL = { k: "vlc", label: "$/u", edit: true, dec: true, val: (o, e) => e.vlc.toFixed(2) };
+  // Promo cost (Reg / Deep) is now the DERIVED result of the allowance breakup — read-only
   const COSTCOLS = [
-    { k: "deadNet", label: "Reg", edit: true, dec: true, val: (o, e) => e.deadNet.toFixed(2) },
-    { k: "deepDeadNet", label: "Deep", edit: true, dec: true, val: (o, e) => e.deepDeadNet.toFixed(2) }
+    { k: "deadNet", label: "Reg" },
+    { k: "deepDeadNet", label: "Deep" }
   ];
+  // the allowances that BUILD the promo cost — editable, toggled Regular↔Deep (like events)
+  const ALLOWCOLS = [
+    { k: "offInvoice", label: "Off-inv", edit: true },
+    { k: "scan", label: "Scan", edit: true },
+    { k: "shipToStore", label: "Ship", edit: true }
+  ];
+  const ALWTITLE = { offInvoice: "off-invoice", scan: "scan", shipToStore: "ship-to-store" };
+  // allowance group header doubles as the Regular↔Deep toggle (which promo cost you're breaking up)
+  function allowCap() {
+    const deep = NP.state.v2allowMode === "deep";
+    return 'Allowances · <button type="button" class="npv2-evtoggle" data-allowtoggle title="Enter the allowances for the regular or the deep-discount promo cost — click to switch">' + (deep ? "D" : "R") + " ⇄</button>";
+  }
+  function deepLadderOf(o) { return window.NPViews && NPViews.deepEffective ? NPViews.deepEffective(o, NP.state.draft).ladder : NP.effective(o, NP.state.draft).ladder; }
+  function deepCostOf(o) { return window.NPViews && NPViews.deepEffective ? NPViews.deepEffective(o, NP.state.draft).deadNet : NP.effective(o, NP.state.draft).deadNet; }
+  // read-only derived promo-cost cell + editable allowance cell
+  function costCellHTML(o, deep) {
+    const v = deep ? deepCostOf(o) : NP.effective(o, NP.state.draft).deadNet;
+    return '<div class="npv2-fg-cell npv2-fg-costc" data-cost="' + o.uid + ":" + (deep ? "deep" : "reg") + '" title="Promo cost $/u — ' + (deep ? "deep-discount" : "regular") + ' weeks (built from the allowances)"><b>' + NP.fmt.price(v) + "</b></div>";
+  }
+  function allowCellHTML(c, o, eDraft) {
+    const deep = NP.state.v2allowMode === "deep";
+    const lad = deep ? deepLadderOf(o) : eDraft.ladder;
+    const dollar = (lad[c.k] || 0) * eDraft.vlc;
+    return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit" data-cell="' + o.uid + ":alw:" + c.k + '" title="' + esc((deep ? "Deep" : "Regular") + " " + (ALWTITLE[c.k] || c.k) + " allowance ($/u) — builds the promo cost") + '">' +
+      '<input class="npv2-fg-input npv2-fg-alwin" type="text" inputmode="decimal" data-uid="' + o.uid + '" data-alw="' + c.k + '" value="' + dollar.toFixed(2) + '"></div>';
+  }
   function evCols() {
     const deep = NP.state.v2evMode === "deep";
     return [
@@ -80,7 +107,7 @@
   // events column header doubles as the Regular↔Deep toggle (events are coupled to the cost columns)
   function evCap() {
     const deep = NP.state.v2evMode === "deep";
-    return 'Events · <button type="button" class="npv2-evtoggle" data-evtoggle title="Editing events &amp; cost for regular or deep-discount weeks — click to switch">' + (deep ? "DEEP" : "REGULAR") + " ⇄</button>";
+    return 'Events · <button type="button" class="npv2-evtoggle" data-evtoggle title="Editing events &amp; cost for regular or deep-discount weeks — click to switch">' + (deep ? "D" : "R") + " ⇄</button>";
   }
   function frontItems() {
     let items = NP.cat().items.slice();
@@ -133,10 +160,11 @@
   }
   function idCell(o, res, ly, eDraft) {
     return '<th class="npv2-fg-id"><div class="npv2-fg-idin">' +
-      '<div class="npv2-fg-name"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + "</span></div>" +
+      '<div class="npv2-fg-name"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + '</span><span class="np-rc-id npv2-fg-base">Base ' + NP.fmt.price(o.basePrice) + "</span></div>" +
       grpBody("out", OUTCOLS.map((c) => outCellHTML(c, res, ly)).join("")) +
       grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
-      grpBody("cost", COSTCOLS.map((c) => inCellHTML(c, o, eDraft)).join("")) +
+      grpBody("cost", costCellHTML(o, false) + costCellHTML(o, true)) +
+      grpBody("alw", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft)).join("")) +
       grpBody("ev", evCols().map((c) => inCellHTML(c, o, eDraft)).join("")) +
       "</div></th>";
   }
@@ -146,6 +174,7 @@
       grpHead("out", "Outputs vs LY", OUTCOLS) +
       grpHead("vlc", "List", [VLCCOL]) +
       grpHead("cost", "Promo cost $/u", COSTCOLS) +
+      grpHead("alw", allowCap(), ALLOWCOLS) +
       grpHead("ev", evCap(), evCols()) +
       "</div></th>";
   }
@@ -165,11 +194,24 @@
     const stHtml = repeat ? '<span class="npv2-wk-st st-rep">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-st st-new">new</span>';
     const ixt = ixf === "cann" ? " · ⚠ cluster rival also on deal (cannibalisation)" : ixf === "halo" ? " · ✦ co-promoted with a complement (halo)" : "";
     const tip = "Wk " + c.week + " · " + c.store.name + (c.offer ? " · " + c.offer.label : "") + (mechL ? " (" + mechL + ")" : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimised placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
+    // promo prices: store at this week's depth; digital a touch deeper; plus the LY price
+    const hasDig = c.digital.length > 0, digDepth = Math.min(0.5, c.depth + 0.06);
+    const sp = NP.fmt.price(NP.promoPriceOf(o, c.depth)), dp = NP.fmt.price(NP.promoPriceOf(o, digDepth));
+    const lySp = NP.fmt.price(NP.promoPriceOf(o, lyd)), lyDp = NP.fmt.price(NP.promoPriceOf(o, Math.min(0.5, lyd + 0.06)));
+    // optimised-placement indicator: new vs a repeat of last year
+    const optIcon = repeat
+      ? '<i class="npv2-wk-opt is-rep" title="repeats last year">↺</i>'
+      : '<i class="npv2-wk-opt is-opt" title="optimised — new placement vs last year">✦</i>';
+    const lockI = lock ? '<i class="npv2-wk-lk" title="locked into plan"></i>' : "";
+    const warnI = noAlw ? '<i class="npv2-wk-warn" title="on promo, no vendor allowance">⚠</i>' : "";
     return '<td class="npv2-fg-wk tactic-' + c.store.className + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="' + esc(tip) + '">' +
-      '<div class="npv2-wk-c">' +
-        '<div class="npv2-wk-top"><span class="npv2-wk-v">' + (c.val ? esc(c.val) : "•") + "</span>" + arr + "</div>" +
-        stHtml +
-        '<div class="npv2-wk-tags">' + (noAlw ? '<i class="npv2-wk-warn" title="on promo, no vendor allowance">⚠</i>' : "") + (c.digital.length ? '<i class="npv2-wk-d">D</i>' : "") + (lock ? '<i class="npv2-wk-lk" title="locked into plan"></i>' : "") + "</div>" +
+      '<div class="npv2-wk-c npv2-wk-pc">' +
+        (c.val ? '<div class="npv2-wk-tok">' + esc(c.val) + "</div>" : "") +
+        '<div class="npv2-wk-pr"><span class="npv2-wk-ch">S</span><b>' + sp + "</b></div>" +
+        (repeat ? '<div class="npv2-wk-lp">LY ' + lySp + "</div>" : "") +
+        (hasDig ? '<div class="npv2-wk-pr npv2-wk-prd"><span class="npv2-wk-ch npv2-wk-chd">D</span><b>' + dp + "</b></div>" + (repeat ? '<div class="npv2-wk-lp">LY ' + lyDp + "</div>" : "") : "") +
+        (!repeat ? '<div class="npv2-wk-lp"><span class="npv2-wk-newt">new</span></div>' : "") +
+        '<div class="npv2-wk-tags">' + arr + optIcon + lockI + warnI + "</div>" +
       "</div></td>";
   }
   function sel(label, id, opts, cur) {
@@ -199,12 +241,26 @@
     const stratRes = (o) => (strat === "optimized" || !cfV || !cfV.cfResult ? NP.resultFor(o, map) : cfV.cfResult(o, strat));
     const wkByUid = {}; items.forEach((o) => (wkByUid[o.uid] = stratWk(o)));
     const ixMap = ixOn ? buildIxMap(items, wkByUid) : null;
-    let periodHead = "";
-    for (let p = 0; p < 13; p++) periodHead += '<th class="npv2-fg-period' + (p === 0 ? " npv2-fg-snap" : "") + '" colspan="4" data-period="' + p + '" role="button" tabindex="0" title="Flip into period ' + (p + 1) + ' detail (4 weeks)">P' + (p + 1) + "</th>";
+    // focused period → show only its 4 weeks (the pinned block is unchanged); else all 52
+    const focus = NP.state.v2period;
+    const weeks = focus == null ? Array.from({ length: 52 }, (_, w) => w)
+                                : [0, 1, 2, 3].map((i) => focus * 4 + i).filter((w) => w < 52);
+    let periodHead;
+    if (focus == null) {
+      periodHead = "";
+      for (let p = 0; p < 13; p++) periodHead += '<th class="npv2-fg-period' + (p === 0 ? " npv2-fg-snap" : "") + '" colspan="4" data-period="' + p + '" role="button" tabindex="0" title="Zoom into period ' + (p + 1) + ' (4 weeks)">P' + (p + 1) + "</th>";
+    } else {
+      periodHead = '<th class="npv2-fg-period npv2-fg-periodback npv2-fg-snap" colspan="' + weeks.length + '" data-zoomout role="button" tabindex="0" title="Zoom back out to all 52 weeks">' +
+        '<span class="npv2-fg-zback">‹ all 52 weeks</span><b>Period ' + (focus + 1) + '</b><span class="npv2-fg-zwk">wks ' + (weeks[0] + 1) + "–" + (weeks[weeks.length - 1] + 1) + "</span></th>";
+    }
     let wkHead = "";
-    for (let w = 0; w < 52; w++) { const ev = NP.RETAIL_EVENTS.find((x) => x.wk === w); wkHead += '<th class="npv2-fg-wkh' + (ev ? " npv2-fg-holi" : "") + '">' + (w + 1) + (ev ? "<small>" + esc(ev.short) + "</small>" : "") + "</th>"; }
+    weeks.forEach((w) => {
+      const ev = NP.RETAIL_EVENTS.find((x) => x.wk === w);
+      if (focus == null) { wkHead += '<th class="npv2-fg-wkh' + (ev ? " npv2-fg-holi" : "") + '">' + (w + 1) + (ev ? "<small>" + esc(ev.short) + "</small>" : "") + "</th>"; }
+      else { wkHead += '<th class="npv2-fg-wkh npv2-fg-wkh-p' + (ev ? " npv2-fg-holi" : "") + '"><div class="npv2-pwk"><b>Wk ' + (w + 1) + "</b>" + (ev ? "<small>" + esc(ev.short) + "</small>" : "") + '<div class="npv2-pwk-cols"><span></span><span>Sales</span><span>Units</span><span>AGP</span></div></div></th>'; }
+    });
     const head = "<thead><tr>" + idHead() + periodHead + "</tr><tr>" + wkHead + "</tr></thead>";
-    const span = 1 + 52, evWeeks = new Set(NP.RETAIL_EVENTS.map((e) => e.wk));
+    const span = 1 + weeks.length, evWeeks = new Set(NP.RETAIL_EVENTS.map((e) => e.wk));
     // items promoting with little/no vendor allowance (VLC − dead-net) → flag (like V1)
     const alwU = (o) => { const e = NP.effective(o, map); return e.vlc - e.deadNet; };
     const noAlwSet = new Set(items.slice().sort((a, b) => alwU(a) - alwU(b)).slice(0, Math.max(1, Math.round(items.length * 0.12))).map((o) => o.uid));
@@ -213,10 +269,13 @@
       const eDraft = NP.effective(o, NP.state.draft), res = stratRes(o), ly = NP.lyResult(o), wk = wkByUid[o.uid], noAlw = noAlwSet.has(o.uid);
       const lyset = new Set(); NP.weekPlan(o, null, true).forEach((c, w) => { if (c.promoted) lyset.add(w); });
       if (!ff.sortBy && o.vendor !== lastV) { lastV = o.vendor; body += '<tr class="npv2-fg-vrow"><td colspan="' + span + '"><span>' + esc(o.vendor) + "</span></td></tr>"; }
-      body += "<tr>" + idCell(o, res, ly, eDraft) + wk.map((c, w) => ribbonCell(o, c, evWeeks.has(w), ixMap ? ixFlag(ixMap, o, w) : null, lyset, noAlw)).join("") + "</tr>";
+      const cells = focus == null
+        ? weeks.map((w) => ribbonCell(o, wk[w], evWeeks.has(w), ixMap ? ixFlag(ixMap, o, w) : null, lyset, noAlw)).join("")
+        : (function () { const s = NP.weeklySeries(o, map); return weeks.map((w, i) => periodCell(o, s, wk, w, noAlw, i === 0)).join(""); })();
+      body += "<tr>" + idCell(o, res, ly, eDraft) + cells + "</tr>";
     });
     if (!items.length) body = '<tr><td class="npv2-empty" colspan="' + span + '">No NCRCs match these filters.</td></tr>';
-    return '<table class="npv2-fg">' + head + "<tbody>" + body + "</tbody></table>";
+    return '<table class="npv2-fg' + (focus != null ? " is-period" : "") + '">' + head + "<tbody>" + body + "</tbody></table>";
   }
   function lyTotals() { let r = 0, u = 0, a = 0; NP.cat().items.forEach((o) => { const x = NP.lyResult(o); r += x.revenueM; u += x.units; a += x.agpM; }); return { r: r, u: u, a: a }; }
   // ROW 1 — distribution strategies as selectable cards, each with its Sales/Units/AGP + Δ vs LY
@@ -244,6 +303,7 @@
       '<span class="npv2-lg"><i class="npv2-wk-warn">⚠</i>on promo · no allowance</span>' +
       '<span class="npv2-lg"><i class="npv2-sw npv2-sw-ev"></i>holiday wk</span>' +
       '<span class="npv2-lg"><i class="npv2-sw npv2-fg-none"></i>no promo</span>' +
+      '<span class="npv2-lg"><i class="npv2-wk-opt is-opt">✦</i>optimised placement <i class="npv2-wk-opt is-rep">↺</i>repeats LY</span>' +
       '<span class="npv2-lg-div"></span>' +
       '<span class="npv2-lg">depth vs LY <i class="npv2-wk-ar is-deeper">▲</i> deeper <i class="npv2-wk-ar is-shallower">▼</i> shallower <i class="npv2-wk-ar is-eq">=</i> same · <span class="npv2-wk-ly">LY %</span> = repeats LY</span>' +
       "</div>";
@@ -320,7 +380,29 @@
     NP.applyEdit(uid, field, inp.value);
     const cell = inp.closest(".npv2-fg-inc");
     if (cell) { const edited = NP.isEdited(o, field); cell.classList.toggle("is-edited", edited); cell.classList.toggle("is-outband", edited && !NP.inBand(o, field, inp.value)); }
+    if (field === "vlc") updateCostCells(o);   // promo cost is derived from VLC × (1 − allowances)
     showBand(inp, o); updateScenarioUI();
+  }
+  // allowance edits build the (read-only) promo cost — update the derived cost cells live
+  function onAllowInput(e) {
+    const inp = e.target, uid = inp.dataset.uid, key = inp.dataset.alw, deep = NP.state.v2allowMode === "deep";
+    NP.applyAllow(uid, key, inp.value, deep);
+    const o = NP.cat().items.find((x) => x.uid === uid);
+    updateCostCells(o);
+    const cell = inp.closest(".npv2-fg-inc"); if (cell) cell.classList.add("is-edited");
+    updateScenarioUI();
+  }
+  function onAllowBlur(e) {
+    const inp = e.target, key = inp.dataset.alw, deep = NP.state.v2allowMode === "deep";
+    const o = NP.cat().items.find((x) => x.uid === inp.dataset.uid), eDraft = NP.effective(o, NP.state.draft);
+    const lad = deep ? deepLadderOf(o) : eDraft.ladder;
+    inp.value = ((lad[key] || 0) * eDraft.vlc).toFixed(2);
+  }
+  function updateCostCells(o) {
+    const reg = document.querySelector('[data-cost="' + o.uid + ':reg"]');
+    if (reg) reg.innerHTML = "<b>" + NP.fmt.price(NP.effective(o, NP.state.draft).deadNet) + "</b>";
+    const deep = document.querySelector('[data-cost="' + o.uid + ':deep"]');
+    if (deep) deep.innerHTML = "<b>" + NP.fmt.price(deepCostOf(o)) + "</b>";
   }
   function onEditBlur(e) {
     const inp = e.target, field = inp.dataset.field, o = NP.cat().items.find((x) => x.uid === inp.dataset.uid), d = NP.effective(o, NP.state.draft);
@@ -381,14 +463,21 @@
     const vs = front.querySelector("#npV2FgVendor"); vs.onchange = () => { ff.vendor = vs.value; renderFront(); };
     const rs = front.querySelector("#npV2FgRog"); rs.onchange = () => { ff.rog = rs.value; renderFront(); };
     const cs = front.querySelector("#npV2FgClass"); cs.onchange = () => { ff.cls = cs.value; renderFront(); };
-    // editable pinned inputs
-    front.querySelectorAll(".npv2-fg-input").forEach((inp) => {
+    // editable pinned inputs (VLC, events) — allowance inputs are handled separately below
+    front.querySelectorAll(".npv2-fg-input:not(.npv2-fg-alwin)").forEach((inp) => {
       inp.addEventListener("input", onEditInput);
       inp.addEventListener("focus", (e) => showBand(e.target, NP.cat().items.find((x) => x.uid === e.target.dataset.uid)));
       inp.addEventListener("blur", onEditBlur);
     });
-    // click a period header → flip into its 4-week detail
-    front.querySelectorAll("[data-period]").forEach((el) => (el.onclick = (e) => { e.stopPropagation(); flipToMonth(+el.dataset.period); }));
+    // allowance inputs build the (read-only) promo cost — write to the regular/deep ladder live
+    front.querySelectorAll(".npv2-fg-alwin").forEach((inp) => {
+      inp.addEventListener("input", onAllowInput);
+      inp.addEventListener("blur", onAllowBlur);
+    });
+    front.querySelectorAll("[data-allowtoggle]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); NP.state.v2allowMode = NP.state.v2allowMode === "deep" ? "reg" : "deep"; renderFront(); }));
+    // click a period header → zoom the ribbon into that period's 4 weeks (pinned block stays)
+    front.querySelectorAll("[data-period]").forEach((el) => (el.onclick = (e) => { e.stopPropagation(); zoomPeriod(+el.dataset.period); }));
+    front.querySelectorAll("[data-zoomout]").forEach((el) => (el.onclick = (e) => { e.stopPropagation(); zoomOut(); }));
     // click a promoted week → single-week drawer
     front.querySelectorAll("[data-mweek]").forEach((el) => (el.onclick = () => { const p = el.dataset.mweek.split("|"); if (window.NPViews && NPViews.openWeek) NPViews.openWeek("plan", p[0], +p[1]); }));
     // scenario controls
@@ -397,6 +486,7 @@
     front.querySelector("#npV2Cmp").onclick = openCompareOverlay;
     const ixb = front.querySelector("#npV2Ix"); if (ixb) ixb.onclick = () => { NP.state.v2ix = !NP.state.v2ix; renderFront(); };
     front.querySelectorAll("[data-evtoggle]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); NP.state.v2evMode = NP.state.v2evMode === "deep" ? "reg" : "deep"; renderFront(); }));
+    front.querySelectorAll("[data-breakup]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openBreakup(); }));
     front.querySelectorAll("[data-sortby]").forEach((b) => (b.onclick = () => { ff.sortBy = ff.sortBy === b.dataset.sortby ? null : b.dataset.sortby; renderFront(); }));
     front.querySelectorAll("[data-bin]").forEach((b) => (b.onclick = () => { ff.bin = b.dataset.bin; renderFront(); }));
     front.querySelectorAll("[data-planview]").forEach((b) => (b.onclick = () => togglePlanView(b.dataset.planview === "1")));
@@ -464,6 +554,26 @@
     }
   }
 
+  /* ========================================== period zoom (in/out, same grid)
+     Clicking a period zooms the ribbon down to that period's 4 weeks while the
+     pinned identity/outputs/inputs stay put; the zoom-out header returns to 52. */
+  // drill into the allowance breakup behind the promo cost (the classic deal-input
+  // allowance view, with its Regular/Deep selector + Hdr-flat-separate column)
+  function openBreakup() {
+    NP.state.v2plan = true;     // makes the Deal-inputs step reachable + stops the 3→4 remap
+    NP.state.showAllow = true;  // open the allowance breakup
+    if (NP.renderStepper) NP.renderStepper();
+    NP.goStep(3);
+  }
+  function zoomPeriod(p) { if (NP.state.v2period === p) return zoomOut(); NP.state.v2period = p; renderFront(); playZoom("in"); }
+  function zoomOut() { if (NP.state.v2period == null) return; NP.state.v2period = null; renderFront(); playZoom("out"); }
+  function playZoom(dir) {
+    const wrap = document.getElementById(WRAP); if (!wrap) return;
+    const cls = dir === "in" ? "npv2-zin" : "npv2-zout";
+    wrap.classList.add(cls);
+    setTimeout(() => wrap.classList.remove(cls), 340);
+  }
+
   /* horizontal drag-to-pan — the "swipe" gesture; capture only after a real drag so taps on
      week cells still open the detail. CSS scroll-snap + overscroll-behavior do the rest. */
   function bindDrag(wrap) {
@@ -501,23 +611,39 @@
     doFlip(true);
   }
   function flipBack() { if (!flip.animating) doFlip(false); }
+  // Zoom transition (replaces the old rotateY flip): the current view scales+fades out
+  // while the incoming view scales+fades in, so it reads as zooming INTO a period and
+  // back OUT to the 52-week grid. The two faces overlap (absolute) only during the anim.
   function doFlip(toBack) {
     const fl = document.getElementById(FLIPEL); if (!fl) return;
     const front = document.getElementById(FRONT), back = document.getElementById(MFACE);
     flip.animating = true; flip.open = toBack;
-    fl.classList.add("is-anim");
-    fl.style.transform = "rotateY(" + (toBack ? "-90deg" : "90deg") + ")";
+    const oldFace = toBack ? front : back, newFace = toBack ? back : front;
+    const newFrom = toBack ? 0.9 : 1.1, oldTo = toBack ? 1.1 : 0.9; // in: grow from small; out: shrink away
+    fl.classList.add("is-zooming");
+    newFace.hidden = false; oldFace.hidden = false;
+    newFace.style.transition = "none";
+    newFace.style.transform = "scale(" + newFrom + ")";
+    newFace.style.opacity = "0";
+    void fl.offsetWidth; // commit the start state before transitioning
+    requestAnimationFrame(() => {
+      newFace.style.transition = "";
+      newFace.style.transform = "scale(1)";
+      newFace.style.opacity = "1";
+      oldFace.style.transform = "scale(" + oldTo + ")";
+      oldFace.style.opacity = "0";
+    });
     setTimeout(() => {
-      front.hidden = toBack; back.hidden = !toBack;
-      fl.style.transform = "rotateY(" + (toBack ? "90deg" : "-90deg") + ")";
-      requestAnimationFrame(() => requestAnimationFrame(() => { fl.style.transform = "rotateY(0deg)"; }));
-      setTimeout(() => { fl.classList.remove("is-anim"); flip.animating = false; }, 200);
-    }, 190);
+      oldFace.hidden = true;
+      [front, back].forEach((f) => { f.style.transition = ""; f.style.transform = ""; f.style.opacity = ""; });
+      fl.classList.remove("is-zooming");
+      flip.animating = false;
+    }, 300);
   }
   function syncFlip() {
     const fl = document.getElementById(FLIPEL); if (!fl) return;
     const front = document.getElementById(FRONT), back = document.getElementById(MFACE);
-    if (flip.open) { buildMonthFace(flip.m); front.hidden = true; back.hidden = false; fl.style.transform = "rotateY(0deg)"; }
+    if (flip.open) { buildMonthFace(flip.m); front.hidden = true; back.hidden = false; }
     else { front.hidden = false; back.hidden = true; }
   }
 
@@ -532,13 +658,15 @@
     return items;
   }
   // compact CY / LY / Δ mini-table — Sales/Units/AGP labelled once (column heads), not per value
-  function miniTable(cy, ly) {
+  // showLabels (default true) prints the CY/LY/Δ row labels; the in-grid period detail
+  // passes false on all but the first week so the labels aren't repeated across the row.
+  function miniTable(cy, ly, showLabels) {
     const dCell = (c, l, f) => { const d = c - l, p = l ? d / l : 0, pos = d >= 0; return '<span class="npv2-mc-dc"><b class="' + (pos ? "np-pos" : "np-neg") + '">' + (d >= 0 ? "+" : "-") + f(Math.abs(d)) + '</b><i class="' + (pos ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(p) + "</i></span>"; };
-    // no per-cell Sales/Units/AGP header — labelled once in the column heads of the grid
+    const L = (t) => '<span class="npv2-mc-rl">' + (showLabels === false ? "" : t) + "</span>";
     return '<div class="npv2-mc-mt">' +
-      '<div class="npv2-mc-row"><span class="npv2-mc-rl">CY</span><span>' + km(cy.s) + "</span><span>" + NP.fmt.u(cy.u) + "</span><span>" + km(cy.a) + "</span></div>" +
-      '<div class="npv2-mc-row npv2-mc-ly"><span class="npv2-mc-rl">LY</span><span>' + km(ly.s) + "</span><span>" + NP.fmt.u(ly.u) + "</span><span>" + km(ly.a) + "</span></div>" +
-      '<div class="npv2-mc-row npv2-mc-d"><span class="npv2-mc-rl">Δ</span>' + dCell(cy.s, ly.s, km) + dCell(cy.u, ly.u, NP.fmt.u) + dCell(cy.a, ly.a, km) + "</div></div>";
+      '<div class="npv2-mc-row">' + L("CY") + "<span>" + km(cy.s) + "</span><span>" + NP.fmt.u(cy.u) + "</span><span>" + km(cy.a) + "</span></div>" +
+      '<div class="npv2-mc-row npv2-mc-ly">' + L("LY") + "<span>" + km(ly.s) + "</span><span>" + NP.fmt.u(ly.u) + "</span><span>" + km(ly.a) + "</span></div>" +
+      '<div class="npv2-mc-row npv2-mc-d">' + L("Δ") + dCell(cy.s, ly.s, km) + dCell(cy.u, ly.u, NP.fmt.u) + dCell(cy.a, ly.a, km) + "</div></div>";
   }
   function promoBlock(o, c) {
     // "locked" is only for promoted weeks locked into the plan — never on non-promoted weeks
@@ -563,6 +691,19 @@
     const cy = { s: s.sales[w], u: s.units[w], a: s.agp[w] }, ly = { s: s.lySales[w], u: s.lyUnits[w], a: s.lyAgp[w] };
     const warn = c.promoted && noAlw ? '<div class="npv2-mc-warn"><span>⚠</span> on promo · no vendor allowance</div>' : "";
     return '<td class="npv2-mg-cell' + cls + '"' + attr + '><div class="npv2-mc">' + miniTable(cy, ly) + promoBlock(o, c) + warn + "</div></td>";
+  }
+  // in-grid period detail cell — the SAME rich content as the flip face's monthCell, but
+  // rendered as a column of the frozen-pane grid so the pinned identity + editable deal
+  // inputs stay on screen (the complaint with the old flip was it hid the inputs).
+  function periodCell(o, s, wk, w, noAlw, isFirst) {
+    const c = wk[w];
+    const cy = { s: s.sales[w], u: s.units[w], a: s.agp[w] }, ly = { s: s.lySales[w], u: s.lyUnits[w], a: s.lyAgp[w] };
+    let cls = "npv2-fg-pcell", attr = "";
+    if (c.promoted) { cls += " is-promo" + (noAlw ? " is-noalw" : ""); attr = ' data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="Open week ' + c.week + ' detail"'; }
+    else if (c.locked) cls += " is-locked";
+    if (isFirst) cls += " is-first";
+    const warn = c.promoted && noAlw ? '<div class="npv2-mc-warn"><span>⚠</span> on promo · no vendor allowance</div>' : "";
+    return '<td class="' + cls + '"' + attr + '><div class="npv2-mc">' + miniTable(cy, ly, isFirst) + promoBlock(o, c) + warn + "</div></td>";
   }
   function monthGrid(m) {
     const map = NP.displayMap(), mw = monthWeeks(m), weeks = mw.weeks, items = monthItems();

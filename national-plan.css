@@ -783,6 +783,102 @@ body.dark .np-c3 > .panel-heading { background: linear-gradient(180deg, rgba(23,
 .np-c3-tol-t { font-size: 0.78rem; font-weight: 600; color: var(--ink); }
 .np-c3-tol-v { font-size: 0.78rem; font-weight: 700; color: var(--ink); }
 .np-c3-tol-d { margin: 2px 0 0; font-size: 0.72rem; color: var(--muted); }
+
+/* ── step-2 header: thesis text + "show learnt values" switch ── */
+.np-c3 > .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; }
+.np-c3-htext { min-width: 0; }
+.np-c3-toggle { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; margin-top: 2px; }
+.np-c3-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.np-c3-toggle-tr { width: 34px; height: 19px; border-radius: 999px; background: #c4ccd6; position: relative; transition: background .15s; flex: 0 0 auto; }
+.np-c3-toggle-tr::after { content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+.np-c3-toggle input:checked + .np-c3-toggle-tr { background: var(--blue); }
+.np-c3-toggle input:checked + .np-c3-toggle-tr::after { transform: translateX(15px); }
+.np-c3-toggle-lbl { font-size: 0.74rem; font-weight: 600; color: var(--ink); white-space: nowrap; }
+body.dark .np-c3-toggle-tr { background: #3a475e; }
+
+/* ── constraints class tabs ── */
+.np-c3-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin: 0 0 4px; }
+body.dark .np-c3-tabs { border-bottom-color: #25324a; }
+.np-c3-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 14px; cursor: pointer; display: inline-flex; flex-direction: column; gap: 2px; line-height: 1.2; margin-bottom: -1px; }
+.np-c3-tabl { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+.np-c3-tabn { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--faint, #9aa6b6); }
+.np-c3-tab:hover .np-c3-tabl { color: var(--ink); }
+.np-c3-tab.is-active { border-bottom-color: var(--blue); }
+.np-c3-tab.is-active .np-c3-tabl { color: var(--blue); }
+.np-c3-tab.is-active .np-c3-tabn { color: var(--blue); }
+.np-c3-tabbody { min-height: 280px; }
+.np-c3-tabbody .np-c3-sec { margin-top: 14px; }
+/* the "your asks" list is now a tab, not a below-the-line footer — drop the heavy divider */
+.np-c3-tabbody .np-c3-choices { margin-top: 14px; padding-top: 0; border-top: 0; }
+
+/* ── grain / basis pills ── */
+.np-c3-grain { display: inline-block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 6px; border-radius: 4px; white-space: nowrap; background: rgba(120,130,145,0.14); color: #5c6b80; }
+.g-category, .g-category-like { background: rgba(23,105,232,0.12); color: #1b62c4; }
+.g-per-sku, .g-sku-role { background: rgba(16,160,120,0.14); color: #0e8e68; }
+.g-vendor-item { background: rgba(214,158,30,0.18); color: #9a6a05; }
+.g-per-offer, .g-item-week { background: rgba(120,130,145,0.16); color: #5c6b80; }
+body.dark .g-category, body.dark .g-category-like { color: #7db0ff; }
+body.dark .g-per-sku, body.dark .g-sku-role { color: #4fd0a0; }
+body.dark .g-vendor-item { color: #e3b765; }
+.np-c3-basis { display: inline-block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.b-learnt { background: rgba(23,105,232,0.12); color: #1b62c4; }
+.b-fixed { background: rgba(120,130,145,0.16); color: #6b7990; }
+body.dark .b-learnt { color: #7db0ff; }
+.np-c3-status { display: inline-block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.np-c3-status.s-on { background: rgba(16,160,120,0.16); color: #0e8e68; }
+.np-c3-status.s-off { background: rgba(120,130,145,0.18); color: #6b7990; }
+body.dark .np-c3-status.s-on { color: #4fd0a0; }
+
+/* ── optimiser settings block (over-funding + protection floors) ── */
+.np-c3-optset { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px 44px; margin-top: 10px; }
+.np-c3-optset > .np-c3-row { flex: 1 1 320px; min-width: 280px; padding-top: 0; }
+.np-c3-optset-floors { flex: 0 0 auto; }
+.np-c3-optset-floorh { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--faint, #9aa6b6); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.np-c3-subhead { margin: 24px 0 0; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #8a97aa; }
+
+/* ── guardrails "learnt values" table ── */
+.np-c3-gv-wrap { margin-top: 8px; overflow-x: auto; }
+.np-c3-gv { width: 100%; border-collapse: collapse; }
+.np-c3-gv th, .np-c3-gv td { padding: 8px 14px 8px 0; font-size: 0.76rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.np-c3-gv th { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--faint, #9aa6b6); white-space: nowrap; }
+.np-c3-gv .gv-name { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.np-c3-gv .gv-meaning { color: var(--muted); width: 100%; }
+.np-c3-gv .gv-val { display: none; font-weight: 600; color: var(--ink); text-align: right; white-space: nowrap; }
+.np-c3-gv th.gv-val { text-align: right; color: #1b62c4; }
+.np-c3.show-learnt .np-c3-gv .gv-meaning { display: none; }
+.np-c3.show-learnt .np-c3-gv .gv-val { display: table-cell; }
+body.dark .np-c3-gv th, body.dark .np-c3-gv td { border-color: #25324a; }
+.np-c3-tolchip { display: inline-block; font-size: 0.64rem; font-weight: 700; color: #9a6a05; background: rgba(214,158,30,0.16); padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+body.dark .np-c3-tolchip { color: #e3b765; }
+.np-c3-gv-cap { margin: 12px 0 0; font-size: 0.72rem; color: var(--muted); line-height: 1.5; max-width: 880px; }
+.np-c3-gv-cap b { color: var(--ink); font-weight: 600; }
+
+/* ── dense constraint table (Pruned + Optimiser settings) ── */
+.np-c3-tbl-wrap { margin-top: 10px; overflow-x: auto; }
+.np-c3-tbl { width: 100%; border-collapse: collapse; }
+.np-c3-tbl th, .np-c3-tbl td { padding: 7px 14px 7px 0; font-size: 0.75rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.np-c3-tbl th { font-size: 0.61rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--faint, #9aa6b6); white-space: nowrap; }
+.np-c3-tbl td:first-child { white-space: nowrap; }
+.np-c3-tbl td b { font-weight: 600; color: var(--ink); }
+.np-c3-tbl td:nth-child(2) { color: var(--muted); width: 100%; min-width: 240px; }
+.np-c3-tbl .ta-r { text-align: right; white-space: nowrap; }
+body.dark .np-c3-tbl th, body.dark .np-c3-tbl td { border-color: #25324a; }
+.np-c3-tbl .c3-grp td { padding-top: 15px; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--blue); border-bottom: 1px solid var(--line); }
+.np-c3-tbl .c3-off td { opacity: 0.6; }
+.np-c3-th { display: inline-block; font-size: 0.68rem; font-weight: 700; color: var(--ink); background: rgba(120,130,145,0.12); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.np-c3-linkto { font-size: 0.71rem; color: #8a97aa; white-space: nowrap; }
+
+/* ── optimisation scenarios ── */
+.np-c3-scns { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px 18px; margin-top: 10px; }
+.np-c3-scn { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+body.dark .np-c3-scn { border-color: #25324a; }
+.np-c3-scn.is-rec { border-color: rgba(23,105,232,0.45); background: rgba(23,105,232,0.04); }
+.np-c3-scn-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.np-c3-scn-t { font-size: 0.8rem; font-weight: 700; color: var(--ink); display: inline-flex; align-items: baseline; gap: 8px; }
+.np-c3-scn-tag { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blue); background: rgba(23,105,232,0.12); padding: 2px 6px; border-radius: 4px; }
+.np-c3-scn-drv { flex: 0 0 auto; font-size: 0.68rem; font-weight: 700; color: #9a6a05; background: rgba(214,158,30,0.16); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+body.dark .np-c3-scn-drv { color: #e3b765; }
+.np-c3-scn-d { margin: 6px 0 0; font-size: 0.72rem; color: var(--muted); line-height: 1.45; }
 /* grouped, left-aligned with generous gaps + dividers — not stretched to the viewport */
 .np-c3-split { display: flex; flex-wrap: wrap; align-items: flex-start; }
 .np-c3-split-l { flex: 0 0 auto; width: max-content; max-width: 320px; }
@@ -967,10 +1063,15 @@ body.npv2-nolib .npv2-swiper .swiper-wrapper { display: flex; transition: transf
 body.npv2-nolib .npv2-slide { flex: 0 0 100%; width: 100%; }
 
 /* --- the flip (52-week <-> month detail) --- */
-.npv2-flip { transform-origin: 50% 50%; will-change: transform; }
-.npv2-flip.is-anim { transition: transform 0.19s cubic-bezier(.45,.05,.55,.95); }
-.npv2-face { width: 100%; }
+.npv2-flip { position: relative; }
+.npv2-face { width: 100%; transform-origin: 50% 42%; }
 .npv2-face[hidden] { display: none; }
+/* zoom transition: both faces overlap and cross-fade/scale only while animating */
+.npv2-flip.is-zooming > .npv2-face {
+  position: absolute; inset: 0; z-index: 1;
+  transition: transform 0.3s cubic-bezier(.33,0,.2,1), opacity 0.26s ease;
+  will-change: transform, opacity;
+}
 
 /* --- month detail face --- */
 .npv2-face-back { background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 10px 34px rgba(15,23,42,0.10); }
@@ -1135,6 +1236,8 @@ body.dark .npv2-fg-id { background: #131f33; } body.dark .npv2-fg thead .npv2-fg
 .npv2-fg-name b { display: block; font-size: 0.74rem; font-weight: 700; color: var(--ink); white-space: normal; line-height: 1.15; }
 body.dark .npv2-fg-name b { color: #e6ecf5; }
 .npv2-fg-name .np-rc-size, .npv2-fg-name .np-rc-id { display: inline-block; margin-right: 7px; }
+/* base price under the NCRC id — same muted treatment, on its own line */
+.npv2-fg-name .npv2-fg-base { display: block; margin: 2px 0 0; }
 .npv2-fg-nameh { color: var(--muted); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
 .npv2-fg-nameh small { display: block; font-size: 0.54rem; color: var(--faint); font-weight: 600; text-transform: none; letter-spacing: 0; margin-top: 2px; }
 .npv2-fg-mets { display: flex; gap: 4px; }
@@ -1973,3 +2076,102 @@ body.np-v2 #npV2Front #npV2PlanPanel .np-results-head,
 body.np-v2 #npV2Front #npV2PlanPanel .np-results-head.is-stuck {
   position: sticky !important; top: 0 !important; z-index: 20;
 }
+
+/* ============================================================================
+   PERIOD ZOOM (same grid — pinned block stays, ribbon shows the 4 weeks)
+   ========================================================================= */
+.npv2-fg.is-period { width: 100%; }
+/* the focused period shows the RICH per-week detail (CY/LY/Δ + promo) in wide cells,
+   while the pinned identity + editable inputs stay frozen on the left */
+/* period view: the table is width:100%, so pin the frozen block to its content width —
+   the WEEK columns (not the pinned block) absorb the extra width, so no gap after Events */
+.npv2-fg.is-period .npv2-fg-id { width: 632px !important; min-width: 632px !important; max-width: 632px !important; }
+.npv2-fg.is-period td.npv2-fg-pcell { min-width: 210px; padding: 9px 13px; vertical-align: top; text-align: left; background: #fff; border-left: 1px solid var(--line); white-space: normal; }
+body.dark .npv2-fg.is-period td.npv2-fg-pcell { background: #131f33; border-color: #25324a; }
+.npv2-fg.is-period td.npv2-fg-pcell.is-promo { cursor: pointer; }
+.npv2-fg.is-period td.npv2-fg-pcell.is-promo:hover { background: var(--blue-soft, rgba(23,105,232,0.06)); }
+.npv2-fg.is-period td.npv2-fg-pcell:not(.is-promo) { background: linear-gradient(180deg, rgba(15,23,42,0.015), rgba(15,23,42,0.04)); }
+body.dark .npv2-fg.is-period td.npv2-fg-pcell:not(.is-promo) { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.05)); }
+.npv2-fg.is-period .npv2-fg-wkh.npv2-fg-wkh-p { width: auto !important; min-width: 210px !important; max-width: none !important; padding: 6px 13px !important; text-align: left !important; vertical-align: bottom; }
+/* Sales/Units/AGP shown ONCE per week header, aligned over the cell value columns */
+.npv2-pwk { display: flex; flex-direction: column; gap: 3px; }
+.npv2-pwk > b { font-size: 0.66rem; color: var(--ink); text-transform: none; letter-spacing: 0; }
+body.dark .npv2-pwk > b { color: #e6ecf5; }
+.npv2-pwk > small { color: var(--blue); font-size: 0.5rem; }
+.npv2-pwk-cols { display: grid; grid-template-columns: 20px 1fr 1fr 1fr; gap: 2px 8px; }
+.npv2-pwk-cols span { text-align: right; font-size: 0.5rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; }
+/* non-first cells keep the empty 20px label slot so values stay column-aligned across the row */
+.npv2-fg.is-period td.npv2-fg-pcell .npv2-mc-rl { min-width: 20px; }
+/* the period header becomes the zoom-out affordance */
+.npv2-fg-period.npv2-fg-periodback { text-align: left !important; cursor: pointer; padding: 4px 14px !important; background: #e8f0fb !important; }
+body.dark .npv2-fg-period.npv2-fg-periodback { background: #1d2c46 !important; }
+.npv2-fg-periodback:hover { background: #d9e7fa !important; }
+.npv2-fg-periodback .npv2-fg-zback { color: var(--blue); font-weight: 800; margin-right: 12px; }
+.npv2-fg-periodback b { color: var(--ink); font-size: 0.72rem; text-transform: none; letter-spacing: 0; }
+body.dark .npv2-fg-periodback b { color: #e6ecf5; }
+.npv2-fg-periodback .npv2-fg-zwk { color: var(--muted); margin-left: 10px; font-weight: 600; text-transform: none; }
+/* zoom in/out animation on the ribbon container (pinned columns stay present) */
+@keyframes npv2-zin { from { opacity: 0.5; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+@keyframes npv2-zout { from { opacity: 0.5; transform: scale(1.06); } to { opacity: 1; transform: scale(1); } }
+body.np-v2 .npv2-fg-wrap.npv2-zin { animation: npv2-zin 0.32s cubic-bezier(.33,0,.2,1); }
+body.np-v2 .npv2-fg-wrap.npv2-zout { animation: npv2-zout 0.32s cubic-bezier(.33,0,.2,1); }
+
+/* ============================================================================
+   ENRICHED PROMO RIBBON CELL (52-week view): store + digital promo price, each with
+   its LY price; visible depth arrow; optimised icon; icons along the bottom.
+   Wider cells, font NOT reduced. ========================================== */
+.npv2-fg:not(.is-period) .npv2-fg-wk { width: 70px !important; min-width: 70px !important; max-width: 70px !important; vertical-align: top; }
+.npv2-fg:not(.is-period) .npv2-fg-wkh { width: 70px !important; min-width: 70px !important; max-width: 70px !important; }
+/* undo the corner-absolute icon rule so the depth arrow + icons sit in normal flow */
+.npv2-fg-wk .npv2-wk-pc i { position: static !important; top: auto !important; right: auto !important; font-size: inherit; }
+.npv2-wk-pc { display: flex !important; flex-direction: column; align-items: stretch !important; gap: 1px; padding: 4px 5px 3px !important; text-align: left; height: 100%; min-height: 0; }
+.npv2-wk-pc .npv2-wk-tok { font-size: 0.56rem; color: var(--muted); line-height: 1.1; white-space: nowrap; overflow: hidden; }
+.npv2-wk-pr { display: flex; align-items: center; gap: 3px; line-height: 1.2; }
+.npv2-wk-pr b { font-size: 0.68rem; font-weight: 700; color: var(--ink); }
+body.dark .npv2-wk-pr b { color: #e6ecf5; }
+.npv2-wk-ch { font-size: 0.46rem; font-weight: 800; color: #fff; background: #8aa0bd; border-radius: 2px; padding: 0 2px; line-height: 1.5; }
+.npv2-wk-chd { background: #3b6fb5; }
+.npv2-wk-pr .npv2-wk-ar { margin-left: auto; font-size: 0.66rem !important; }
+.npv2-wk-lp { font-size: 0.56rem; color: var(--faint); line-height: 1.1; white-space: nowrap; padding-left: 2px; }
+.npv2-wk-newt { color: #15805a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.npv2-wk-pc .npv2-wk-tags { display: flex; gap: 6px; margin-top: auto; padding-top: 4px; padding-bottom: 3px; align-items: center; justify-content: flex-start; }
+/* the depth arrow now lives in the bottom icon row with the others */
+.npv2-wk-pc .npv2-wk-tags .npv2-wk-ar { font-size: 0.7rem !important; margin-left: 0 !important; line-height: 1; }
+.npv2-wk-opt { font-size: 0.66rem !important; font-style: normal; line-height: 1; }
+.npv2-wk-opt.is-opt { color: #15805a; }
+.npv2-wk-opt.is-rep { color: var(--faint); }
+
+/* header flat — a separate flat fee, not part of the per-unit promo cost; set off with a divider + neutral tint */
+.np-ss th.np-ss-flathead { background: #eef1f6 !important; color: #5b6b82 !important; border-left: 2px solid #c4cedd; }
+body.dark .np-ss th.np-ss-flathead { background: #1a2334 !important; color: #9fb0c4 !important; border-left-color: #2c3a52; }
+.np-ss td.np-ss-edit[data-cell$=":headerFlat"] { border-left: 2px solid #c4cedd; }
+body.dark .np-ss td.np-ss-edit[data-cell$=":headerFlat"] { border-left-color: #2c3a52; }
+
+/* "break up" drill-in affordance on the V2 Promo cost header */
+.npv2-breakup { border: 1px solid currentColor; background: transparent; color: var(--blue); font-size: 0.52rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; cursor: pointer; font-family: inherit; letter-spacing: 0.02em; min-height: 0 !important; line-height: 1.35; white-space: nowrap; margin-left: 5px; vertical-align: middle; }
+.npv2-breakup:hover { background: var(--blue-soft, rgba(23,105,232,0.12)); }
+
+/* Allowances group (Off-inv / Scan / Ship) — editable like events, builds the promo cost */
+.npv2-fg-alw { border-left: 1px solid var(--line); }
+.npv2-fg-alw .npv2-fg-gcells > * { width: 44px; min-width: 44px; }
+body.dark .npv2-fg-alw { border-color: #25324a; }
+/* promo cost is now the DERIVED, read-only result (not a yellow input) */
+.npv2-fg-costc { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--ink); background: transparent; }
+.npv2-fg-costc b { font-size: 0.72rem; }
+body.dark .npv2-fg-costc b { color: #e6ecf5; }
+
+/* ---- fixes after adding the inline Allowances group ---- */
+/* 1) frozen block fits its content (no fixed 580px clip, no excess) so Events sits tight */
+.npv2-fg-id { width: max-content !important; min-width: 0 !important; max-width: none !important; }
+/* Events is the last group — natural width (compact captions mean no trailing gap); the
+   period-detail columns, not the pinned block, absorb the table's extra width */
+.npv2-fg-ev { flex: 0 0 auto !important; padding-right: 0 !important; }
+.npv2-fg-wrap { scroll-padding-left: 560px; }
+/* 2) Allowances = a SOFT light pink (editable), distinct from the cream inputs */
+.npv2-fg-alw { background: #fcf4f8 !important; border-left: 1px solid #efe1ea !important; }
+.npv2-fg thead .npv2-fg-alw { background: #f6ecf2 !important; }
+.npv2-fg-alw .npv2-fg-gcap, .npv2-fg-alw .npv2-fg-colh-in { color: #9c5b7e !important; }
+body.dark .npv2-fg-alw { background: rgba(214,90,150,0.07) !important; border-left-color: #2c3a52 !important; }
+/* 3) the derived Promo cost values centered horizontally + TOP-aligned to match the
+   top-aligned input cells (cell padding-top 9px + input padding-top 11px ≈ 20px) */
+.npv2-fg-costc { flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; padding-top: 20px !important; text-align: center; }

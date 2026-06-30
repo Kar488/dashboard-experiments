@@ -1,0 +1,104 @@
+/* ============================================================================
+   MyDesk consolidated KPI board — one card per metric, each with its own
+   smooth 52-week mini-trend (Actual + dotted LY), plus a UPC/NCRC/CIG filter
+   that re-scopes the cards to a single item. Replaces the old KPI grids AND
+   the "Weekly P&L and KPI Trends" panel. Scoped under #kpiBoard; colours come
+   from the page theme vars (styles.css) so light/dark follow the dashboard.
+   ========================================================================== */
+:root{ --dxk-lyline:#b9c2d0; --dxk-guide:#e1e7f0; --dxk-hl:#9aa5b1; }
+body.dark{ --dxk-lyline:#5a6678; --dxk-guide:#2b384c; --dxk-hl:#6b7891; }
+
+/* .kpi-grid / .secondary-grid set display:grid, which overrides the [hidden] attribute — force the
+   replaced grids off. Both the primary KPIs and the basket metrics now live inside #kpiBoard. */
+#primaryMetrics[hidden], #secondaryMetrics[hidden]{display:none !important;}
+#kpiBoard{display:block;margin-top:10px;}
+#kpiBoard .panel-heading{margin-bottom:12px;}
+#kpiBoard .dxk-head-right{display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+#kpiBoard .pos{color:var(--green);} #kpiBoard .neg{color:var(--red);}
+
+#kpiBoard .legend{display:flex;gap:16px;align-items:center;font-size:.74rem;color:var(--muted);}
+#kpiBoard .legend i{display:inline-block;width:20px;height:0;border-top:2.5px solid var(--blue);border-radius:2px;margin-right:6px;vertical-align:middle;}
+#kpiBoard .legend i.ly{border-top:1.5px dashed var(--dxk-lyline);}
+
+#kpiBoard .kfilter-group{display:inline-flex;align-items:center;gap:8px;}
+#kpiBoard .ftype{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;}
+#kpiBoard .ftype button{min-height:0;border:0;background:var(--panel);color:var(--muted);font-size:.7rem;font-weight:700;letter-spacing:.02em;padding:6px 10px;cursor:pointer;border-right:1px solid var(--line);}
+#kpiBoard .ftype button:last-child{border-right:0;}
+#kpiBoard .ftype button.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+#kpiBoard .kfilter{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-strong);border-radius:8px;background:var(--panel);padding:5px 10px;transition:border-color .15s,box-shadow .15s;}
+#kpiBoard .kfilter:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(23,105,232,.12);}
+#kpiBoard .kfi{color:var(--faint);font-size:.92rem;line-height:1;}
+#kpiBoard .kfilter input{min-height:0;border:0;outline:0;font:inherit;font-size:.8rem;background:transparent;color:var(--ink);min-width:200px;}
+#kpiBoard .kclear{min-height:0;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:.82rem;padding:0 2px;line-height:1;}
+#kpiBoard .kclear[hidden]{display:none;}
+#kpiBoard .fchip{margin:2px 0 14px;font-size:.74rem;color:var(--muted);background:var(--blue-soft);border:1px solid color-mix(in srgb,var(--blue) 22%,var(--panel));border-radius:8px;padding:7px 12px;display:inline-flex;align-items:center;gap:8px;}
+#kpiBoard .fchip[hidden]{display:none;}
+#kpiBoard .fchip b{color:var(--ink);}
+#kpiBoard .fchip button{min-height:0;border:0;background:transparent;color:var(--blue);font-weight:600;cursor:pointer;font-size:.74rem;}
+#kpiBoard .card-na{margin:16px 0 4px;font-size:.74rem;color:var(--faint);font-style:italic;}
+
+#kpiBoard .tier{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:700;margin:16px 2px 9px;}
+#kpiBoard .grid{display:grid;gap:12px;}
+#kpiBoard .grid.primary{grid-template-columns:repeat(auto-fill,minmax(252px,1fr));}
+#kpiBoard .grid.secondary{grid-template-columns:repeat(auto-fill,minmax(196px,1fr));}
+
+#kpiBoard .card{border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--tight-shadow);padding:13px 14px;display:flex;flex-direction:column;}
+#kpiBoard .card-top{display:flex;align-items:center;gap:9px;}
+#kpiBoard .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:.74rem;font-weight:700;flex-shrink:0;}
+#kpiBoard .card-label{font-size:.82rem;font-weight:600;color:var(--ink);}
+#kpiBoard .card-value{font-size:1.3rem;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;margin-top:7px;}
+#kpiBoard .card-vsrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:4px;}
+#kpiBoard .card-delta{font-size:.78rem;font-weight:600;font-variant-numeric:tabular-nums;}
+#kpiBoard .card-vs{font-size:.7rem;color:var(--faint);}
+#kpiBoard .card-foot{display:flex;justify-content:space-between;gap:10px;margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:.7rem;}
+#kpiBoard .ms-grid{margin-top:9px;display:flex;flex-direction:column;gap:13px;}
+#kpiBoard .ms-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+#kpiBoard .ms-l{display:flex;flex-direction:column;gap:1px;}
+#kpiBoard .ms-label{font-size:.64rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;}
+#kpiBoard .ms-val{font-size:1.16rem;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;}
+#kpiBoard .ms-r{display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;}
+#kpiBoard .ms-vs{font-size:.64rem;color:var(--faint);}
+#kpiBoard .ms-delta{font-size:.76rem;font-weight:600;font-variant-numeric:tabular-nums;}
+#kpiBoard .card-source{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:.64rem;color:var(--faint);}
+#kpiBoard .explain{display:inline-flex;align-items:center;gap:4px;margin-top:auto;padding-top:11px;color:var(--blue);font-weight:600;font-size:.78rem;text-decoration:none;cursor:pointer;}
+#kpiBoard .explain:hover{text-decoration:underline;}
+
+#kpiBoard .tile{border:1px solid var(--line);border-radius:9px;background:var(--panel);box-shadow:var(--tight-shadow);padding:10px 12px;display:flex;flex-direction:column;}
+#kpiBoard .tile-label{font-size:.64rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;}
+#kpiBoard .tile-vsrow{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:4px;}
+#kpiBoard .tile-value{font-size:1.04rem;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1;}
+#kpiBoard .tile-delta{font-size:.72rem;font-weight:600;font-variant-numeric:tabular-nums;}
+#kpiBoard .tile-vs{font-size:.58rem;color:var(--faint);margin-top:5px;}
+/* Basket & household tiles: no trend. A light sky-blue gradient fade sets them apart from the
+   trend metrics while staying a full, defined card (border + shadow, full-strength text).
+   A blank spacer keeps them the same height as the trend tiles. */
+#kpiBoard .tile.muted{
+  background:linear-gradient(180deg, color-mix(in srgb, var(--blue) 12%, var(--panel)) 0%, var(--panel) 78%);
+  border-color:color-mix(in srgb, var(--blue) 16%, var(--line));
+}
+#kpiBoard .trend-blank{margin-top:9px;height:54px;}
+
+#kpiBoard .trend{margin-top:9px;}
+#kpiBoard .trend-plot{width:100%;cursor:crosshair;}
+#kpiBoard .trendsvg{width:100%;height:100%;display:block;}
+#kpiBoard .trendsvg .area{fill:currentColor;opacity:.06;stroke:none;}
+#kpiBoard .trendsvg .act{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;}
+#kpiBoard .trendsvg .ly{fill:none;stroke:var(--dxk-lyline);stroke-width:1.4;stroke-dasharray:3 3;stroke-linejoin:round;vector-effect:non-scaling-stroke;}
+#kpiBoard .trendsvg .g{stroke:var(--dxk-guide);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:2 2;}
+#kpiBoard .trendsvg .dot{fill:currentColor;}
+#kpiBoard .trendsvg .hl{stroke:var(--dxk-hl);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke;}
+#kpiBoard .trendsvg .ha{fill:currentColor;}
+#kpiBoard .trendsvg .hly{fill:var(--dxk-lyline);}
+#kpiBoard .trend-axis{position:relative;height:12px;margin-top:2px;}
+#kpiBoard .trend-axis span{position:absolute;transform:translateX(-50%);font-size:.55rem;color:var(--faint);white-space:nowrap;font-variant-numeric:tabular-nums;}
+#kpiBoard .trend-axis span.l{transform:none;}
+#kpiBoard .trend-axis span.r{transform:translateX(-100%);}
+
+/* hover tooltip (lives on <body>, position:fixed) */
+#dxkTip{position:fixed;z-index:80;pointer-events:none;display:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 22px rgba(18,32,56,.16);padding:8px 10px;font-size:.7rem;min-width:132px;}
+#dxkTip b{display:block;font-size:.66rem;color:var(--muted);font-weight:600;margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em;}
+#dxkTip span{display:flex;align-items:center;gap:6px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.5;}
+#dxkTip span i{width:12px;height:0;border-top:2px solid var(--blue);display:inline-block;flex-shrink:0;}
+#dxkTip span i.ly{border-top:1.5px dashed var(--dxk-lyline);}
+#dxkTip span.dl{margin-top:3px;font-weight:600;}
+#dxkTip span.dl.pos{color:var(--green);} #dxkTip span.dl.neg{color:var(--red);}

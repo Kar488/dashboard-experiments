@@ -10,7 +10,7 @@
   const ALW_GROUPS = [
     { group: "Buying allowances", cls: "buy", items: [["offInvoice", "Off-inv"], ["billBack", "B/back"], ["priceBreak", "P/brk"]] },
     { group: "Freight", cls: "frt", items: [["freight", "Frt"]] },
-    { group: "Retail allowances", cls: "ret", items: [["scan", "Scan"], ["shipToStore", "Ship-to-store"], ["headerFlat", "Hdr flat"], ["newItem", "New item"]] }
+    { group: "Retail allowances", cls: "ret", items: [["scan", "Scan"], ["shipToStore", "Ship-to-store"], ["newItem", "New item"]] }
   ];
   const ALW = ALW_GROUPS.reduce((a, g) => a.concat(g.items), []);
   const RETAIL_LABEL = { scan: "Scan", shipToStore: "Ship to store", headerFlat: "Header flat", newItem: "New item" };
@@ -34,7 +34,7 @@
     const e = NP.effective(o, map), base = deepLadder(e.ladder);
     const ov = (map && map[o.uid]) || {};
     const dl = ov.deepLadder ? Object.assign({}, base, ov.deepLadder) : base;
-    return { vlc: e.vlc, events: e.events, ladder: dl, deadNet: deadNetFrom(e.vlc, dl) };
+    return { vlc: e.vlc, events: e.events, ladder: dl, deadNet: deadNetFrom(e.vlc, dl), headerFlat: e.headerFlat };
   }
 
   /* ===== context menu (Ask Assistant) ===== */
@@ -174,8 +174,10 @@
       if (g.group === "Freight") cols.push({ k: "netCost", label: "Net cost", cls: "np-ss-net" });
     });
     cols.push({ k: "deadNet", label: "Promo cost", edit: "money" });
+    if (!allow) cols.push({ k: "deepDeadNet", label: "Promo cost deep", edit: "money" });
+    // header flat — a separate flat $ fee, NOT part of the per-unit promo cost (both views)
+    cols.push({ k: "headerFlat", label: "Hdr flat $", edit: "flat", cls: "np-ss-flat" });
     if (!allow) {
-      cols.push({ k: "deepDeadNet", label: "Promo cost deep", edit: "money" });
       // events columns sit under ONE "Events" group header carrying the Regular↔Deep
       // toggle (so the toggle clearly governs all three) — same logic as the V2 grid
       const deepEv = NP.state.v2evMode === "deep";
@@ -226,14 +228,14 @@
   function allowHeader() {
     const deep = isDeep();
     const seg = '<div class="np-dnver">' +
-      '<span class="np-dnver-lab">Promo cost version</span>' +
+      '<span class="np-dnver-lab">Break up promo cost for</span>' +
       '<div class="np-dnver-seg">' +
-        '<button type="button" class="np-dnver-opt' + (!deep ? " is-active" : "") + '" data-dnver="v1">Standard<small>negotiated base</small></button>' +
-        '<button type="button" class="np-dnver-opt' + (deep ? " is-active" : "") + '" data-dnver="v2">Deep-deal<small>deeper funding</small></button>' +
+        '<button type="button" class="np-dnver-opt' + (!deep ? " is-active" : "") + '" data-dnver="v1">Regular<small>standard weeks</small></button>' +
+        '<button type="button" class="np-dnver-opt' + (deep ? " is-active" : "") + '" data-dnver="v2">Deep<small>deeper-funded weeks</small></button>' +
       "</div>" + allowDelta() + "</div>";
     const note = deep
-      ? '<div class="np-allow-note np-allow-note-deep">Editing the <b>Deep-deal</b> promo cost — a second, more deeply funded version (richer off-invoice, bill-back &amp; price-break). Edit any allowance or the promo cost; changes save to <b>Your scenario</b> and carry over to the deal-inputs grid (VLC &amp; <b>Promo cost deep</b>).</div>'
-      : '<div class="np-allow-note">Editing <b>Promo cost</b> redistributes the allowance breakup automatically; edit any allowance to override. Switch to <b>Deep-deal</b> to edit the deeper-funded version. Other columns hidden to focus on cost build-up.</div>';
+      ? '<div class="np-allow-note np-allow-note-deep">Breaking up the <b>Deep</b> promo cost (deeper-funded weeks — richer off-invoice, bill-back &amp; price-break). Edit any allowance; changes save to <b>Your scenario</b> and carry over to <b>Promo cost deep</b>. <b>Hdr flat $</b> is a separate flat fee — it does not reduce the promo cost.</div>'
+      : '<div class="np-allow-note">Breaking up the <b>Regular</b> promo cost: off-invoice, bill-back, price-break, freight, scan &amp; ship-to-store build it (edit any to override). Switch to <b>Deep</b> for the deeper-funded weeks. <b>Hdr flat $</b> is a separate flat fee — not part of the promo cost.</div>';
     return seg + note;
   }
   // average dead-net under each version, to quantify how much deeper the deep deal runs
@@ -272,7 +274,7 @@
       r0 += '<th class="np-ss-grp np-grp-' + g.cls + '" colspan="' + g.items.length + '">' + esc(g.group) + "</th>";
       if (g.group === "Freight") r0 += '<th class="np-ss-net np-ss-nethead" rowspan="2">Net cost</th>';
     });
-    r0 += '<th class="np-ss-edithead" rowspan="2">Promo cost</th></tr>';
+    r0 += '<th class="np-ss-edithead" rowspan="2">Promo cost</th><th class="np-ss-edithead np-ss-flathead" rowspan="2">Hdr flat $</th></tr>';
     const r1 = "<tr>" + ALW.map(([k, l]) => '<th class="np-ss-alwhead">' + esc(l) + " $</th>").join("") + "</tr>";
     return r0 + r1;
   }
@@ -346,6 +348,7 @@
     if (k === "netCost") { const l = e.ladder; return '<td class="np-ss-net np-ss-ro" id="nc-' + o.uid + '">' + fmt.price(e.vlc * (1 - l.offInvoice - l.billBack - l.priceBreak - l.freight)) + "</td>"; }
     if (k === "deadNet") return editCell(o, "deadNet", e.deadNet.toFixed(2));
     if (k === "deepDeadNet") return editCell(o, "deepDeadNet", deepEffective(o, NP.state.draft).deadNet.toFixed(2));
+    if (k === "headerFlat") return editCell(o, "headerFlat", (e.headerFlat != null ? e.headerFlat : o.headerFlat).toFixed(2));
     if (k === "events") return editCell(o, "events", String(e.events));
     if (k === "digEvents") return editCell(o, "digEvents", String(e.digEvents));
     if (k === "bothEvents") return editCell(o, "bothEvents", String(e.bothEvents));
@@ -390,6 +393,7 @@
       else if (field === "deepBothEvents") { ov.deepBothEvents = Math.round(clamp(val, 0, 40)); }
       else if (field === "deadNet") { deep ? distributeDeepDeadNet(o, val) : distributeDeadNet(o, val); }
       else if (field === "deepDeadNet") { distributeDeepDeadNet(o, val); }
+      else if (field === "headerFlat") { ov.headerFlat = Math.max(0, val); }   // flat fee — independent of the promo-cost ladder & of regular/deep
       else if (field === "vlc") { ov.vlc = val; ov.deadNetTouched = false; syncRow(o); }
     }
     showHint(inp, o); markEdited(o); updateDirtyUI();
@@ -427,7 +431,7 @@
     });
   }
   function markEdited(o) {
-    ["vlc", "deadNet", "deepDeadNet", "events", "digEvents", "bothEvents", "deepEvents", "deepDigEvents", "deepBothEvents"].forEach((f) => { const td = document.querySelector('[data-cell="' + o.uid + ":" + f + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, f)); });
+    ["vlc", "deadNet", "deepDeadNet", "headerFlat", "events", "digEvents", "bothEvents", "deepEvents", "deepDigEvents", "deepBothEvents"].forEach((f) => { const td = document.querySelector('[data-cell="' + o.uid + ":" + f + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, f)); });
     ALW.forEach(([key]) => ["pct", "usd"].forEach((kind) => { const td = document.querySelector('[data-cell="' + o.uid + ":alw:" + key + ":" + kind + '"]'); if (td) td.classList.toggle("is-edited", NP.isEdited(o, "alw:" + key)); }));
   }
 
@@ -538,7 +542,7 @@
   function monthScale() { return '<div class="np-rc-months"><div class="np-rc-monthrow">' + MONTHS.map((mo, i) => '<span class="np-rc-month" data-month="' + i + '" role="button" tabindex="0" title="Zoom into ' + mo + '">' + mo + "</span>").join("") + "</div></div>"; }
 
   /* ===== month zoom overlay (click a month label) — self-contained; remove the
-     [data-month] bindings in bindResults/bindCounterfactual to turn it off ===== */
+     [data-month] bindings in bindResults to turn it off ===== */
   function monthWeeks(m) { const a = [], s = Math.round(m * 52 / 12), e = Math.round((m + 1) * 52 / 12); for (let w = s; w < e; w++) a.push(w); return { weeks: a, start: s, end: e }; }
   let _zoom = { m: 0, vendor: "all" };
   function zoomItems() {
@@ -963,16 +967,6 @@
   function cfTotals(strategy) { const t = { units: 0, revenueM: 0, agpM: 0 }; NP.cat().items.forEach((o) => { const r = cfResult(o, strategy); t.units += r.units; t.revenueM += r.revenueM; t.agpM += r.agpM; }); return t; }
   function totObj(t) { const m = NP.objMeta().id; return m === "units" ? t.units : m === "agp" ? t.agpM : t.revenueM; }
 
-  function renderCounterfactual() {
-    const host = document.getElementById("npStep5"), c = NP.cat(), cf = NP.state.cf;
-    host.innerHTML =
-      '<section class="panel"><div class="panel-heading"><div><h2>Counterfactuals — how events distribute across the year</h2>' +
-      '<p>Pick a distribution strategy: see its category outcome and where every vendor/NCRC promotes. Items in a cluster <strong>cannibalise</strong> and share <strong>halo</strong>, so timing changes the result.</p></div></div>' +
-      stratCards(cf) + "</section>" +
-      (cf.strategy === "optimized" ? interactionsPanel(c) : "") +
-      placementSection(c, cf);
-    bindCounterfactual(host);
-  }
   function clustersCollapsible(c, cf) {
     const clusters = clustersOf(c), open = cf.clustersOpen;
     const grid = open ? '<div class="np-cluster-grid">' + Object.keys(clusters).map((k) => { const m = clusters[k]; return '<div class="np-cluster"><div class="np-cluster-head"><b>' + (NP.CLUSTER_LABEL[k] || k) + "</b><span>" + m.length + " NCRCs</span></div><div class=\"np-cluster-members\">" + m.map((o) => '<span class="np-chip np-chip-' + o.form + '">' + esc(o.brand) + "</span>").join("") + "</div></div>"; }).join("") + "</div>" : "";
@@ -1214,16 +1208,6 @@
       return '<tr><td class="np-l">Wk ' + w + "</td><td>" + m(vlc * f) + "</td><td>" + m(off) + "</td><td>" + m(bb) + "</td><td>" + m(pb) + "</td><td>" + m(fr) + '</td><td class="np-cf-subc">' + m(net) + "</td><td>" + m(ret) + '</td><td class="np-cf-totc">' + m(dead) + "</td></tr>"; }).join("");
     return '<div class="np-cf-scroll"><table class="np-cf-mini"><thead><tr><th class="np-l">Week</th><th>VLC</th><th>Off-inv</th><th>Bill back</th><th>P/brk</th><th>Freight</th><th>Net cost</th><th>Retail</th><th>Dead-net</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
   }
-  function bindCounterfactual(host) {
-    host.querySelectorAll("[data-clust]").forEach((b) => b.onclick = () => { NP.state.cf.clustersOpen = !NP.state.cf.clustersOpen; renderCounterfactual(); });
-    host.querySelectorAll("[data-strat]").forEach((b) => b.onclick = () => { NP.state.cf.strategy = b.dataset.strat; renderCounterfactual(); });
-    host.querySelectorAll("[data-week]").forEach((el) => el.onclick = () => { const p = el.dataset.week.split("|"); openWeek(p[0], p[1], +p[2]); });
-    host.querySelectorAll(".np-rc-card").forEach((card) => card.querySelectorAll("[data-flip]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); card.classList.toggle("is-flipped"); }));
-    bindInteractions(host);
-    bindMonthZoom(host);
-    host.addEventListener("mousemove", exTip); host.addEventListener("mouseleave", clearSpark);
-  }
-
   /* ============================================== VIEW: CONSTRAINTS (step 2) ===
      Reframes the "constraints requested" list into how the optimiser actually works:
      agreed-once global locks · learned values · per-category inputs · scenarios ·
@@ -1236,6 +1220,111 @@
   }
   function tolItem(title, value, desc) {
     return '<div class="np-c3-tol"><div class="np-c3-tol-h"><span class="np-c3-tol-t">' + title + '</span><span class="np-c3-tol-v">' + value + "</span></div><p class=\"np-c3-tol-d\">" + desc + "</p></div>";
+  }
+  // grain pill — at what level the optimiser makes the decision (Category / Per SKU / Vendor·item …)
+  function grainTag(g) {
+    const slug = g.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
+    return '<span class="np-c3-grain g-' + slug + '">' + g + "</span>";
+  }
+  // is the threshold learnt from data, or a fixed hand-agreed rule?
+  function basisTag(b) { return '<span class="np-c3-basis b-' + (b === "Learnt" ? "learnt" : "fixed") + '">' + b + "</span>"; }
+  // on / off by default
+  function statusTag(on) { return '<span class="np-c3-status s-' + (on ? "on" : "off") + '">' + (on ? "On" : "Off") + "</span>"; }
+  // "Show learnt values" toggle + active constraints tab — persist across step navigation in-session
+  let c3Learnt = false;
+  let c3Tab = "guardrails";
+  // dense constraint table — shared by Pruned & Optimiser settings so they read like the guardrails
+  // table the merchant likes. cols: [{label, right}]; rows: {group} header OR {cells, off}.
+  function c3Table(cols, rows) {
+    const head = "<thead><tr>" + cols.map((c) => "<th" + (c.right ? ' class="ta-r"' : "") + ">" + c.label + "</th>").join("") + "</tr></thead>";
+    const body = "<tbody>" + rows.map((r) => {
+      if (r.group) return '<tr class="c3-grp"><td colspan="' + cols.length + '">' + r.group + "</td></tr>";
+      return "<tr" + (r.off ? ' class="c3-off"' : "") + ">" + r.cells.map((cell, i) => "<td" + (cols[i].right ? ' class="ta-r"' : "") + ">" + cell + "</td>").join("") + "</tr>";
+    }).join("") + "</tbody>";
+    return '<table class="np-c3-tbl">' + head + body + "</table>";
+  }
+  function thChip(v) { return '<span class="np-c3-th">' + v + "</span>"; }
+  function linkTo(v) { return '<span class="np-c3-linkto">' + v + "</span>"; }
+  // PRUNED — every auto-removal rule, fixed or learnt, on or off by default.
+  function prunedTable() {
+    const R = [
+      // [name, what it does, grain, basis, threshold, on]
+      ["Token discounts", "A few cents off isn't an offer.", "Per offer", "Fixed", "&lt; 5¢", true],
+      ["Won't cover the shelf tag", "Margin must beat the ~12¢ paper tag (ESL stores skipped).", "Per offer", "Fixed", "12¢", true],
+      ["Shallow digital", "A digital offer under 20% off isn't worth a slot.", "Per offer", "Fixed", "&lt; 20%", true],
+      ["No real discount", "Anything that rounds to $0 off.", "Per offer", "Fixed", "Pruned", true],
+      ["Runaway depth jumps", "Depth can't swing more than 20% week to week.", "Item · week", "Fixed", "≤ 20%/wk", true],
+      ["Multi-step mechanics", "Must-buy &amp; buy-X-get pruned as too complex.", "Per offer", "Fixed", "Pruned", true],
+      ["Deeper than the ceiling", "No deeper than the category's learnt max depth.", "Category", "Learnt", "LY max +20%", true],
+      ["Thin movers", "Barely-sold items let go — BG/FG roles only; KVI, SSKVI &amp; Critical protected.", "SKU · role", "Learnt", "BG / FG", true],
+      ["Broken cost data", "Implausible below-cost signatures (cost ≫ price).", "Per offer", "Fixed", "Pruned", true],
+      ["Double hoops", "A digital clip stacked on a must-buy.", "Per offer", "Fixed", "Buy + clip", false],
+      ["Below-cost prune", "Drop promos priced below cost.", "Per offer", "Fixed", "Below cost", false],
+      ["Role depth cap", "Cap depth by merchandising role.", "SKU · role", "Learnt", "By role", false],
+      ["Margin-floor prune", "Hard-drop below the floor (the soft margin-floor guardrail stays on).", "Category", "Learnt", "Below floor", false]
+    ];
+    const cols = [{ label: "Rule" }, { label: "What it does" }, { label: "Grain" }, { label: "Basis" }, { label: "Threshold", right: true }, { label: "Default", right: true }];
+    const rows = R.map((r) => ({ off: !r[5], cells: ["<b>" + r[0] + "</b>", r[1], grainTag(r[2]), basisTag(r[3]), thChip(r[4]), statusTag(r[5])] }));
+    return c3Table(cols, rows);
+  }
+  // OPTIMISER SETTINGS — the dials that decide how the guardrails bite. Grouped; most link to a guardrail.
+  function optimiserTable() {
+    const cols = [{ label: "Setting" }, { label: "What it does" }, { label: "Links to" }, { label: "Value", right: true }, { label: "Default", right: true }];
+    const rows = [
+      { group: "Enforcement — how a limit bites" },
+      { cells: ["<b>Weekly flyer pool</b>", "Max items in the printed flyer per store per week.", linkTo("Flyer space"), thChip("Hard · slack"), statusTag(true)] },
+      { cells: ["<b>Digital promo cap</b>", "Max digital deals shown per week.", linkTo("Digital offers/wk"), thChip("Hard · slack"), statusTag(true)] },
+      { cells: ["<b>Per-category flyer ceiling</b>", "Max flyer items per category per week — stops one category hogging the flyer.", linkTo("Flyer per category"), thChip("Hard · slack"), statusTag(true)] },
+      { cells: ["<b>Category promo-share mode</b>", "Whether store and digital promo-share caps are enforced separately or as one combined cap.", linkTo("Promo-share cap"), thChip("Split"), statusTag(true)] },
+      { group: "Tolerances — headroom around the learnt caps" },
+      { cells: ["<b>Promo-share tolerance</b>", "How far above the learnt promo-share cap the optimizer can go.", linkTo("→ Promo-share cap"), thChip("±20%"), statusTag(true)] },
+      { cells: ["<b>Avg-depth tolerance</b>", "How far above the learnt avg-depth cap the optimizer can go.", linkTo("→ Avg-depth cap"), thChip("±20%"), statusTag(true)] },
+      { cells: ["<b>Intensity tolerance</b>", "How far above the learnt promo intensity the optimizer can go.", linkTo("→ Deep-discount risk"), thChip("±20%"), statusTag(true)] },
+      { cells: ["<b>Vendor over-funding</b>", "How far above the committed vendor $ the plan can go. Never below.", linkTo("→ Vendor band"), thChip("+5%"), statusTag(true)] },
+      { group: "Protection floors — promoted result must hold vs LY" },
+      { cells: ["<b>Units floor</b>", "Plan units must reach this % of last year (lower threshold for holiday weeks).", linkTo("Plan output"), thChip("≥ 80% · 70% hol"), statusTag(true)] },
+      { cells: ["<b>Sales floor</b>", "Plan revenue must reach this % of last year (lower for holidays).", linkTo("Plan output"), thChip("≥ 85% · 78% hol"), statusTag(true)] },
+      { cells: ["<b>Margin floor (AGP)</b>", "Plan AGP must reach this % of last year (lower for holidays).", linkTo("Plan output"), thChip("≥ 85% · 75% hol"), statusTag(true)] },
+      { group: "Other" },
+      { cells: ["<b>Vendor committed basis</b>", "How the vendor commitment is built — from each item's real allowance $.", linkTo("Vendor funding"), thChip("Per item"), statusTag(true)] },
+      { cells: ["<b>Enabled guardrails</b>", "Which per-candidate penalty nudges are active (margin, allowance, deep-discount).", linkTo("→ Guardrails"), thChip("Margin · Allowance · Deep-risk"), statusTag(true)] }
+    ];
+    return c3Table(cols, rows);
+  }
+  // the "Show learnt values" table — real discovered values, side-by-side across example categories.
+  // Toggling the section's .show-learnt class swaps the plain-English "What it means" column for these
+  // numbers — the proof that the optimiser already learns this, so the merchant needn't hand-set it.
+  function guardTable() {
+    const C = ["Avocado", "Bacon", "Butter / Margarine"];
+    // [decision, grain, plain-English meaning, [val per category], tolerance/headroom chip]
+    const G = [
+      ["Category promo-share cap", "Category", "% of items in this category that can be on store promo.", ["16%", "39%", "43%"], "±20%"],
+      ["Category avg-depth cap", "Category", "Average discount % across promoted items in this category.", ["24%", "24%", "18%"], "±20%"],
+      ["Margin floor", "Category-like", "Penalises a deal if its margin % is below the category minimum.", ["8.9%", "23.7%", "24.2%"], ""],
+      ["Allowance floor", "Per SKU", "Penalises a deal if vendor funding is below the category minimum % of revenue.", ["Mostly 2.0%", "Mostly 2.0%", "2.0–2.5%"], ""],
+      ["Vendor band", "Vendor · item", "Total vendor spend must hit the negotiated commitment. Soft cap at 5% above.", ["40%", "40%", "40%"], ""],
+      ["Event cadence — store", "Per SKU", "Number of store promo weeks this item gets, matching last year.", ["1–24 events", "4–38 events", "0–1 events"], ""],
+      ["Event cadence — digital", "Per SKU", "Number of digital deal weeks this item gets, matching last year.", ["Up to 7", "Up to 5", "0"], ""],
+      ["Event cadence — combined", "Per SKU", "Number of weeks this item runs both store and digital together, matching last year.", ["0", "Up to 6", "0"], ""],
+      ["Deep-discount risk", "Per SKU", "Penalises a deal if the discount % exceeds this item's learnt seasonal maximum.", ["25–41%", "10–28%", "6–9%"], "+10%"]
+    ];
+    const head = "<thead><tr><th>Learnt guardrail</th><th>Grain</th><th class=\"gv-meaning\">What it means</th>" +
+      C.map((c) => '<th class="gv-val">' + c + "</th>").join("") + "</tr></thead>";
+    const body = "<tbody>" + G.map((r) => {
+      const tol = r[4] ? ' <span class="np-c3-tolchip">' + r[4] + "</span>" : "";
+      return '<tr><td class="gv-name">' + r[0] + "</td><td>" + grainTag(r[1]) + '</td><td class="gv-meaning">' + r[2] + tol + "</td>" +
+        r[3].map((v) => '<td class="gv-val">' + v + "</td>").join("") + "</tr>";
+    }).join("") + "</tbody>";
+    return '<table class="np-c3-gv">' + head + body + "</table>" +
+      '<p class="np-c3-gv-cap"><b>Show learnt values</b> reveals the real numbers — here sampled across three categories. ' +
+      "The optimiser already holds these for every item and week; hand-setting them all is exactly what you don't need to do.</p>";
+  }
+  // optimisation scenarios — the levers a merchant pulls instead of overriding limits. Each re-solves
+  // inside the SAME learnt guardrails; the % drivers are the real vendor_scenario event-lifts.
+  function scenarioCard(title, badge, desc, driver, rec) {
+    return '<div class="np-c3-scn' + (rec ? " is-rec" : "") + '"><div class="np-c3-scn-h"><span class="np-c3-scn-t">' + title +
+      (badge ? '<span class="np-c3-scn-tag">' + badge + "</span>" : "") + "</span>" +
+      (driver ? '<span class="np-c3-scn-drv">' + driver + "</span>" : "") + '</div><p class="np-c3-scn-d">' + desc + "</p></div>";
   }
   // highlighted, clickable reference to another step (like the Deal inputs treatment)
   function glink(step, label) { return '<a class="np-c3-glink" data-goto="' + step + '">' + label + "</a>"; }
@@ -1266,18 +1355,31 @@
     const host = document.getElementById("npStep2"); if (!host) return;
     const div = NP.divMeta().short, cn = NP.cat().name.split(" — ")[0];
 
-    // the only hard, agreed-once rules — tolerances beside the protection floors
-    const tols =
-      tolItem("Over-funding tolerance", "+5%", "Up to 5% over plan — never below committed.") +
-      tolItem("Promo-intensity headroom", "±20% / wk", "How much more / less promotional than LY.") +
-      tolItem("Depth headroom", "±20% / wk", "How far average discount depth may drift.");
-    const floors = '<table class="np-c3-floors"><thead><tr><th>Protection floor vs LY</th><th>Non-holiday</th><th>Holiday</th></tr></thead><tbody>' +
-      '<tr><td>Units</td><td>≥ 80%</td><td>≥ 70%</td></tr>' +
-      '<tr><td>Sales</td><td>≥ 85%</td><td>≥ 78%</td></tr>' +
-      '<tr><td>Margin (AGP)</td><td>≥ 85%</td><td>≥ 75%</td></tr></tbody></table>';
-    const secA = conSec("Agreed globally · locked at design",
-      "Set once with your team, applied to every category.",
-      '<div class="np-c3-split"><div class="np-c3-split-l">' + tols + '</div><div class="np-c3-split-r">' + floors + '</div><div class="np-c3-split-r">' + disciplineLYTable() + "</div></div>");
+    // GUARDRAILS — learnt limits the plan must stay inside. The big "show learnt values" table.
+    const secG = conSec("Guardrails · learnt limits the plan respects",
+      "Read from last year per item, category and vendor, then flexed within their tolerances. All on by default — these are the numbers you'd otherwise hand-set; you don't have to.",
+      '<div class="np-c3-gv-wrap">' + guardTable() + "</div>");
+
+    // PRUNED — every auto-removal rule as a dense table (fixed vs learnt, on vs off).
+    const secP = conSec("Pruned · offers removed automatically",
+      "Applied before the plan is costed — no input needed. The first nine are on by default; the last four are available per division but off.",
+      '<div class="np-c3-tbl-wrap">' + prunedTable() + "</div>");
+
+    // OPTIMISER SETTINGS — the dials that decide how the guardrails bite. Comprehensive, grouped table.
+    const secO = conSec("Optimiser settings · how the limits bite",
+      "The dials set once for the division — enforcement modes, the tolerances that wrap the learnt caps, protection floors and fallbacks. Most link straight to a guardrail above.",
+      '<div class="np-c3-tbl-wrap">' + optimiserTable() + "</div>");
+
+    // SCENARIOS — the levers you pull instead of overriding. Each re-solves inside the same guardrails.
+    const scns =
+      scenarioCard("Default fulcrum", "recommended", "Full optimise, no tilt — best objective across all vendors, balanced inside every guardrail above.", "", true) +
+      scenarioCard("Lift top-3 vendors", "", "Raise the leading vendors' promo-week targets (ranked by revenue). Secondary tie-break favours them ×1.25.", "#1 +12% · #2 +6% · #3 +3%") +
+      scenarioCard("Own-brand bias", "", "Top-vendor lift, plus extra promo weeks on own-brand items. Tie-break favours own brands ×1.15.", "Own brand +12%") +
+      scenarioCard("Replay last year", "benchmark", "Fix every slot to its LY decision — no optimise. The comparison floor that makes the lift obvious.", "0% lift") +
+      scenarioCard("Unconstrained", "", "Drop the soft envelope to see the ceiling. The hard physical limits (flyer space, digital cap) still hold.", "soft caps off");
+    const secS = conSec("Scenarios · steer the plan instead of overriding",
+      "Each re-solves inside the same learnt guardrails, so you tilt the plan without unpicking it. Run and compare them on the " + glink(4, "52-week plan") + ".",
+      '<div class="np-c3-scns">' + scns + "</div>");
 
     // everything else: their asks, answered with where / how it's handled (grey, soft)
     const asks = [
@@ -1287,7 +1389,7 @@
       ["Min deep-promo frequency · front-cover (4 retail buckets)", "Front cover is a gap today; deep-promo frequency shows as learned and output values on the " + glink(4, "52-week plan") + "."],
       ["Complex promotions allowed (yes / no)", "Learned digital caps that flex weekly with seasonality — not an on / off switch, or the forecast breaks."],
       ["Hard-lock off double hoops", "Exposed as a <b>pruned</b> tactic — digital won't stack on a must-buy."],
-      ["Own Brands shielding &amp; exceptions", "Run as an OB-specific scenario on " + glink(5, "Counterfactuals") + ", not a hard constraint."],
+      ["Own Brands shielding &amp; exceptions", "Run as an OB-specific scenario on the " + glink(4, "52-week plan") + ", not a hard constraint."],
       ["Promoted minimum discount % vs white tag", "Covered with deep-promo frequency — learned and output values on the " + glink(4, "52-week plan") + " above."],
       ["Overall plan confidence score", "Reported after the run on the " + glink(4, "52-week plan") + " — the optimiser maximises it; you can't set a target like 89.5%."]
     ];
@@ -1295,14 +1397,35 @@
       '<p class="np-c3-choices-intro">Everything you raised is here — most are handled as inputs, learned values or scenarios rather than hard limits, so the plan stays grounded in the forecast. Where each one lives:</p><dl>' +
       asks.map((a) => "<dt>" + a[0] + "</dt><dd>" + a[1] + "</dd>").join("") + "</dl></div>";
 
+    // one class at a time — tabs keep the dense tables but collapse the page to a single screen.
+    const TABS = [
+      { id: "guardrails", tab: "Guardrails", n: 9, sub: "learnt", html: secG },
+      { id: "pruned", tab: "Pruned", n: 13, sub: "auto-removed", html: secP },
+      { id: "optimiser", tab: "Optimiser settings", n: 13, sub: "dials", html: secO },
+      { id: "scenarios", tab: "Scenarios", n: 5, sub: "levers", html: secS },
+      { id: "asks", tab: "Your asks", n: asks.length, sub: "answered", html: choices }
+    ];
+    if (!TABS.some((t) => t.id === c3Tab)) c3Tab = "guardrails";
+    const tabBar = '<div class="np-c3-tabs" role="tablist">' + TABS.map((t) =>
+      '<button type="button" class="np-c3-tab' + (c3Tab === t.id ? " is-active" : "") + '" data-tab="' + t.id + '">' +
+      '<span class="np-c3-tabl">' + t.tab + '</span><span class="np-c3-tabn">' + t.n + " " + t.sub + "</span></button>").join("") + "</div>";
+    const active = TABS.find((t) => t.id === c3Tab);
+
     host.innerHTML =
-      '<section class="panel np-c3">' +
-        '<div class="panel-heading"><div><h2>Constraints &amp; guardrails</h2>' +
-          "<p>For <b>" + esc(div) + " · " + esc(cn) + "</b>, the only hard rules are the globally-agreed tolerances below. Everything else you asked for is handled as an input, a learned value, or a scenario.</p></div></div>" +
-        secA + choices +
+      '<section class="panel np-c3' + (c3Learnt ? " show-learnt" : "") + '">' +
+        '<div class="panel-heading"><div class="np-c3-htext"><h2>Constraints &amp; guardrails</h2>' +
+          "<p>For <b>" + esc(div) + " · " + esc(cn) + "</b>. You'd normally set every limit by hand before optimising — you don't need to. " +
+          "Almost everything is a <b>learnt guardrail</b> or <b>pruned automatically</b>; <b>optimiser settings</b> decide how those bite, and you steer with <b>scenarios</b>.</p></div>" +
+          (c3Tab === "guardrails" ? '<label class="np-c3-toggle"><input type="checkbox" id="npC3Learnt"' + (c3Learnt ? " checked" : "") + '><span class="np-c3-toggle-tr"></span><span class="np-c3-toggle-lbl">Show learnt values</span></label>' : "") +
+        "</div>" +
+        tabBar +
+        '<div class="np-c3-tabbody">' + active.html + "</div>" +
       "</section>";
+    host.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { c3Tab = b.dataset.tab; renderConstraints(); });
     host.querySelectorAll("[data-goto]").forEach((b) => b.onclick = () => NP.goStep(+b.dataset.goto));
+    const tg = host.querySelector("#npC3Learnt"), sec = host.querySelector(".np-c3");
+    if (tg) tg.onchange = () => { c3Learnt = tg.checked; sec.classList.toggle("show-learnt", c3Learnt); };
   }
 
-  window.NPViews = { renderGrid, renderResults, renderExplain, renderCounterfactual, renderConstraints, openWeek, cfWeeks, cfResult, cfStrategies, cfStratName, cfTotals };
+  window.NPViews = { renderGrid, renderResults, renderExplain, renderConstraints, openWeek, cfWeeks, cfResult, cfStrategies, cfStratName, cfTotals, deepEffective };
 })();
