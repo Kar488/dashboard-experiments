@@ -157,10 +157,11 @@
         <div class="panel-heading">
           <div>
             <h2>Performance Explorer</h2>
-            <p>Group ▸ Category ▸ Vendor ▸ Item — drill what's working vs not without losing your place. Click a row to go deeper; the right column shows the focused row's full KPIs.</p>
+            <p>Group ▸ Category ▸ Vendor ▸ Item — toggle Miller columns or the heat grid, flag vendors for review, and open per-item 52-week trends. Click a row to drill; use the breadcrumb to climb back up.</p>
           </div>
         </div>
-        <div id="dxDrill"></div>
+        <!-- Enhanced explorer: Miller ⇄ Heat toggle, vendor review + recommended actions, per-item KPI trend drawer. -->
+        <iframe id="dxDrillFrame" src="nimbalyst-local/mockups/mydesk-group-drill.interactive.html" title="Performance Explorer" style="width:100%;height:840px;border:0;border-radius:10px;background:#fff;display:block;"></iframe>
       </section>
 
       <!-- Item table superseded by the Performance Explorer + the KPI board's UPC/NCRC/CIG filter. Kept hidden so app.js / dashboard-extras.js renderers still find #detailTabs / #itemRows. -->
