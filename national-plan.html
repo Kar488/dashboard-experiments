@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>National 52-Week Plan Optimiser</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="promo-plan.css" />
+    <link rel="stylesheet" href="national-plan.css?v=40" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <h1>Merch United</h1>
+        <span class="badge">52 Week Plan</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="updated">Plan precomputed through May 9, 2025</span>
+        <a class="ghost-button nav-link" href="index.html">← Dashboard</a>
+        <button class="ghost-button" id="themeToggle">Dark Mode</button>
+        <button class="ghost-button">Karthik Iyer</button>
+        <button class="primary-button">Ask Assistant</button>
+      </div>
+    </header>
+
+    <!-- sticky stepper -->
+    <nav class="np-stepper" id="npStepper" aria-label="Plan workflow"></nav>
+
+    <main class="dashboard national-plan weekly-plan-panel">
+      <!-- STEP 1 — scope -->
+      <section class="np-step" id="npStep1">
+        <div class="panel np-scope-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Build the national 52-week plan</h2>
+              <p>The national team negotiates and optimises the plan with vendors. Pick the division, category and the objective to optimise for, then generate the plan. Divisional teams later execute it on their desks.</p>
+            </div>
+          </div>
+          <div class="np-scope-row">
+            <span class="plan-step-group">
+              <span class="plan-step-num">1.</span><span class="plan-step-label">Division</span>
+              <select class="plan-category-select np-division-select" id="npDivision"></select>
+            </span>
+            <span class="plan-step-sep" aria-hidden="true"></span>
+            <span class="plan-step-group">
+              <span class="plan-step-num">2.</span><span class="plan-step-label">Category</span>
+              <select class="plan-category-select" id="npCategory"></select>
+            </span>
+            <span class="plan-step-sep" aria-hidden="true"></span>
+            <span class="plan-step-group">
+              <span class="plan-step-num">3.</span><span class="plan-step-label">Optimise for</span>
+              <div class="plan-obj-capsule" id="npObjective"></div>
+            </span>
+          </div>
+          <div class="np-scope-foot">
+            <button class="primary-button" id="npGenerate" type="button">Generate optimised plan →</button>
+            <span class="np-scope-hint">The optimiser pre-runs the best plan plus alternatives for each goal in batch, so results are instant to browse and edit.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 2 — constraints & guardrails (rendered by JS) -->
+      <section class="np-step" id="npStep2" hidden></section>
+
+      <!-- STEP 3 — deal inputs (spreadsheet) -->
+      <section class="np-step" id="npStep3" hidden>
+        <div class="panel np-guard-ribbon">
+          <button class="np-guard-summary" id="npGuardToggle" type="button" aria-expanded="false">
+            <span class="np-guard-lead">🔒 Optimised within <strong id="npGuardCount">22</strong> learned guardrails</span>
+            <span class="np-guard-mini" id="npGuardMini"></span>
+            <span class="np-guard-caret">▸ what the optimiser solved for</span>
+          </button>
+          <div class="np-guard-body" id="npGuardBody" hidden></div>
+        </div>
+
+        <section class="panel np-grid-panel">
+          <div class="panel-heading np-grid-heading">
+            <div>
+              <h2>Deal inputs by vendor &amp; NCRC</h2>
+              <p>The discovered deal inputs behind the optimised plan, rolled to NCRC. Edit any yellow cell — edits auto-save to <strong>Your scenario</strong>.<br>Click <strong>Rerun forecast</strong> (repair-and-score) to re-estimate the affected lines against the base plan.</p>
+            </div>
+            <div class="np-grid-tools">
+              <div class="scenario-strip" id="npScenarioStrip"></div>
+              <button class="detail-toggle-button" id="npAllowToggle" type="button" aria-pressed="false">Allowance breakup</button>
+              <button class="plan-compare-toggle" id="npCompareToggle" type="button" hidden>+ Compare</button>
+              <button class="create-scenario-button" id="npRerun" type="button" disabled>Rerun forecast</button>
+              <div class="np-compare-wrap" id="npCompareWrap" hidden></div>
+            </div>
+          </div>
+          <div class="np-dirty-banner" id="npDirtyBanner" hidden>
+            <span>You have unsaved edits.</span>
+            <button class="np-link-btn" id="npRerun2" type="button">Rerun forecast to see the impact →</button>
+            <button class="np-link-btn np-link-muted" id="npRevert" type="button">Discard edits</button>
+          </div>
+          <div class="np-grid-filter" id="npGridFilter"></div>
+          <div class="projection-wrap np-ss-wrap" id="npGridWrap"></div>
+        </section>
+      </section>
+
+      <!-- STEP 4 — results: 52-week tactic plan (counterfactuals folded in here) -->
+      <section class="np-step" id="npStep4" hidden></section>
+
+      <!-- STEP 6 — why it beats last year -->
+      <section class="np-step" id="npStep6" hidden></section>
+    </main>
+
+    <!-- global overlays -->
+    <div class="np-cell-hint" id="npCellHint" hidden></div>
+    <div class="np-ctxmenu" id="npCtxMenu" hidden></div>
+    <div class="np-fc-pop" id="npFcPop" hidden></div>
+    <div class="np-drawer-scrim" id="npDrawerScrim" hidden></div>
+    <aside class="np-drawer" id="npDrawer" hidden aria-label="Ask Assistant"></aside>
+    <div class="np-modal-scrim" id="npModalScrim" hidden></div>
+    <div class="np-modal" id="npModal" hidden role="dialog" aria-label="Guardrail detail"></div>
+
+    <script src="national-plan.js?v=27"></script>
+    <script src="explain-dataset.js"></script>
+    <script src="national-plan-views.js?v=28"></script>
+    <script src="national-plan-v2.js?v=33"></script>
+  </body>
+</html>

@@ -1247,7 +1247,7 @@
       <div class="panel-heading promo-exec-heading">
         <div>
           <h2>Weekly P&amp;L and KPI Trends</h2>
-          <p id="trendSubtitle">Pick a metric chip to switch the trend chart. Click a period column header to expand its 4 weeks inline.</p>
+          <p id="trendSubtitle">Weekly P&amp;L and KPI by period. Click a period column header to expand its 4 weeks inline.</p>
         </div>
         <div class="detail-actions trend-search">
           <button class="export-button" type="button" data-wpl-export>Export weekly data</button>
@@ -1258,30 +1258,8 @@
       <div class="promo-exec-summary" id="wplSummary" ${wplCollapsed ? "" : "hidden"}>${wplCollapsed ? renderWplSummary() : ""}</div>
 
       <div id="wplBody" ${wplCollapsed ? "hidden" : ""}>
-      <div class="wpl-chart-wrap">
-        <header class="wpl-chart-head">
-          <strong>${currentMetric.label} &mdash; 52 week trend</strong>
-          <div class="wpl-legend">
-            <span class="legend-actual"></span>Actual
-            <span class="legend-forecast"></span>Forecast / LY
-          </div>
-        </header>
-        <div class="wpl-chip-row" aria-label="Trend metric and week scheme">
-          <div class="wpl-metric-capsule" role="tablist" aria-label="Trend metric">
-            ${chartMetrics.map((m) => `
-              <button type="button" class="wpl-capsule-opt ${wplState.selectedMetric === m.key ? "active" : ""}" data-wpl-chart-metric="${m.key}">${m.label}</button>
-            `).join("")}
-          </div>
-          <div class="wpl-week-mode" role="group" aria-label="Week scheme">
-            <span>Weeks</span>
-            <div class="wpl-metric-capsule wpl-metric-capsule-sm">
-              <button type="button" class="wpl-capsule-opt ${wplState.weekMode === "fiscal" ? "active" : ""}" data-wpl-week-mode="fiscal">Fiscal</button>
-              <button type="button" class="wpl-capsule-opt ${wplState.weekMode === "promo" ? "active" : ""}" data-wpl-week-mode="promo">Promo</button>
-            </div>
-          </div>
-        </div>
-        <div id="wplChartHost" class="wpl-chart-host"></div>
-      </div>
+      <!-- The big 52-week trend chart was removed: each KPI card in #kpiBoard now carries its own
+           per-metric trend, so this chart was a duplicate. The P&L / KPI period table below stays. -->
 
       <div class="wpl-table-filters" aria-label="Period table filters">
         <span class="wpl-table-filters-label">Filter table by:</span>

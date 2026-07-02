@@ -6,6 +6,8 @@
     <title>Merchandising Dashboard</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="promo-plan.css" />
+    <link rel="stylesheet" href="mydesk-drill.css" />
+    <link rel="stylesheet" href="mydesk-kpi.css" />
   </head>
   <body>
     <header class="topbar">
@@ -15,6 +17,7 @@
       </div>
       <div class="topbar-actions">
         <span class="updated">Data updated through May 9, 2025</span>
+        <a class="ghost-button nav-link" href="national-plan.html">National 52-Week Plan</a>
         <a class="ghost-button nav-link" href="promo-plan-status.html">Plan Status</a>
         <button class="ghost-button" id="themeToggle">Dark Mode</button>
         <button class="ghost-button">Karthik Iyer</button>
@@ -34,8 +37,12 @@
         <span class="data-mode" id="dataMode" hidden></span>
       </section>
 
-      <section class="kpi-grid" id="primaryMetrics" aria-label="Primary metrics"></section>
-      <section class="secondary-grid" id="secondaryMetrics" aria-label="Secondary basket and household metrics"></section>
+      <!-- Consolidated KPI board (cards with per-metric trends + UPC/NCRC/CIG filter). Replaces the two grids below + the Weekly P&L Trends panel. -->
+      <section id="kpiBoard" aria-label="KPI overview"></section>
+      <!-- Primary KPI grid is replaced by #kpiBoard above (kept hidden so app.js/dashboard-extras.js renderers still find it). -->
+      <section class="kpi-grid" id="primaryMetrics" aria-label="Primary metrics" hidden></section>
+      <!-- Basket & household metrics now render as compact tiles inside #kpiBoard. Kept hidden so app.js still finds this target. -->
+      <section class="secondary-grid" id="secondaryMetrics" aria-label="Secondary basket and household metrics" hidden></section>
 
       <section class="actions-grid" aria-label="Pending actions">
         <article class="action-card orange">
@@ -146,7 +153,19 @@
         </div><!-- /#promoExecBody -->
       </section>
 
-      <section class="panel detail-panel">
+      <section class="panel" id="dxDrillPanel" aria-label="Performance explorer">
+        <div class="panel-heading">
+          <div>
+            <h2>Performance Explorer</h2>
+            <p>Group ▸ Category ▸ Vendor ▸ Item — toggle Miller columns or the heat grid, flag vendors for review, and open per-item 52-week trends. Click a row to drill; use the breadcrumb to climb back up.</p>
+          </div>
+        </div>
+        <!-- Enhanced explorer: Miller ⇄ Heat toggle, vendor review + recommended actions, per-item KPI trend drawer. -->
+        <iframe id="dxDrillFrame" src="nimbalyst-local/mockups/mydesk-group-drill.interactive.html" title="Performance Explorer" style="width:100%;height:840px;border:0;border-radius:10px;background:#fff;display:block;"></iframe>
+      </section>
+
+      <!-- Item table superseded by the Performance Explorer + the KPI board's UPC/NCRC/CIG filter. Kept hidden so app.js / dashboard-extras.js renderers still find #detailTabs / #itemRows. -->
+      <section class="panel detail-panel" hidden>
         <div class="panel-heading detail-heading">
           <div class="tabs" id="detailTabs">
             <button class="active" data-view="top">Top Performing Items</button>
@@ -183,6 +202,8 @@
         </div>
       </section>
 
+      <!-- Weekly P&L and KPI period TABLE stays. Only the big 52-week trend chart was removed from
+           dashboard-extras.js renderWeeklyPLPanel (per-card trends in #kpiBoard replace it). -->
       <section class="panel trends-panel" id="weeklyPLPanel">
         <!-- Content rendered by dashboard-extras.js -->
         <!-- Hidden legacy stubs so the original app.js render calls still find their targets without throwing. -->
@@ -305,5 +326,7 @@
     <script src="vendor/recharts.js"></script>
     <script src="promo-plan.js"></script>
     <script src="dashboard-extras.js"></script>
+    <script src="mydesk-drill.js"></script>
+    <script src="mydesk-kpi.js"></script>
   </body>
 </html>

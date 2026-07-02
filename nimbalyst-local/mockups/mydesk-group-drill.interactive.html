@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MyDesk — Group ▸ Category ▸ Item/Vendor (interactive)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f4f6fa;--panel:#fff;--line:#dfe5ef;--line-strong:#c8d2e2;--text:#111827;
+    --muted:#667085;--faint:#98a4b6;--ink:#0f172a;--blue:#1769e8;--blue-soft:#eaf2ff;
+    --green:#4a8a5d;--red:#b25a55;--green-soft:#71a081;--red-soft:#c2918d;--shadow:0 10px 24px rgba(18,32,56,.06);
+    --tight-shadow:0 2px 10px rgba(15,23,42,.05);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,"Segoe UI",sans-serif;font-size:14px;}
+  .wrap{width:min(1680px,100%);margin:0 auto;padding:20px 22px 60px;}
+  h2{font-size:1rem;font-weight:600;margin:0;}
+  p{margin:0;color:var(--muted);line-height:1.4;}
+  button{font:inherit;cursor:pointer;}
+
+  .panel{border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow);padding:16px;}
+
+  /* header controls */
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:14px;}
+  .ctl{display:flex;align-items:center;gap:8px;}
+  .ctl label{font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  select{min-height:34px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);font:inherit;font-weight:600;padding:0 30px 0 12px;}
+  .lens{display:flex;gap:4px;}
+  .lens button{min-height:30px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--muted);font-weight:600;font-size:.78rem;padding:6px 12px;}
+  .lens button.active{border-color:var(--blue);background:var(--blue);color:#fff;}
+
+  /* breadcrumb + subtle rank-by */
+  .crumbs-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;}
+  .rankby{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;}
+  .rankby span{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:600;}
+  .rankby select{min-height:26px;font-size:.73rem;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:0 22px 0 9px;background:#fff;}
+  .rankby select:hover{border-color:var(--line-strong);color:var(--ink);}
+  .crumbs{display:flex;align-items:center;gap:6px;font-size:.82rem;flex-wrap:wrap;flex:1 1 auto;}
+  .crumb{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);font-weight:600;}
+  .crumb.home{color:var(--blue);border-color:var(--blue-soft);background:var(--blue-soft);}
+  .crumb.clickable{cursor:pointer;}
+  .crumb.clickable:hover{border-color:var(--line-strong);color:var(--ink);}
+  .crumb.ghost{color:var(--faint);cursor:default;}
+  .sep{color:var(--faint);font-weight:700;}
+
+  /* miller */
+  .miller{display:grid;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+  .pane{border-right:1px solid var(--line);min-width:0;display:flex;flex-direction:column;}
+  .pane:last-child{border-right:0;}
+  .pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;height:44px;padding:0 14px;background:#fafbfd;border-bottom:1px solid var(--line);}
+  .pane-head .ttl{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pane-head .cnt{font-size:.6rem;color:var(--faint);font-weight:600;white-space:nowrap;}
+  .pane-toggle{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;flex-shrink:0;}
+  .pane-toggle button{border:0;background:#fff;color:var(--muted);font-size:.66rem;font-weight:700;padding:4px 9px;}
+  .pane-toggle button.active{background:var(--ink);color:#fff;}
+  .pane-body{overflow-y:auto;max-height:460px;}
+
+  .row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #eef1f6;cursor:pointer;position:relative;}
+  .row:hover{background:#fbfcfe;}
+  .row.drill{background:var(--blue-soft);}
+  .row.drill::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);}
+  .row.inspect{box-shadow:inset 0 0 0 2px #cfe0fb;}
+  .accent{width:3px;height:30px;border-radius:3px;flex-shrink:0;}
+  .accent.win{background:#d8e9de;}.accent.mid{background:#eaeef4;}.accent.lose{background:#ecd8d5;}
+  .row .main{flex:1 1 auto;min-width:0;}
+  .row .nm{font-size:.8rem;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row .sub{font-size:.64rem;color:var(--faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pulse{flex-shrink:0;cursor:pointer;}
+  .pulse:hover{opacity:.85;}
+  .pulse .mid{stroke:#dde3ed;stroke-width:1;}
+  .pulse .p{fill:#7eaa8c;opacity:.7;}
+  .pulse .n{fill:#bf8f8a;opacity:.85;}
+  .redbadge{font-size:.62rem;font-weight:600;color:var(--red-soft);background:transparent;padding:0;flex-shrink:0;}
+  .redbadge.zero{color:var(--green-soft);background:transparent;}
+  .rt{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex-shrink:0;min-width:96px;}
+  .rt .val{font-size:.8rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .rt .ly{font-size:.6rem;color:var(--faint);font-weight:500;font-variant-numeric:tabular-nums;}
+  .rt .delta{font-size:.65rem;font-weight:550;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .delta.pos{color:var(--green-soft);}.delta.neg{color:var(--red-soft);}
+  .chev{color:var(--faint);font-weight:700;flex-shrink:0;}
+
+  .modhint{font-size:.68rem;color:var(--faint);margin-top:10px;}
+
+  /* KPI detail = the rightmost column of the same module */
+  .pane.dpane{background:#fcfdff;border-right:0;}
+  .dhead{background:#f1f5fc !important;}
+  .dhead .ttl{color:var(--ink);font-weight:700;text-transform:none;font-size:.74rem;}
+  .dhead .tally{display:flex;gap:8px;font-size:.64rem;font-weight:700;white-space:nowrap;}
+  .dhead .tally .up{color:var(--green);}.dhead .tally .dn{color:var(--red);}
+  .dscope{display:flex;align-items:center;gap:7px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:.66rem;color:var(--muted);}
+  .dscope .acc{width:8px;height:8px;border-radius:2px;}
+  .dscope .acc.win{background:#4a8a5d;}.dscope .acc.mid{background:#9fb0c6;}.dscope .acc.lose{background:#b25a55;}
+  .kpirow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:12px;padding:8px 14px;border-bottom:1px solid #eef1f6;cursor:pointer;}
+  .kpirow:hover{background:#f2f6fd;}
+  .kpirow.ranked{box-shadow:inset 3px 0 0 var(--blue);}
+  .kpirow .kl{display:flex;flex-direction:column;gap:1px;font-size:.72rem;color:var(--ink);font-weight:600;min-width:0;}
+  .kpirow .kl small{font-size:.58rem;color:var(--faint);font-weight:500;font-variant-numeric:tabular-nums;}
+  .kpirow .kabs{font-size:.58rem;color:var(--faint);font-weight:600;font-variant-numeric:tabular-nums;}
+  .kpirow .kr{text-align:right;display:flex;flex-direction:column;gap:1px;}
+  .kpirow .kv{font-size:.78rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .kpirow .kd{font-size:.66rem;font-weight:600;font-variant-numeric:tabular-nums;}
+  .kpirow .kd.pos{color:var(--green-soft);}.kpirow .kd.neg{color:var(--red-soft);}
+
+  /* view toggle */
+  .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .viewseg{display:inline-flex;border:1px solid var(--line-strong);border-radius:9px;overflow:hidden;}
+  .viewseg button{border:0;background:#fff;color:var(--muted);font-size:.78rem;font-weight:700;padding:8px 15px;border-right:1px solid var(--line);}
+  .viewseg button:last-child{border-right:0;}
+  .viewseg button.active{background:var(--ink);color:#fff;}
+
+  /* the [hidden] attribute can't beat .miller's display:grid on its own, so force it */
+  .miller[hidden], .heat[hidden]{display:none !important;}
+
+  /* heat grid — interactive data grid / heat matrix */
+  .heat{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;}
+  .heat-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:9px 16px;background:#fbfcfe;border-bottom:1px solid var(--line);}
+  .heat-head .ttl{font-size:.82rem;font-weight:700;color:var(--ink);letter-spacing:-.012em;}
+  .heat-head .tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .heat-head .cnt{font-size:.66rem;color:var(--faint);font-weight:600;white-space:nowrap;}
+  .palsel{display:inline-flex;align-items:center;gap:6px;}
+  .palsel span{font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:700;}
+  .palsel select{min-height:28px;font-size:.72rem;font-weight:600;color:var(--muted);border:1px solid var(--line-strong);border-radius:7px;padding:0 22px 0 9px;background:#fff;}
+  .heat-cap{font-size:.66rem;line-height:1.45;color:var(--faint);padding:9px 16px;border-bottom:1px solid var(--line);background:#fff;}
+  .heat-cap b{color:var(--muted);font-weight:700;}
+  .heat-scroll{overflow:auto;max-height:600px;}
+  .hg-head,.hg-row{display:grid;align-items:stretch;}
+  .hg-head{position:sticky;top:0;z-index:6;background:#fff;border-bottom:1px solid var(--line-strong);}
+  .hg-h{font-size:.58rem;text-transform:uppercase;letter-spacing:.045em;color:var(--muted);font-weight:700;padding:11px 10px;text-align:center;cursor:pointer;line-height:1.22;border-left:1px solid #f2f4f8;user-select:none;white-space:normal;overflow-wrap:anywhere;}
+  .hg-h:hover{color:var(--ink);background:#fafbfd;}
+  .hg-h.name{position:sticky;left:0;background:#fff;z-index:7;text-align:left;padding-left:14px;border-left:0;cursor:default;}
+  .hg-h.ranked{color:var(--blue);}
+  .hg-row{border-bottom:1px solid #f1f3f8;cursor:pointer;}
+  .hg-row:hover .hg-name{background:#f5f8fd;}
+  .hg-row:hover .hg-cell{filter:brightness(.985);}
+  .hg-row.leaf{cursor:default;}
+  .hg-row.leaf:hover .hg-name{background:#fff;}
+  .hg-row.leaf:hover .hg-cell{filter:none;}
+  .hg-row.total{position:sticky;top:57px;z-index:5;cursor:default;background:#f7f9fc;border-bottom:2px solid var(--line-strong);}
+  .hg-row.total.clean, .hg-row.total.clean .hg-name{background:#e7f1fb;}
+  .clean-mode .hg-cell{border-left:1px solid #eef1f6;}
+  .hg-name{display:flex;align-items:center;gap:9px;padding:0 12px 0 14px;position:sticky;left:0;background:#fff;z-index:2;border-right:1px solid var(--line);min-width:0;}
+  .hg-row.total .hg-name{background:#f7f9fc;}
+  .htag{flex-shrink:0;width:19px;height:19px;border-radius:5px;font-size:.58rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;letter-spacing:0;}
+  .ht-group{background:#e4ecf7;color:#3f6096;}.ht-category{background:#e7efe2;color:#4c6b4a;}.ht-vendor{background:#f1e9db;color:#836a3c;}.ht-item{background:#edeff3;color:#7c8798;}.ht-dept,.ht-total{background:var(--ink);color:#fff;}
+  .hg-nm{font-size:.79rem;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.006em;}
+  .hg-nm small{font-weight:500;color:var(--faint);font-size:.63rem;letter-spacing:0;}
+  .hg-row.total .hg-nm{font-weight:700;}
+  .hg-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1px;padding:8px 10px;min-height:70px;border-left:1px solid rgba(255,255,255,.65);}
+  .hg-cell .hv{font-size:.78rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap;}
+  .hg-cell .hly{font-size:.63rem;font-weight:500;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .hg-cell .hd{font-size:.63rem;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:1px;}
+  .hg-cell .habs{font-size:.58rem;font-weight:500;opacity:.85;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .hg-cell .hd.pos,.hg-cell .habs.pos{color:#2f8a56;}
+  .hg-cell .hd.neg,.hg-cell .habs.neg{color:#b0554f;}
+  .heat-legend{display:flex;align-items:center;gap:8px;padding:12px 16px;font-size:.66rem;color:var(--faint);border-top:1px solid var(--line);}
+  .heat-legend .scale{display:flex;height:11px;width:220px;border-radius:3px;overflow:hidden;border:1px solid var(--line);}
+  .heat-legend .scale span{flex:1;}
+  .heat-legend .lg-sep{color:var(--line-strong);}
+  .heat-legend .lg-item{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+
+  /* compact status icons (shared by miller + heat) */
+  .sicon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;border:1px solid transparent;background:transparent;padding:0;flex-shrink:0;}
+  .sicon .i{width:14px;height:14px;display:block;}
+  .sicon.ok{color:#3f8a58;}
+  .sicon.flag{width:auto;height:auto;min-width:0;padding:1px 2px;border:0;background:transparent;color:#c1893f;cursor:pointer;border-radius:5px;}
+  .sicon.flag .i{width:15px;height:15px;}
+  .sicon.flag:hover{color:#a06a24;background:#faf1e3;}
+
+  /* tiny "pharmacy capsule" filter toggles */
+  .capfilter{display:inline-flex;align-items:center;gap:6px;}
+  .cap{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 10px;border-radius:999px;border:1px solid var(--line-strong);background:#fff;color:var(--muted);font-size:.65rem;font-weight:600;line-height:1;cursor:pointer;white-space:nowrap;}
+  .cap:hover{border-color:var(--muted);color:var(--ink);}
+  .cap.on{background:#eef2f7;border-color:var(--line-strong);color:var(--ink);}
+  .cap .dot{width:7px;height:7px;}
+  .cap .capflag{display:inline-flex;color:#c1893f;}
+  .cap .capflag .i{width:12px;height:12px;display:block;}
+  button.sicon{cursor:pointer;}
+  /* item status = borderless cool-coloured line icon (no square, no red/green clash) */
+  .sicon.statmark{width:auto;height:auto;min-width:0;padding:1px 2px;border:0;background:transparent;border-radius:5px;}
+  .sicon.statmark .i{width:15px;height:15px;}
+  button.sicon.statmark{cursor:pointer;}
+  button.sicon.statmark:hover{background:#f1f3f8;}
+  .s-cost_inflation{color:#6E56CF;} .s-declining{color:#2E8BC0;} .s-overfunded{color:#C08A2E;} .s-on_track{color:#3f8a58;}
+  .capmark{display:inline-flex;align-items:center;}
+  .capmark .i{width:12px;height:12px;display:block;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  /* per-item trend chart icon */
+  .sicon.chartbtn{width:auto;height:auto;min-width:0;padding:1px 2px;border:0;background:transparent;color:var(--faint);cursor:pointer;border-radius:5px;}
+  .sicon.chartbtn .i{width:15px;height:15px;}
+  .sicon.chartbtn:hover{color:var(--blue);background:#eef4fe;}
+
+  /* right-side trend drawer */
+  .drawer-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.10);opacity:0;visibility:hidden;transition:opacity .28s ease;z-index:999;}
+  .drawer-backdrop.show{opacity:1;visibility:visible;}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:460px;max-width:94vw;background:#fff;border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(15,23,42,.14);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:1000;display:flex;flex-direction:column;}
+  .drawer.open{transform:translateX(0);}
+  .drawer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line);}
+  .drawer-title{font-size:.9rem;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
+  .drawer-sub{font-size:.66rem;color:var(--faint);font-weight:500;margin-top:3px;}
+  .drawer-x{width:28px;height:28px;flex-shrink:0;border:1px solid var(--line-strong);background:#fff;color:var(--muted);border-radius:7px;font-size:.8rem;cursor:pointer;line-height:1;}
+  .drawer-x:hover{border-color:var(--muted);color:var(--ink);}
+  .drawer-body{overflow-y:auto;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start;}
+  .trendcard{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;}
+  .tc-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:5px;}
+  .tc-k{font-size:.58rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tc-v{font-size:.7rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .tc-d{font-size:.58rem;font-weight:700;}
+  .tc-d.pos{color:#2f8a56;} .tc-d.neg{color:#b0554f;}
+  .tchart{width:100%;height:46px;display:block;overflow:visible;}
+  .tchart .ln{fill:none;stroke:var(--blue);stroke-width:1.4;vector-effect:non-scaling-stroke;}
+  .tchart .lyln{fill:none;stroke:#c2ccda;stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke;}
+  .tchart .pk{fill:#2f8a56;} .tchart .tr{fill:#b0554f;}
+  .tchart .wlab{font-size:5.6px;font-weight:700;paint-order:stroke;stroke:#fff;stroke-width:.7px;stroke-linejoin:round;}
+  text.wlab.pk{fill:#2f8a56;} text.wlab.tr{fill:#b0554f;}
+  .tchart .hx{stroke:#9aa4b3;stroke-width:1;stroke-dasharray:2 2;vector-effect:non-scaling-stroke;}
+  .tchart .hdot{fill:var(--blue);stroke:#fff;stroke-width:1.2;}
+  .tc-x{display:flex;justify-content:space-between;font-size:.55rem;color:var(--faint);font-weight:600;margin-top:3px;}
+  .tc-x .pk{color:#2f8a56;} .tc-x .tr{color:#b0554f;}
+  .ttip{position:fixed;z-index:1100;background:#1f2937;color:#fff;font-size:.62rem;font-weight:600;padding:6px 9px;border-radius:7px;pointer-events:none;display:none;white-space:nowrap;box-shadow:0 8px 22px rgba(0,0,0,.28);}
+  .ttip b{display:block;font-size:.58rem;opacity:.75;margin-bottom:2px;font-weight:700;}
+  .ttip span{display:block;font-variant-numeric:tabular-nums;}
+  @media (max-width:560px){ .drawer-body{grid-template-columns:1fr;} }
+  /* miller row meta line holding the icons */
+  .vmeta,.imeta{display:flex;align-items:center;gap:6px;}
+
+  /* shared bottom legend row */
+  .legend-bar{display:flex;align-items:center;gap:15px;flex-wrap:wrap;padding:12px 4px 0;font-size:.66rem;color:var(--faint);}
+  .legend-bar .lg-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+  .legend-bar .scale{display:flex;height:11px;width:150px;border-radius:3px;overflow:hidden;border:1px solid var(--line);margin:0 2px;}
+  .legend-bar .scale span{flex:1;}
+  .legend-bar .sicon{width:18px;height:18px;}
+  .legend-bar .lg-sep{color:var(--line-strong);font-weight:700;}
+
+  /* floating popover (recommended action / drivers) */
+  .pop{position:absolute;z-index:9999;max-width:440px;min-width:280px;background:#fff;border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 18px 46px rgba(15,23,42,.20);padding:15px 17px;font-size:.75rem;color:var(--text);display:none;}
+  .pop-h{font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:9px;}
+  .pop-lead{margin:0 0 11px;line-height:1.55;color:var(--ink);font-weight:500;}
+  .pop-lead b{font-weight:700;}
+  .pop-actions{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+  .pop-actions li{position:relative;padding-left:22px;line-height:1.5;color:var(--text);}
+  .pop-actions li::before{content:'→';position:absolute;left:0;top:0;color:var(--blue);font-weight:800;}
+  .drv-list{display:flex;flex-direction:column;gap:8px;}
+  .drv{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:11px;padding:9px 11px;background:#f7f9fc;border-radius:8px;}
+  .drv-l{display:inline-flex;align-items:center;gap:7px;font-weight:700;color:var(--ink);}
+  .drv-v{font-weight:800;font-variant-numeric:tabular-nums;color:var(--red);}
+  .drv-arrow{color:var(--faint);font-weight:700;}
+  .drv-th{font-size:.68rem;color:var(--muted);white-space:nowrap;}
+
+  @media (max-width:1100px){ .pane-body{max-height:320px;} .miller{overflow-x:auto;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="panel">
+    <div class="toolbar">
+      <div class="viewseg" id="viewToggle">
+        <button data-view="miller" class="active">▤ Miller columns</button>
+        <button data-view="heat">▦ Heat grid</button>
+      </div>
+    </div>
+    <div class="crumbs-row">
+      <div class="crumbs" id="crumbs"></div>
+      <div class="rankby"><span>Rank by</span><select id="rankSel"></select></div>
+    </div>
+    <div class="miller" id="miller"></div>
+    <div class="heat" id="heat" hidden></div>
+    <div class="legend-bar" id="legendBar"></div>
+    <p class="modhint" id="modhint"></p>
+  </section>
+</div>
+
+<div class="drawer-backdrop" id="drawerBk"></div>
+<aside class="drawer" id="drawer" aria-label="KPI trends">
+  <div class="drawer-head">
+    <div class="drawer-titles"><div class="drawer-title"></div><div class="drawer-sub"></div></div>
+    <button class="drawer-x" id="drawerX" title="Close (Esc)">✕</button>
+  </div>
+  <div class="drawer-body"></div>
+</aside>
+
+<script>
+/* ---------- KPI definitions ---------- */
+const KPIS = [
+  {key:'sales',   label:'Sales',           fmt:'moneyM', unit:'%',  up:true},
+  {key:'units',   label:'Units',           fmt:'numM',   unit:'%',  up:true},
+  {key:'aiv',     label:'AIV',             fmt:'money2', unit:'%',  up:true},
+  {key:'agpPct',  label:'AGP %',           fmt:'pct',    unit:'pp', up:true},
+  {key:'agpDol',  label:'AGP $',           fmt:'moneyM', unit:'%',  up:true},
+  {key:'cogs',    label:'COGS',            fmt:'moneyM', unit:'%',  up:false},
+  {key:'allow',   label:'Allowances',      fmt:'moneyM', unit:'%',  up:true},
+  {key:'deadnet', label:'Deadnet Cost',    fmt:'moneyM', unit:'%',  up:false},
+  {key:'mix',     label:'Sales Mix %',     fmt:'pct',    unit:'pp', up:true},
+  {key:'bog',     label:'BOG %',           fmt:'pct',    unit:'pp', up:true},
+  {key:'markdown',label:'Markdown %',      fmt:'pct',    unit:'pp', up:false},
+  {key:'msMulo',  label:'Mkt Share MULO+', fmt:'pct',    unit:'pp', up:true},
+  {key:'msFood',  label:'Mkt Share Food',  fmt:'pct',    unit:'pp', up:true},
+  {key:'cpi',     label:'CPI-P',           fmt:'idx',    unit:'pt', up:false},
+];
+const KPI = Object.fromEntries(KPIS.map(k=>[k.key,k]));
+
+/* ---------- status taxonomy (vendor review + item drivers) ----------
+   Distinct line icons in COOL colours so they never blend with the green/red heat cells. */
+const IC_TRENDUP   = `<svg viewBox="0 0 16 16" class="i"><path d="M2.2 10.6l4-4.2 2.6 2.6 5-5.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.4 3.8h3.4v3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const IC_TRENDDOWN = `<svg viewBox="0 0 16 16" class="i"><path d="M2.2 5.4l4 4.2 2.6-2.6 5 5.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.4 12.2h3.4V8.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const IC_COINS     = `<svg viewBox="0 0 16 16" class="i"><ellipse cx="8" cy="4" rx="4.5" ry="2.1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 4v3.3c0 1.16 2.02 2.1 4.5 2.1s4.5-.94 4.5-2.1V4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 7.3v3.3c0 1.16 2.02 2.1 4.5 2.1s4.5-.94 4.5-2.1V7.3" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`;
+const STATUS = {
+  cost_inflation:{ label:'Cost Inflation',            abbr:'Cost inflation',            color:'#6E56CF', icon:IC_TRENDUP },   // violet
+  declining:     { label:'Declining Vendor Support',  abbr:'Declining vendor support',  color:'#2E8BC0', icon:IC_TRENDDOWN }, // blue
+  overfunded:    { label:'Overfunding',               abbr:'Overfunding',               color:'#C08A2E', icon:IC_COINS },     // amber
+  on_track:      { label:'On track',                  abbr:'On track',                  color:'#3f8a58', icon:'' },
+};
+
+/* ---------- deterministic RNG ---------- */
+function rng(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}
+  return ()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return ((h^=h>>>16)>>>0)/4294967296;};}
+
+/* ---------- hierarchy seed ---------- */
+const DEPTS = [
+  {id:'314 · Dairy', groups:[
+    {name:'36 · Refrigerated Dairy', sales:292.3, tilt:0.10, cats:['Yogurt','Fluid Milk','Butter','Creamers','Cottage Cheese','Sour Cream']},
+    {name:'35 · Eggs',               sales:72.4,  tilt:-0.75,cats:['Shell Eggs','Specialty Eggs','Egg Substitutes']},
+    {name:'37 · Cheese',             sales:121.7, tilt:0.18, cats:['Natural Chunk','Shredded','Slices','Cream Cheese','Snack Cheese']},
+    {name:'38 · Refrigerated Foods', sales:72.9,  tilt:0.55, cats:['Lunchmeat','Hot Dogs','Dough','Dips','Pasta']},
+  ]},
+  {id:'375 · Bakery (1 group → skipped)', groups:[
+    {name:'Bakery', sales:140.0, tilt:-0.20, cats:['Bread','Rolls','Cakes','Donuts','Cookies','Pies']},
+  ]},
+];
+const VENDORS = ['Danone','General Mills','Chobani','Kraft Heinz','Land O\'Lakes','Tillamook','Private Label','Sargento','Cargill','Hormel'];
+const SIZES = ['8 oz','12 oz','16 oz','24 oz','32 oz','6 ct','12 ct','18 ct','2 lb','64 fl oz'];
+
+/* ---------- KPI value generation ---------- */
+function baseVal(k,node,r){
+  const s=node.sales;
+  switch(k.key){
+    case 'sales':return s;
+    case 'units':return s/(3+r()*2);
+    case 'aiv':return 3+r()*3;
+    case 'agpPct':return 35+r()*12;
+    case 'agpDol':return s*(0.28+r()*0.12);
+    case 'cogs':return s*(0.6+r()*0.1);
+    case 'allow':return s*(0.07+r()*0.06);
+    case 'deadnet':return s*(0.5+r()*0.12);
+    case 'mix':return node.mix!=null?node.mix:(2+r()*22);
+    case 'bog':return 28+r()*28;
+    case 'markdown':return 10+r()*26;
+    case 'msMulo':return 17+r()*9;
+    case 'msFood':return 29+r()*9;
+    case 'cpi':return 0.98+r()*0.09;
+  }
+}
+function buildKpis(node){
+  const r=rng(node.name+'|'+node.sales.toFixed(2));
+  node.kpi={};
+  KPIS.forEach(k=>{
+    const noise=(r()-0.5)*11;
+    const fm = node.tilt*8 + noise;            // favourable magnitude (pp/%-ish)
+    const favorable = fm>=0;
+    const dir = k.up ? Math.sign(fm) : -Math.sign(fm); // numeric direction of the KPI value
+    let d = Math.abs(fm)*dir;                  // deltaNum (true signed change)
+    if(k.unit==='pt') d *= 0.01;               // index points (CPI ~1.0) move in hundredths, not whole points
+    const value = baseVal(k,node,r);
+    let ly, changeAbs;
+    if(k.unit==='%'){ ly = value/(1+d/100); changeAbs = value-ly; }   // value KPIs: % change → LY $ and $ change
+    else { ly = value - d; changeAbs = d; }                            // pp / pt KPIs: LY is value minus the move
+    node.kpi[k.key]={ value, ly, changeAbs, fm, favorable, deltaNum:d };
+  });
+}
+
+/* ---------- build node tree ---------- */
+let NODE_ID=0;
+function mkNode(name,sales,tilt,kind,mix){const n={id:'n'+(NODE_ID++),name,sales,tilt,kind,mix};buildKpis(n);return n;}
+function splitSales(total,n,seedStr){const r=rng(seedStr);const w=Array.from({length:n},()=>0.5+r());const sum=w.reduce((a,b)=>a+b,0);return w.map(x=>+(total*x/sum).toFixed(1));}
+
+/* Item drivers → status. A driver that breaches its threshold flags the item;
+   the first breached (cost → declining → overfunded) is the primary status. */
+function assignItemStatus(node){
+  const r=rng(node.id+'st');
+  const cost=+(-4+r()*11).toFixed(2);                                   // -4%..+7%  · breach > 5%
+  const funding = r()<0.18 ? +(-(40+r()*300)).toFixed(2) : +(5+r()*35).toFixed(2); // sometimes deeply negative · breach <= 0%
+  const overfund=+(r()*24).toFixed(2);                                  // 0..24%   · breach > 20%
+  const drivers=[];
+  if(cost>5)      drivers.push({key:'cost_inflation', label:'Cost Inflation',  value:cost,     thresh:'> 5% threshold'});
+  if(funding<=0)  drivers.push({key:'declining',      label:'Funding Change',  value:funding,  thresh:'<= 0% threshold'});
+  if(overfund>20) drivers.push({key:'overfunded',     label:'Overfunding',     value:overfund, thresh:'> 20% threshold'});
+  node.drivers=drivers;
+  node.review=drivers.length>0;
+  node.status=drivers.length? drivers[0].key : 'on_track';
+}
+/* Vendor rolls up its items: impacted NCRC count, primary concern, category drivers. */
+function assignVendorStatus(v, cats){
+  const items=v.items||[]; const total=items.length||1;
+  const flagged=items.filter(i=>i.review);
+  const bd={cost_inflation:0,declining:0,overfunded:0};
+  flagged.forEach(i=>{ bd[i.status]++; });
+  v.breakdown=bd; v.impacted=flagged.length;
+  v.review = (v.tilt<0) || (flagged.length>=Math.ceil(total*0.5));
+  const order=Object.entries(bd).sort((a,b)=>b[1]-a[1]);
+  v.primaryConcern = (order[0]&&order[0][1]>0)? order[0] : ['cost_inflation', flagged.length];
+  const r=rng(v.id+'vc');
+  v.catCount = 4 + Math.floor(r()*9);
+  const pool=cats.slice(), pick=[], n=Math.min(4,pool.length);
+  for(let i=0;i<n;i++){ pick.push(pool.splice(Math.floor(r()*pool.length),1)[0]); }
+  v.reviewCats=pick;
+}
+
+const TREE = DEPTS.map(d=>{
+  const groups = d.groups.map(g=>{
+    const gn = mkNode(g.name, g.sales, g.tilt, 'group');
+    const cs = splitSales(g.sales, g.cats.length, g.name);
+    gn.children = g.cats.map((c,ci)=>{
+      const ct = Math.max(-0.95,Math.min(0.95, g.tilt*0.55 + (rng(c)()-0.5)*0.9));
+      const cn = mkNode(c, cs[ci], ct, 'category', +(100*cs[ci]/g.sales).toFixed(1));
+      // items
+      const isales = splitSales(cs[ci], 6, c+'|i');
+      cn.items = isales.map((sv,ii)=>{
+        const it = Math.max(-0.95,Math.min(0.95, ct*0.7 + (rng(c+ii+'i')()-0.5)*0.95));
+        const seed = c+ii+'i2';
+        const desc = ['Core','Value','Premium','Organic','Family','Snack'][ii];
+        const v = VENDORS[Math.floor(rng(seed+'v')()*VENDORS.length)];
+        const size = SIZES[Math.floor(rng(seed+'s')()*SIZES.length)];
+        const nm = v+' '+desc+' '+size;
+        const n = mkNode(nm, sv, it, 'item');
+        n.sub = 'NCRC '+(100000+Math.floor(rng(nm)()*899999));
+        n.vendor=v; assignItemStatus(n); return n;
+      });
+      // vendors — each carries its OWN items so you can drill vendor → item
+      const vsales = splitSales(cs[ci], 4, c+'|v');
+      cn.vendors = vsales.map((sv,vi)=>{
+        const vt = Math.max(-0.95,Math.min(0.95, ct*0.6 + (rng(c+vi+'v')()-0.5)*0.95));
+        const nm = VENDORS[(vi*3+ci)%VENDORS.length];
+        const n = mkNode(nm, sv, vt, 'vendor');
+        const cnt = 8 + Math.floor(rng(nm+vi+'cnt')()*27); // 8..34 items
+        n.sub = cnt+' items · '+(vt<0?'funding gap':'on plan');
+        const vis = splitSales(sv, cnt, nm+'|vi'+vi+ci);
+        const tag = nm.split(' ')[0];
+        n.items = vis.map((iv,ii)=>{
+          const it = Math.max(-0.95,Math.min(0.95, vt*0.7 + (rng(nm+ii+ci+'vit')()-0.5)*0.95));
+          const desc = ['Core','Value','Premium','Organic','Family','Snack','Light','Classic'][ii%8];
+          const size = SIZES[Math.floor(rng(nm+ii+ci+'sz')()*SIZES.length)];
+          const inm = nm+' '+desc+' '+size+(ii>=8?' #'+(Math.floor(ii/8)+1):'');
+          const node2 = mkNode(inm, iv, it, 'item');
+          node2.sub='NCRC '+(100000+Math.floor(rng(inm+ii)()*899999));
+          node2.vendor=nm; assignItemStatus(node2); return node2;
+        });
+        assignVendorStatus(n, g.cats);
+        return n;
+      });
+      return cn;
+    });
+    return gn;
+  });
+  const droot = mkNode(d.id.split(' ·')[0]+' aggregate', d.groups.reduce((a,g)=>a+g.sales,0),
+                       d.groups.reduce((a,g)=>a+g.tilt,0)/d.groups.length, 'dept');
+  droot.children = groups;
+  return {id:d.id, root:droot, groups, single: groups.length===1};
+});
+
+/* ---------- state ---------- */
+const state = { deptIdx:0, rankBy:'sales', path:[], inspect:null, leafMode:'vendors', view:'miller', palette:'sage', statusFilter:new Set(), _lastKind:null };
+
+/* ---------- formatting ---------- */
+function fmtVal(k,v){
+  switch(k.fmt){
+    case 'moneyM':return '$'+v.toFixed(1)+'M';
+    case 'numM':return v.toFixed(1)+'M';
+    case 'money2':return '$'+v.toFixed(2);
+    case 'pct':return v.toFixed(1)+'%';
+    case 'idx':return v.toFixed(2);
+  }
+}
+function fmtDelta(k,kp){
+  const sign = kp.deltaNum>=0?'+':'−';
+  const a = Math.abs(kp.deltaNum);
+  const u = k.unit==='pp'?'pp':(k.unit==='pt'?'':'%');
+  return sign+a.toFixed(k.unit==='pt'?2:1)+u;
+}
+/* Absolute $ / unit change (for value KPIs) — empty for pp/idx KPIs where % isn't meaningful. */
+function fmtAbsChange(k,kp){
+  const s=kp.changeAbs>=0?'+':'−', a=Math.abs(kp.changeAbs);
+  if(k.fmt==='moneyM')return s+'$'+a.toFixed(1)+'M';
+  if(k.fmt==='numM') return s+a.toFixed(1)+'M';
+  if(k.fmt==='money2')return s+'$'+a.toFixed(2);
+  return '';
+}
+/* absolute change in the KPI's native unit — money shown in K under $1M (e.g. +$121.5K) */
+function fmtCellAbs(k,change){
+  const s=change>=0?'+':'−', a=Math.abs(change);
+  switch(k.fmt){
+    case 'moneyM': return a<1 ? s+'$'+(a*1000).toFixed(1)+'K' : s+'$'+a.toFixed(2)+'M';
+    case 'numM':   return a<1 ? s+(a*1000).toFixed(0)+'K'     : s+a.toFixed(2)+'M';
+    case 'money2': return s+'$'+a.toFixed(2);
+    case 'pct':    return s+a.toFixed(1)+'pp';
+    case 'idx':    return s+a.toFixed(2);
+  }
+}
+/* Colour + sign always agree: a positive change is green, a negative change is red. */
+function favClass(kp){return kp.deltaNum>=0?'pos':'neg';}
+function arrow(kp){return kp.deltaNum>=0?'▲':'▼';}
+
+/* ---------- sorting: biggest drops first, by the ranked KPI ---------- */
+function sortNodes(nodes){
+  const key=state.rankBy;
+  return nodes.slice().sort((a,b)=>a.kpi[key].deltaNum-b.kpi[key].deltaNum);
+}
+function accentClass(node){const d=node.kpi[state.rankBy].deltaNum;return d>3?'win':(d<-3?'lose':'mid');}
+
+/* ---------- pulse svg ---------- */
+function pulseSVG(node,w){
+  const n=KPIS.length, gap=2, bw=Math.max(3,(w-(n-1)*gap)/n), h=30, mid=15, cap=12;
+  let bars='';
+  KPIS.forEach((k,i)=>{
+    const kp=node.kpi[k.key];
+    const up=kp.deltaNum>=0;
+    const bh=Math.max(2, Math.min(cap,Math.abs(kp.deltaNum))/cap*13);
+    const x=(i*(bw+gap)).toFixed(1);
+    const y=up?(mid-bh):mid;
+    const cls=up?'p':'n';
+    const tip=k.label+': '+fmtVal(k,kp.value)+' ('+fmtDelta(k,kp)+', '+(up?'up':'down')+')';
+    bars+=`<rect class="${cls}" x="${x}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}"><title>${tip}</title></rect>`;
+  });
+  return `<svg class="pulse" data-pulse="${node.id}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><line class="mid" x1="0" y1="${mid}" x2="${w}" y2="${mid}"/>${bars}</svg>`;
+}
+function redCount(node){return KPIS.filter(k=>node.kpi[k.key].deltaNum<0).length;}
+
+/* ---------- row html ---------- */
+function rowHTML(node, pulseW, showPulse){
+  const rb=KPI[state.rankBy], kp=node.kpi[state.rankBy];
+  const drill = state.path.includes(node) ? 'drill':'';
+  const insp = state.inspect===node ? 'inspect':'';
+  const pulse = showPulse ? pulseSVG(node,pulseW) : '';
+  const drillable = node.kind==='group'||node.kind==='category'||node.kind==='vendor';
+  const abs=fmtAbsChange(rb,kp);
+  let metaHTML='';
+  if(node.kind==='vendor')    metaHTML=`<div class="sub vmeta">${(node.items||[]).length} items ${vendorPillHTML(node)}</div>`;
+  else if(node.kind==='item') metaHTML=`<div class="sub imeta">${node.sub||''}${node.review?' '+itemStatusHTML(node):''} ${chartIconHTML(node)}</div>`;
+  else if(node.sub)           metaHTML=`<div class="sub">${node.sub}</div>`;
+  return `<div class="row ${drill} ${insp}" data-node="${node.id}">
+    <span class="accent ${accentClass(node)}"></span>
+    <div class="main"><div class="nm">${node.name}</div>${metaHTML}</div>
+    ${pulse}
+    <div class="rt">
+      <span class="val">${fmtVal(rb,kp.value)}</span>
+      <span class="ly">LY ${fmtVal(rb,kp.ly)}</span>
+      <span class="delta ${favClass(kp)}">${arrow(kp)} ${fmtDelta(rb,kp)}${abs?` · ${abs}`:''}</span>
+    </div>
+    ${drillable?'<span class="chev">›</span>':''}
+  </div>`;
+}
+
+/* ---------- status / driver UI helpers (compact icons; meaning lives in the legend) ---------- */
+const IC_WARN   = `<svg viewBox="0 0 16 16" class="i"><path d="M8 2l6 11H2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.4v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.2" r=".95" fill="currentColor"/></svg>`;
+const IC_CHECK  = `<svg viewBox="0 0 16 16" class="i"><path d="M3.2 8.4l3 3 6.4-7.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const IC_FLAG   = `<svg viewBox="0 0 16 16" class="i"><path d="M4.3 2.4v11.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M4.3 3h6.9l-1.5 2.2 1.5 2.2H4.3z" fill="currentColor"/></svg>`; // gentle flag = needs review
+const IC_CHART  = `<svg viewBox="0 0 16 16" class="i"><path d="M2.3 2.5v11h11.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.6 9.6l2.6-2.8 2 1.9 3.4-4.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`; // trend
+function chartIconHTML(node){
+  return `<button class="sicon chartbtn" data-trend="${node.id}" title="52-week trends for every KPI">${IC_CHART}</button>`;
+}
+/* Vendor: one small flag does both — a clickable needs-review marker that opens the recommended action, or an on-track check. */
+function vendorPillHTML(node){
+  if(node.review){
+    return `<button class="sicon flag" data-rec="${node.id}" title="Needs review — click for recommended action">${IC_FLAG}</button>`;
+  }
+  return `<span class="sicon ok" title="On track">${IC_CHECK}</span>`;
+}
+/* Item: a distinct cool-coloured line icon, clickable → drivers overlay. */
+function itemStatusHTML(node){
+  const s=STATUS[node.status];
+  return `<button class="sicon statmark s-${node.status}" data-drivers="${node.id}" title="${s.label} — view drivers">${s.icon}</button>`;
+}
+function recActionHTML(v){
+  const bd=v.breakdown, [pk,pc]=v.primaryConcern;
+  const cats=(v.reviewCats||[]).map(c=>c.toUpperCase()).join(', ');
+  return `<div class="pop-h">Recommended Action</div>
+    <p class="pop-lead">This vendor requires attention with <b>${v.impacted} impacted NCRCs</b> across ${v.catCount} categories. The primary concern is <b>${STATUS[pk].label}</b> (${pc} NCRCs).</p>
+    <ul class="pop-actions">
+      <li>Prioritize a vendor review for ${v.impacted} impacted NCRCs in this vendor; focus first on Cost Inflation (${bd.cost_inflation}), Overfunded (${bd.overfunded}), Declining Vendor (${bd.declining}).</li>
+      <li>Validate the category drivers in <b>${cats}</b> and confirm which NCRCs require funding, cost, pricing, or assortment action.</li>
+      <li>Use the table and CIG toggle below to drill from Group to Category to Item, then align vendor commitments to the flagged NCRCs before the next review cycle.</li>
+    </ul>`;
+}
+function driversHTML(it){
+  if(!it.drivers||!it.drivers.length) return `<div class="pop-h">Drivers</div><p class="pop-lead">On track — no thresholds breached.</p>`;
+  return `<div class="pop-h">Drivers</div><div class="drv-list">${it.drivers.map(d=>`
+    <div class="drv"><span class="drv-l"><span class="sicon statmark s-${d.key}">${STATUS[d.key].icon}</span>${d.label}</span>
+      <span class="drv-v">${d.value>0?'+':''}${d.value}%</span><span class="drv-arrow">→</span><span class="drv-th">${d.thresh}</span></div>`).join('')}</div>`;
+}
+/* floating popover */
+function showPop(html, anchor){
+  let pop=document.getElementById('pop');
+  if(!pop){ pop=document.createElement('div'); pop.id='pop'; pop.className='pop'; document.body.appendChild(pop); }
+  pop.innerHTML=html; pop.style.display='block'; pop.style.visibility='hidden';
+  const r=anchor.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight;
+  let left=r.left+window.scrollX, top=r.bottom+window.scrollY+6;
+  if(left+pw > window.scrollX+window.innerWidth-12) left=window.scrollX+window.innerWidth-pw-12;
+  if(r.bottom+ph+12 > window.innerHeight) top=r.top+window.scrollY-ph-6;
+  pop.style.left=Math.max(12,left)+'px'; pop.style.top=top+'px'; pop.style.visibility='visible';
+}
+function closePop(){ const p=document.getElementById('pop'); if(p) p.style.display='none'; }
+
+/* ---------- 52-week trend drawer (right-side, per item) ---------- */
+const TREND={};                 // kpiKey -> {cy,ly,kp,k,min,max,range} for the currently open item
+const TW=176, TH=46, TPAD=6;
+function genSeries(seed,start,end){
+  const r=rng(seed), amp=Math.abs(end||1), phase=r()*6.28, seas=0.05+r()*0.05;
+  const a=[]; for(let w=0;w<52;w++){ const t=w/51; a.push(start+(end-start)*t+Math.sin(t*6.28+phase)*amp*seas+(r()-0.5)*amp*0.05); }
+  a[51]=end; return a;
+}
+function trendChartSVG(cy,ly,k){
+  const all=cy.concat(ly), min=Math.min(...all), max=Math.max(...all), range=(max-min)||1;
+  const X=i=>TPAD+i/51*(TW-2*TPAD), Y=v=>TH-TPAD-(v-min)/range*(TH-2*TPAD);
+  const cyPts=cy.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const lyPts=ly.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const peakI=cy.indexOf(Math.max(...cy)), lowI=cy.indexOf(Math.min(...cy));
+  const px=X(peakI), py=Y(cy[peakI]), lx=X(lowI), lyy=Y(cy[lowI]);
+  const anc=x=> x>TW-24?'end':(x<24?'start':'middle');
+  return {peakI,lowI,min,max,range, svg:`<svg viewBox="0 0 ${TW} ${TH}" class="tchart" data-k="${k.key}" preserveAspectRatio="none">
+    <polyline class="lyln" points="${lyPts}"/>
+    <polyline class="ln" points="${cyPts}"/>
+    <circle class="pk" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.6"/>
+    <circle class="tr" cx="${lx.toFixed(1)}" cy="${lyy.toFixed(1)}" r="2.6"/>
+    <text class="wlab pk" x="${px.toFixed(1)}" y="${(py-4).toFixed(1)}" text-anchor="${anc(px)}">W${peakI+1}</text>
+    <text class="wlab tr" x="${lx.toFixed(1)}" y="${(lyy+8.5).toFixed(1)}" text-anchor="${anc(lx)}">W${lowI+1}</text>
+    <line class="hx" x1="0" y1="0" x2="0" y2="${TH}" style="opacity:0"/>
+    <circle class="hdot" cx="0" cy="0" r="2.8" style="opacity:0"/>
+  </svg>`};
+}
+function trendCard(node,k){
+  const kp=node.kpi[k.key];
+  const cy=genSeries(node.id+'|'+k.key+'|cy', kp.ly, kp.value);
+  const ly=genSeries(node.id+'|'+k.key+'|ly', kp.ly*0.96, kp.ly);
+  const c=trendChartSVG(cy,ly,k);
+  TREND[k.key]={cy,ly,kp,k,min:c.min,max:c.max,range:c.range};
+  const pct=kp.ly?(kp.value/kp.ly-1)*100:0, cls=kp.value>=kp.ly?'pos':'neg';
+  return `<div class="trendcard">
+    <div class="tc-head"><span class="tc-k">${k.label}</span><span class="tc-v">${fmtVal(k,kp.value)} <span class="tc-d ${cls}">${(pct<0?'−':'')+Math.abs(pct).toFixed(1)}%</span></span></div>
+    ${c.svg}
+    <div class="tc-x"><span class="pk">▲ peak W${c.peakI+1}</span><span class="tr">▼ low W${c.lowI+1}</span></div>
+  </div>`;
+}
+function openTrends(id){
+  const node=nodeById(id); if(!node) return;
+  Object.keys(TREND).forEach(kk=>delete TREND[kk]);
+  const d=document.getElementById('drawer');
+  d.querySelector('.drawer-title').textContent=node.name;
+  d.querySelector('.drawer-sub').textContent=(node.sub? node.sub+' · ':'')+'52-week trend · CY line, LY dotted · hover any week';
+  d.querySelector('.drawer-body').innerHTML=KPIS.map(k=>trendCard(node,k)).join('');
+  document.getElementById('drawerBk').classList.add('show');
+  d.classList.add('open');
+}
+function hideTtip(){
+  const t=document.getElementById('ttip'); if(t) t.style.display='none';
+  document.querySelectorAll('#drawer .hx,#drawer .hdot').forEach(el=>{ el.style.opacity=0; });
+}
+function chartHover(e){
+  const svg=e.target.closest('.tchart'); if(!svg){ hideTtip(); return; }
+  const d=TREND[svg.dataset.k]; if(!d) return;
+  const rect=svg.getBoundingClientRect();
+  let ratio=(e.clientX-rect.left)/rect.width; ratio=Math.max(0,Math.min(1,ratio));
+  const wi=Math.round(ratio*51), cyv=d.cy[wi], lyv=d.ly[wi];
+  const X=TPAD+wi/51*(TW-2*TPAD), Y=TH-TPAD-(cyv-d.min)/d.range*(TH-2*TPAD);
+  const hx=svg.querySelector('.hx'), hd=svg.querySelector('.hdot');
+  hx.setAttribute('x1',X.toFixed(1)); hx.setAttribute('x2',X.toFixed(1)); hx.style.opacity=1;
+  hd.setAttribute('cx',X.toFixed(1)); hd.setAttribute('cy',Y.toFixed(1)); hd.style.opacity=1;
+  let t=document.getElementById('ttip'); if(!t){ t=document.createElement('div'); t.id='ttip'; t.className='ttip'; document.body.appendChild(t); }
+  t.innerHTML=`<b>Week ${wi+1}</b><span>CY ${fmtVal(d.k,cyv)}</span><span>LY ${fmtVal(d.k,lyv)}</span>`;
+  t.style.display='block';
+  let lft=e.clientX+14; if(lft+150>window.innerWidth) lft=e.clientX-150;
+  t.style.left=lft+'px'; t.style.top=(e.clientY+14)+'px';
+}
+function closeDrawer(){ document.getElementById('drawer').classList.remove('open'); document.getElementById('drawerBk').classList.remove('show'); }
+
+document.addEventListener('click',e=>{
+  const tr=e.target.closest('[data-trend]');
+  if(tr){ e.preventDefault(); e.stopPropagation(); openTrends(tr.dataset.trend); return; }
+  const rec=e.target.closest('[data-rec]');
+  if(rec){ e.preventDefault(); e.stopPropagation(); showPop(recActionHTML(nodeById(rec.dataset.rec)), rec); return; }
+  const drv=e.target.closest('[data-drivers]');
+  if(drv){ e.preventDefault(); e.stopPropagation(); showPop(driversHTML(nodeById(drv.dataset.drivers)), drv); return; }
+  if(!e.target.closest('#pop')) closePop();
+}, true);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePop(); closeDrawer(); } });
+
+/* ---------- render ---------- */
+const $=s=>document.querySelector(s);
+function nodeById(id){let f=null;function walk(n){if(n.id===id)f=n;(n.children||[]).forEach(walk);(n.items||[]).forEach(walk);(n.vendors||[]).forEach(walk);}walk(currentDept().root);return f;}
+function currentDept(){return TREE[state.deptIdx];}
+
+/* Shared drill state → the ordered levels (groups?, categories, items/vendors, vendor items).
+   Both views read from this; only the rendering differs, so toggling keeps your place. */
+function computeLevels(){
+  const dept=currentDept();
+  const levels=[];
+  if(!dept.single) levels.push({title:'Group · '+dept.id, nodes:dept.groups, kind:'group', pulse:true});
+  const selGroup = dept.single ? dept.groups[0] : state.path.find(n=>n.kind==='group');
+  if(selGroup) levels.push({title:'Category · in '+selGroup.name, nodes:selGroup.children, kind:'category', pulse:true});
+  const selCat = state.path.find(n=>n.kind==='category');
+  if(selCat){
+    const mode = state.leafMode||'items';
+    levels.push({title:'in '+selCat.name, nodes:mode==='items'?selCat.items:selCat.vendors, kind:mode==='items'?'item':'vendor', pulse:false, leaf:true, mode});
+    if(mode==='vendors'){
+      const selVendor = state.path.find(n=>n.kind==='vendor');
+      if(selVendor) levels.push({title:selVendor.name+' · items', nodes:selVendor.items, kind:'item', pulse:false});
+    }
+  }
+  return levels;
+}
+
+function render(){
+  const dept=currentDept();
+  const levels=computeLevels();
+  const lvlKind = levels.length ? levels[levels.length-1].kind : null;
+  if(lvlKind !== state._lastKind){ state.statusFilter.clear(); state._lastKind=lvlKind; }
+  const detailNode = state.inspect || state.path[state.path.length-1] || dept.root;
+  state.inspect = detailNode;
+
+  document.querySelectorAll('#viewToggle [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
+  $('#miller').hidden = state.view!=='miller';
+  $('#heat').hidden   = state.view!=='heat';
+  $('#modhint').textContent = state.view==='miller'
+    ? "One left→right read: Group → Category → Item/Vendor → the focused row's full KPIs in the last column. Hover a pulse bar to name a KPI; click a KPI to rank everything by it."
+    : "Every cell is coloured by its change vs last year, with the value shown — scan for a row that's red across the board, or a KPI everyone's losing. Click a column header to rank; click a row to drill in; use the breadcrumb to climb back up.";
+
+  if(state.view==='miller') renderMiller(levels, detailNode);
+  else renderHeat(levels);
+  $('#legendBar').innerHTML = (state.view==='heat'? colorScaleHTML():'') + statusLegendHTML();
+  renderCrumbs();
+}
+
+function renderMiller(levels, detailNode){
+  const H = levels.length;
+  const pulseW = H>=3?94:116;
+  $('#miller').style.gridTemplateColumns = Array(H).fill('minmax(208px,1fr)').join(' ') + ' minmax(232px,250px)';
+  const paneHTML = levels.map(p=>{
+    const sorted=sortNodes(p.nodes);
+    const head = p.leaf
+      ? `<div class="pane-head"><span class="ttl">${p.title}</span>
+           <div class="pane-toggle" id="leafToggle">
+             <button data-mode="items" class="${p.mode==='items'?'active':''}">Items</button>
+             <button data-mode="vendors" class="${p.mode==='vendors'?'active':''}">Vendors</button>
+           </div></div>`
+      : `<div class="pane-head"><span class="ttl">${p.title}</span><span class="cnt">${p.nodes.length} ${p.nodes[0].kind}s</span></div>`;
+    return `<div class="pane">${head}<div class="pane-body">${sorted.map(n=>rowHTML(n,pulseW,p.pulse)).join('')}</div></div>`;
+  }).join('');
+  $('#miller').innerHTML = paneHTML + detailPaneHTML(detailNode);
+}
+
+/* ---------- heat grid: the deepest (current) level as entity rows × KPI columns ---------- */
+const KINDTAG={group:'G',category:'C',vendor:'V',item:'I',dept:'Σ',total:'Σ'};
+/* Gentle, low-saturation diverging palettes (ColorBrewer-inspired) — capped alpha so nothing glares.
+   pos = better-vs-LY end, neg = worse-vs-LY end. */
+const PALETTES = {
+  none:      { label:'None — clean table (total shaded)' },
+  sage:      { pos:'96,150,120',  neg:'198,132,116', label:'Sage / Clay' },
+  teal:      { pos:'90,158,150',  neg:'205,123,102', label:'Teal / Terracotta' },
+  bluamber:  { pos:'86,132,190',  neg:'206,154,86',  label:'Blue / Amber (colour-blind safe)' },
+  indigo:    { pos:'108,128,196', neg:'214,124,120', label:'Indigo / Coral' },
+  emerald:   { pos:'88,156,118',  neg:'190,110,80',  label:'Emerald / Rust' },
+  steel:     { pos:'104,146,152', neg:'186,138,140', label:'Muted steel / Rose' },
+  slate:     { pos:'118,140,172', neg:'198,168,96',  label:'Slate / Gold (colour-blind safe)' },
+  ocean:     { pos:'92,150,168',  neg:'202,140,110', label:'Ocean / Sand' },
+  classic:   { pos:'110,160,110', neg:'200,110,105', label:'Classic green / red (muted)' },
+  mono:      { pos:'120,150,178', neg:'150,158,168', label:'Mono blue (single-hue)' },
+};
+function heatStyle(kp){
+  if(state.palette==='none') return 'color:var(--ink);';
+  const p = PALETTES[state.palette] || PALETTES.sage;
+  const d=kp.deltaNum, mag=Math.min(1,Math.abs(d)/9);
+  const rgb = d>=0 ? p.pos : p.neg;
+  const a=(0.05 + mag*0.5).toFixed(3);          // max ~0.55 → soft, never harsh
+  return `background:rgba(${rgb},${a});color:var(--ink);`;
+}
+/* True rollup of the rows currently shown: sum the $/unit metrics, sales-weight the rates. */
+const SUM_KEYS=['sales','units','agpDol','cogs','allow','deadnet'];
+function rollup(nodes,name){
+  const kpi={};
+  const tS=nodes.reduce((a,n)=>a+n.kpi.sales.value,0)||1;
+  const tU=nodes.reduce((a,n)=>a+n.kpi.units.value,0)||1;
+  KPIS.forEach(k=>{
+    if(SUM_KEYS.includes(k.key)){
+      const value=nodes.reduce((a,n)=>a+n.kpi[k.key].value,0);
+      const ly   =nodes.reduce((a,n)=>a+n.kpi[k.key].ly,0);
+      kpi[k.key]={value,ly,changeAbs:value-ly,deltaNum: ly?(value/ly-1)*100:0};
+    } else {
+      const wKey = k.key==='aiv'?'units':'sales';
+      const wt   = k.key==='aiv'?tU:tS;
+      const value=nodes.reduce((a,n)=>a+n.kpi[k.key].value*n.kpi[wKey].value,0)/wt;
+      const ly   =nodes.reduce((a,n)=>a+n.kpi[k.key].ly   *n.kpi[wKey].value,0)/wt;
+      const deltaNum = k.unit==='%' ? (ly?(value/ly-1)*100:0) : (value-ly);
+      kpi[k.key]={value,ly,changeAbs:value-ly,deltaNum};
+    }
+  });
+  return {name:name||'Total', kind:'total', kpi};
+}
+function heatCell(node,k,isTotal){
+  const kp=node.kpi[k.key];
+  const style = state.palette==='none'
+    ? (isTotal ? 'background:#e7f1fb;color:var(--ink);' : 'color:var(--ink);')
+    : heatStyle(kp);
+  const change = kp.value - kp.ly;
+  const pct = kp.ly ? (kp.value/kp.ly - 1)*100 : 0;
+  const pctStr = (pct<0?'−':'') + Math.abs(pct).toFixed(1) + '%';
+  const cls = change>=0 ? 'pos' : 'neg';
+  const abs = fmtCellAbs(k, change);
+  return `<div class="hg-cell" style="${style}" title="${k.label}: CY ${fmtVal(k,kp.value)} · LY ${fmtVal(k,kp.ly)} · ${pctStr} (${abs})">
+      <span class="hv">${fmtVal(k,kp.value)}</span>
+      <span class="hly">${fmtVal(k,kp.ly)}</span>
+      <span class="hd ${cls}">${pctStr}</span>
+      <span class="habs ${cls}">(${abs})</span>
+    </div>`;
+}
+function renderHeat(levels){
+  const lvl=levels[levels.length-1];
+  let rows=sortNodes(lvl.nodes);
+  if(lvl.kind==='vendor' && state.statusFilter.has('review')) rows=rows.filter(v=>v.review);
+  else if(lvl.kind==='item'){
+    const active=[...state.statusFilter];
+    if(active.length) rows=rows.filter(n=>n.review && n.drivers.some(d=>active.includes(d.key)));
+  }
+  const cols=KPIS;
+  const grid=`minmax(210px,250px) repeat(${cols.length}, minmax(82px,1fr))`;
+  const scope = state.path.length ? state.path[state.path.length-1].name : currentDept().id;
+  const totalNode = rollup(rows, 'Total');
+  const plural = {group:'groups',category:'categories',vendor:'vendors',item:'items'};
+  const kindLbl = rows.length===1 ? lvl.kind : (plural[lvl.kind]||lvl.kind+'s');
+
+  const leafToggle = lvl.leaf ? `<div class="pane-toggle" id="leafToggle">
+       <button data-mode="items" class="${lvl.mode==='items'?'active':''}">Items</button>
+       <button data-mode="vendors" class="${lvl.mode==='vendors'?'active':''}">Vendors</button></div>`:'';
+  const palOpts = Object.entries(PALETTES).map(([k,p])=>`<option value="${k}" ${state.palette===k?'selected':''}>${p.label}</option>`).join('');
+  const headBar = `<div class="heat-head"><span class="ttl">${lvl.title}</span>
+      <div class="tools">${leafToggle}
+        ${statusToggleHTML(lvl)}
+        <div class="palsel"><span>Palette</span><select id="palSel">${palOpts}</select></div>
+        <span class="cnt">${rows.length} ${kindLbl} · biggest drops first</span></div></div>`;
+  const caption = `<div class="heat-cap"><b>Top “Total” row</b> = the ${rows.length} ${kindLbl} below rolled up — summed for $ / unit metrics, sales-weighted blended average for rates (AGP %, market share, markdown…). It updates as you drill because it always reflects the rows on screen.</div>`;
+  const colHead = `<div class="hg-head" style="grid-template-columns:${grid}">
+      <div class="hg-h name">Name</div>
+      ${cols.map(k=>`<div class="hg-h ${state.rankBy===k.key?'ranked':''}" data-kpi="${k.key}" title="${k.label} — click to rank">${k.label}${state.rankBy===k.key?' ▼':''}</div>`).join('')}
+    </div>`;
+  const totalRow = `<div class="hg-row total ${state.palette==='none'?'clean':''}" style="grid-template-columns:${grid}">
+      <div class="hg-name"><span class="htag ht-total">Σ</span><span class="hg-nm">Total <small>· ${scope} · ${rows.length} ${kindLbl}</small></span></div>
+      ${cols.map(k=>heatCell(totalNode,k,true)).join('')}</div>`;
+  const body = rows.map(n=>{
+    const drillable = n.kind==='group'||n.kind==='category'||n.kind==='vendor';
+    let sub = n.sub?` <small>${n.sub}</small>`:'', icon='';
+    if(n.kind==='vendor'){ sub=` <small>${(n.items||[]).length} items</small>`; icon=vendorPillHTML(n); }
+    else if(n.kind==='item'){ icon=(n.review?itemStatusHTML(n):'')+chartIconHTML(n); }
+    return `<div class="hg-row ${drillable?'':'leaf'}" ${drillable?`data-node="${n.id}"`:''} style="grid-template-columns:${grid}">
+        <div class="hg-name"><span class="htag ht-${n.kind}">${KINDTAG[n.kind]}</span>
+          <span class="hg-nm">${n.name}${sub}</span>
+          ${icon}${drillable?'<span class="chev" style="margin-left:auto">›</span>':''}</div>
+        ${cols.map(k=>heatCell(n,k)).join('')}</div>`;
+  }).join('');
+  $('#heat').innerHTML = headBar + caption + `<div class="heat-scroll ${state.palette==='none'?'clean-mode':''}">${colHead}${totalRow}${body}</div>`;
+  // pin the Total row flush under the (variable-height) column header — no gap, no overlap
+  const hEl=$('#heat .hg-head'), tEl=$('#heat .hg-row.total');
+  if(hEl && tEl) tEl.style.top = Math.round(hEl.getBoundingClientRect().height)+'px';
+}
+
+/* shared bottom legend — status icons (both views) + colour scale (heat only) */
+function statusLegendHTML(){
+  return `<span class="lg-item"><span class="sicon ok">${IC_CHECK}</span>On track</span>
+    <span class="lg-item"><span class="sicon flag">${IC_FLAG}</span>Needs review — click for recommended action</span>
+    <span class="lg-sep">·</span>
+    <span class="lg-item"><span class="sicon statmark s-cost_inflation">${IC_TRENDUP}</span>Cost inflation</span>
+    <span class="lg-item"><span class="sicon statmark s-declining">${IC_TRENDDOWN}</span>Declining vendor support</span>
+    <span class="lg-item"><span class="sicon statmark s-overfunded">${IC_COINS}</span>Overfunding</span>`;
+}
+/* tiny capsule filter toggles — vendor level filters Needs review; item level filters by driver type */
+function statusToggleHTML(lvl){
+  let toggles=[];
+  if(lvl.kind==='vendor') toggles=[{key:'review', label:'Needs review', flag:true}];
+  else if(lvl.kind==='item') toggles=[
+    {key:'cost_inflation', label:'Cost inflation'},
+    {key:'declining',      label:'Declining vendor support'},
+    {key:'overfunded',     label:'Overfunding'},
+  ];
+  if(!toggles.length) return '';
+  return `<div class="capfilter">${toggles.map(t=>`<button class="cap ${state.statusFilter.has(t.key)?'on':''}" data-filter="${t.key}">${t.flag?`<span class="capflag">${IC_FLAG}</span>`:`<span class="capmark s-${t.key}">${STATUS[t.key].icon}</span>`}${t.label}</button>`).join('')}</div>`;
+}
+function colorScaleHTML(){
+  if(state.palette==='none') return `<span class="lg-item">Clean table — no heat colouring; total row shaded</span><span class="lg-sep">·</span>`;
+  return `<span class="lg-item"><span>Worse</span><div class="scale">${Array.from({length:11},(_,i)=>{const d=(i-5)/5*9;return `<span style="${heatStyle({deltaNum:d})}"></span>`;}).join('')}</div><span>Better vs LY</span></span><span class="lg-sep">·</span>`;
+}
+
+function detailPaneHTML(node){
+  const up=KPIS.filter(k=>node.kpi[k.key].deltaNum>=0).length, dn=KPIS.length-up;
+  const acc=accentClass(node);
+  const kindLabel = node.kind==='dept'?'Department total':cap(node.kind);
+  const sorted=KPIS.slice().sort((a,b)=>node.kpi[a.key].deltaNum-node.kpi[b.key].deltaNum); // biggest drops first
+  const rows=sorted.map(k=>{
+    const kp=node.kpi[k.key];
+    const abs=fmtAbsChange(k,kp);
+    return `<div class="kpirow ${state.rankBy===k.key?'ranked':''}" data-kpi="${k.key}">
+      <span class="kl">${k.label}<small>LY ${fmtVal(k,kp.ly)}</small></span>
+      <span class="kr"><span class="kv">${fmtVal(k,kp.value)}</span><span class="kd ${favClass(kp)}">${arrow(kp)} ${fmtDelta(k,kp)}</span>${abs?`<span class="kabs">${abs}</span>`:''}</span>
+    </div>`;
+  }).join('');
+  return `<div class="pane dpane">
+    <div class="pane-head dhead"><span class="ttl">KPI detail</span><span class="tally"><span class="up">▲ ${up}</span><span class="dn">▼ ${dn}</span></span></div>
+    <div class="dscope"><span class="acc ${acc}"></span><span><b>${node.name}</b> · ${kindLabel} · biggest drops first</span></div>
+    <div class="pane-body">${rows}</div>
+  </div>`;
+}
+
+function renderCrumbs(){
+  const dept=currentDept();
+  const parts=[`<span class="crumb home clickable" data-crumb="__root">${dept.id}</span>`];
+  state.path.forEach(n=>{
+    parts.push('<span class="sep">▸</span>');
+    parts.push(`<span class="crumb clickable" data-crumb="${n.id}">${cap(n.kind)} · ${n.name}</span>`);
+  });
+  $('#crumbs').innerHTML=parts.join('');
+}
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+
+/* ---------- interactions ---------- */
+function initSelectors(){
+  $('#rankSel').innerHTML=KPIS.map(k=>`<option value="${k.key}">${k.label}</option>`).join('');
+}
+$('#miller').addEventListener('click',e=>{
+  const kpi=e.target.closest('[data-kpi]');
+  if(kpi){state.rankBy=kpi.dataset.kpi;$('#rankSel').value=kpi.dataset.kpi;render();return;}
+  const tog=e.target.closest('[data-mode]');
+  if(tog){
+    state.leafMode=tog.dataset.mode;
+    const g=state.path.find(n=>n.kind==='group'), c=state.path.find(n=>n.kind==='category');
+    state.path=[g,c].filter(Boolean);   // switching Items/Vendors clears any selected vendor/item below
+    state.inspect=c||g||null;
+    render();return;
+  }
+  const pulse=e.target.closest('[data-pulse]');
+  if(pulse){state.inspect=nodeById(pulse.dataset.pulse);render();e.stopPropagation();return;}
+  const row=e.target.closest('[data-node]');
+  if(!row)return;
+  drillTo(nodeById(row.dataset.node));
+});
+function drillTo(node){
+  const k=node.kind;
+  const g=state.path.find(n=>n.kind==='group'), c=state.path.find(n=>n.kind==='category'), v=state.path.find(n=>n.kind==='vendor');
+  const keep=[];
+  if(k==='group'){ keep.push(node); }
+  else if(k==='category'){ if(g)keep.push(g); keep.push(node); }
+  else if(k==='vendor'){ if(g)keep.push(g); if(c)keep.push(c); keep.push(node); }
+  else if(k==='item'){ if(g)keep.push(g); if(c)keep.push(c); if(v)keep.push(v); keep.push(node); }
+  state.path=keep;
+  state.inspect=node;
+  render();
+}
+$('#crumbs').addEventListener('click',e=>{
+  const c=e.target.closest('[data-crumb]');if(!c)return;
+  if(c.dataset.crumb==='__root'){state.path=[];state.inspect=null;render();return;}
+  const node=nodeById(c.dataset.crumb);
+  const idx=state.path.indexOf(node);
+  state.path=state.path.slice(0,idx+1);
+  state.inspect=node;render();
+});
+$('#rankSel').addEventListener('change',e=>{state.rankBy=e.target.value;render();});
+
+/* view toggle — shares the same drill state, so you keep your place when flipping */
+$('#viewToggle').addEventListener('click',e=>{
+  const b=e.target.closest('[data-view]'); if(!b)return;
+  state.view=b.dataset.view; render();
+});
+
+/* heat-grid interactions mirror the miller ones */
+$('#heat').addEventListener('click',e=>{
+  const flt=e.target.closest('[data-filter]');
+  if(flt){ const k=flt.dataset.filter; state.statusFilter.has(k)?state.statusFilter.delete(k):state.statusFilter.add(k); render(); return; }
+  const kpi=e.target.closest('[data-kpi]');
+  if(kpi){state.rankBy=kpi.dataset.kpi;$('#rankSel').value=kpi.dataset.kpi;render();return;}
+  const tog=e.target.closest('[data-mode]');
+  if(tog){
+    state.leafMode=tog.dataset.mode;
+    const g=state.path.find(n=>n.kind==='group'), c=state.path.find(n=>n.kind==='category');
+    state.path=[g,c].filter(Boolean);
+    state.inspect=c||g||null;
+    render();return;
+  }
+  const row=e.target.closest('[data-node]');
+  if(row) drillTo(nodeById(row.dataset.node));
+});
+$('#heat').addEventListener('change',e=>{
+  if(e.target.id==='palSel'){ state.palette=e.target.value; render(); }
+});
+
+document.getElementById('drawerX').addEventListener('click',closeDrawer);
+document.getElementById('drawerBk').addEventListener('click',closeDrawer);
+const _drawerBody=document.querySelector('#drawer .drawer-body');
+_drawerBody.addEventListener('mousemove',chartHover);
+_drawerBody.addEventListener('mouseleave',hideTtip);
+
+initSelectors();
+render();
+</script>
+</body>
+</html>
