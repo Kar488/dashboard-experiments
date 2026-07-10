@@ -249,6 +249,45 @@
   .drv-arrow{color:var(--faint);font-weight:700;}
   .drv-th{font-size:.68rem;color:var(--muted);white-space:nowrap;}
 
+  /* control bar */
+  .toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+  .ctl-spacer{flex:1 1 auto;}
+  .ctl-field{display:inline-flex;align-items:center;gap:7px;}
+  .ctl-lab{font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:700;}
+  .ctl-sel{min-height:30px;font-size:.76rem;font-weight:600;color:var(--ink);border:1px solid var(--line-strong);border-radius:8px;padding:0 24px 0 10px;background:#fff;cursor:pointer;}
+  .idseg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;}
+  .idseg button{border:0;border-right:1px solid var(--line);background:#fff;color:var(--muted);font-size:.68rem;font-weight:700;padding:6px 10px;cursor:pointer;min-height:0;}
+  .idseg button:last-child{border-right:0;}
+  .idseg button.active{background:var(--ink);color:#fff;}
+  .ctl-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);background:#fff;color:var(--muted);font-size:.76rem;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;}
+  .ctl-btn:hover{color:var(--ink);border-color:var(--muted);}
+  .ctl-btn.on{color:var(--blue);border-color:var(--blue-soft);background:var(--blue-soft);}
+  .ctl-count{font-variant-numeric:tabular-nums;font-weight:800;margin-left:1px;}
+  /* item-scoped cluster: makes it clear the ID toggle + filter act on items */
+  .ctl-group{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#f7f9fc;border-radius:10px;padding:4px 8px 4px 6px;}
+  .ctl-glab{font-size:.56rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:800;padding:0 2px;}
+  .path-hint{font-size:.7rem;color:var(--faint);margin:0 2px 10px;line-height:1.4;}
+  .active-chips{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:0 0 10px;}
+  .active-chips:empty{margin:0;}
+  .achip{display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:600;color:var(--muted);background:#eef2f7;border:1px solid var(--line);border-radius:999px;padding:3px 9px;cursor:pointer;}
+  .achip b{color:var(--faint);font-weight:700;}
+  .achip:hover b{color:var(--neg);}
+  .achip-clear{border:0;background:transparent;color:var(--blue);font-size:.68rem;font-weight:700;cursor:pointer;}
+  /* filter popover */
+  .filter-pop{position:absolute;z-index:9998;width:300px;background:#fff;border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 18px 46px rgba(15,23,42,.2);padding:13px 15px;font-size:.78rem;color:var(--text);}
+  .filter-pop .fp-h{font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px;}
+  .filter-pop .fp-search{display:flex;align-items:center;gap:6px;border:1px solid var(--line-strong);border-radius:8px;padding:0 9px;margin-bottom:5px;}
+  .filter-pop .fp-search input{border:0;outline:0;flex:1;font-size:.76rem;padding:7px 0;background:transparent;}
+  .filter-pop .fp-sec{font-size:.57rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:800;margin:11px 0 4px;}
+  .filter-pop .fp-chk{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.76rem;color:var(--ink);font-weight:500;cursor:pointer;}
+  .filter-pop .fp-chk input{margin:0;flex-shrink:0;}
+  .filter-pop .fp-chk .statmark{pointer-events:none;padding:0;}
+  .filter-pop .fp-swatch{width:15px;height:15px;border-radius:4px;background:#e6e9f0;flex-shrink:0;}
+  .filter-pop .fp-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);}
+  .filter-pop .fp-clear{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:.72rem;cursor:pointer;}
+  .filter-pop .fp-done{border:0;background:var(--ink);color:#fff;font-weight:700;font-size:.72rem;padding:6px 14px;border-radius:7px;cursor:pointer;}
+  .pane-empty{padding:20px 12px;color:var(--faint);font-size:.75rem;text-align:center;}
+
   @media (max-width:1100px){ .pane-body{max-height:320px;} .miller{overflow-x:auto;} }
 </style>
 </head>
@@ -260,11 +299,20 @@
         <button data-view="miller" class="active">▤ Miller columns</button>
         <button data-view="heat">▦ Heat grid</button>
       </div>
+      <div class="ctl-spacer"></div>
+      <div class="ctl-field"><label class="ctl-lab">View</label><select class="ctl-sel" id="pathSel"></select></div>
+      <div class="ctl-group" id="itemControls">
+        <span class="ctl-glab">Items</span>
+        <div class="idseg" id="idToggle"><button data-id="UPC">UPC</button><button data-id="NCRC" class="active">NCRC</button><button data-id="CIG">CIG</button></div>
+        <button class="ctl-btn" id="filtersBtn"><span>⚲</span> Filter<span class="ctl-count" id="filtersCount"></span></button>
+      </div>
     </div>
+    <p class="path-hint" id="pathHint"></p>
     <div class="crumbs-row">
       <div class="crumbs" id="crumbs"></div>
       <div class="rankby"><span>Rank by</span><select id="rankSel"></select></div>
     </div>
+    <div class="active-chips" id="activeChips"></div>
     <div class="miller" id="miller"></div>
     <div class="heat" id="heat" hidden></div>
     <div class="legend-bar" id="legendBar"></div>
@@ -272,6 +320,7 @@
   </section>
 </div>
 
+<div class="filter-pop" id="filterPop" hidden></div>
 <div class="drawer-backdrop" id="drawerBk"></div>
 <aside class="drawer" id="drawer" aria-label="KPI trends">
   <div class="drawer-head">
@@ -459,8 +508,67 @@ const TREE = DEPTS.map(d=>{
   return {id:d.id, root:droot, groups, single: groups.length===1};
 });
 
+/* ============================================================================
+   Flat canonical item set + 4 pivot paths. Any ordering (group/category/vendor)
+   is built on the fly by grouping the same items, so the grid can navigate:
+     Group▸Category▸Vendor▸Item · Group▸Vendor▸Category▸Item · Group▸Category▸Item · Group▸Vendor▸Item
+   ========================================================================== */
+const DEPT0 = TREE[0];
+const FLAT_ITEMS = [];
+DEPT0.groups.forEach(g => (g.children||[]).forEach(c => (c.items||[]).forEach(it => {
+  it.group = g.name; it.category = c.name;          // it.vendor / .kpi / .drivers / .review / .status already set
+  const rr = rng(it.id + 'ids');
+  it.ncrc = (it.sub || '').replace('NCRC ', '') || String(100000 + Math.floor(rr()*899999));
+  it.upc  = '0' + (10000000000 + Math.floor(rr()*89999999999));
+  it.cig  = 'CIG-' + (1000 + Math.floor(rr()*8999));
+  it.deleted = rr() < 0.12;                          // ~12% flagged deleted
+  FLAT_ITEMS.push(it);
+})));
+
+const PATHS = {
+  gcv: { dims:['group','category','vendor'], label:'Group ▸ Category ▸ Vendor ▸ Item', hint:'Category-led: a group, its categories, the vendors in each category, then items. The default review path.' },
+  gvc: { dims:['group','vendor','category'], label:'Group ▸ Vendor ▸ Category ▸ Item', hint:'Vendor-led: a group, each vendor, the categories that vendor supplies, then items. Use when you are meeting a vendor.' },
+  gc:  { dims:['group','category'],          label:'Group ▸ Category ▸ Item',          hint:'Skip vendors — group → category → item. Fastest route to the SKUs.' },
+  gv:  { dims:['group','vendor'],            label:'Group ▸ Vendor ▸ Item',            hint:'Skip categories — group → vendor → item. See a vendor’s whole item list at once.' },
+};
+const DIMLABEL = { group:'Group', category:'Category', vendor:'Vendor', item:'Item' };
+
 /* ---------- state ---------- */
-const state = { deptIdx:0, rankBy:'sales', path:[], inspect:null, leafMode:'vendors', view:'miller', palette:'sage', statusFilter:new Set(), _lastKind:null };
+const state = { rankBy:'sales', pathType:'gcv', sel:{}, inspect:null, view:'miller', palette:'sage',
+                statusFilter:new Set(), idType:'NCRC', includeDeleted:false, search:'' };
+
+/* ---------- item filtering + on-the-fly aggregation ---------- */
+let NODE_INDEX = {};
+function itemIdVal(it){ return state.idType==='UPC'? it.upc : state.idType==='CIG'? it.cig : it.ncrc; }
+function itemVisible(it){
+  if(!state.includeDeleted && it.deleted) return false;
+  if(state.statusFilter.size){ if(!it.review || !it.drivers.some(d=>state.statusFilter.has(d.key))) return false; }
+  if(state.search){ const q=state.search.toLowerCase(); if(!(it.name.toLowerCase().includes(q) || itemIdVal(it).toLowerCase().includes(q))) return false; }
+  return true;
+}
+function visibleItems(){ return FLAT_ITEMS.filter(itemVisible); }
+function aggNode(dim, val, items){
+  const id = 'agg|'+state.pathType+'|'+dim+'|'+val;
+  const node = { id, name:val, kind:dim, dim, kpi: rollup(items, val).kpi, items, count:items.length, sub:items.length+' items' };
+  if(dim==='vendor'){
+    const flagged=items.filter(i=>i.review), bd={cost_inflation:0,declining:0,overfunded:0};
+    flagged.forEach(i=>bd[i.status]++);
+    node.review = flagged.length >= Math.ceil((items.length||1)*0.5);
+    node.breakdown=bd; node.impacted=flagged.length;
+    const order=Object.entries(bd).sort((a,b)=>b[1]-a[1]);
+    node.primaryConcern=(order[0]&&order[0][1]>0)?order[0]:['cost_inflation',flagged.length];
+    node.catCount=new Set(items.map(i=>i.category)).size;
+    node.reviewCats=[...new Set(items.filter(i=>i.review).map(i=>i.category))].slice(0,4);
+  }
+  NODE_INDEX[id]=node; return node;
+}
+function aggByDim(items, dim){
+  const map=new Map();
+  items.forEach(it=>{ if(!map.has(it[dim])) map.set(it[dim],[]); map.get(it[dim]).push(it); });
+  return [...map.entries()].map(([v,its])=>aggNode(dim,v,its));
+}
+function itemLeaf(it){ it.sub = state.idType+' '+itemIdVal(it) + (it.deleted?' · deleted':''); NODE_INDEX[it.id]=it; return it; }
+function rootTotal(){ return rollup(visibleItems(), 'All groups'); }
 
 /* ---------- formatting ---------- */
 function fmtVal(k,v){
@@ -529,8 +637,8 @@ function redCount(node){return KPIS.filter(k=>node.kpi[k.key].deltaNum<0).length
 /* ---------- row html ---------- */
 function rowHTML(node, pulseW, showPulse){
   const rb=KPI[state.rankBy], kp=node.kpi[state.rankBy];
-  const drill = state.path.includes(node) ? 'drill':'';
-  const insp = state.inspect===node ? 'inspect':'';
+  const drill = (node.dim && state.sel[node.dim]===node.name) ? 'drill':'';
+  const insp = (state.inspect && state.inspect.id===node.id) ? 'inspect':'';
   const pulse = showPulse ? pulseSVG(node,pulseW) : '';
   const drillable = node.kind==='group'||node.kind==='category'||node.kind==='vendor';
   const abs=fmtAbsChange(rb,kp);
@@ -686,35 +794,31 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePop(); close
 
 /* ---------- render ---------- */
 const $=s=>document.querySelector(s);
-function nodeById(id){let f=null;function walk(n){if(n.id===id)f=n;(n.children||[]).forEach(walk);(n.items||[]).forEach(walk);(n.vendors||[]).forEach(walk);}walk(currentDept().root);return f;}
-function currentDept(){return TREE[state.deptIdx];}
+function nodeById(id){ return NODE_INDEX[id] || null; }
 
-/* Shared drill state → the ordered levels (groups?, categories, items/vendors, vendor items).
-   Both views read from this; only the rendering differs, so toggling keeps your place. */
+/* Build the ordered levels for the chosen pivot path + current selections.
+   NODE_INDEX is rebuilt each pass so popovers/drill can look nodes up by id. */
 function computeLevels(){
-  const dept=currentDept();
-  const levels=[];
-  if(!dept.single) levels.push({title:'Group · '+dept.id, nodes:dept.groups, kind:'group', pulse:true});
-  const selGroup = dept.single ? dept.groups[0] : state.path.find(n=>n.kind==='group');
-  if(selGroup) levels.push({title:'Category · in '+selGroup.name, nodes:selGroup.children, kind:'category', pulse:true});
-  const selCat = state.path.find(n=>n.kind==='category');
-  if(selCat){
-    const mode = state.leafMode||'items';
-    levels.push({title:'in '+selCat.name, nodes:mode==='items'?selCat.items:selCat.vendors, kind:mode==='items'?'item':'vendor', pulse:false, leaf:true, mode});
-    if(mode==='vendors'){
-      const selVendor = state.path.find(n=>n.kind==='vendor');
-      if(selVendor) levels.push({title:selVendor.name+' · items', nodes:selVendor.items, kind:'item', pulse:false});
-    }
+  NODE_INDEX = {};
+  const dims = PATHS[state.pathType].dims;
+  const levels = [];
+  let pool = visibleItems();
+  for(let i=0;i<dims.length;i++){
+    const dim = dims[i];
+    const selPrev = dims.slice(0,i).map(d=>state.sel[d]);
+    levels.push({ title: DIMLABEL[dim] + (i? ' · in '+dims.slice(0,i).map(d=>state.sel[d]).join(' ▸ ') : ''),
+                  nodes: aggByDim(pool, dim), kind:dim, dim, pulse:true });
+    const sv = state.sel[dim];
+    if(sv==null) return levels;
+    pool = pool.filter(it=>it[dim]===sv);
   }
+  levels.push({ title:'Items', nodes: pool.map(itemLeaf), kind:'item', dim:'item', pulse:false, leaf:true });
   return levels;
 }
 
 function render(){
-  const dept=currentDept();
   const levels=computeLevels();
-  const lvlKind = levels.length ? levels[levels.length-1].kind : null;
-  if(lvlKind !== state._lastKind){ state.statusFilter.clear(); state._lastKind=lvlKind; }
-  const detailNode = state.inspect || state.path[state.path.length-1] || dept.root;
+  const detailNode = state.inspect || rootTotal();
   state.inspect = detailNode;
 
   document.querySelectorAll('#viewToggle [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
@@ -728,7 +832,45 @@ function render(){
   else renderHeat(levels);
   $('#legendBar').innerHTML = (state.view==='heat'? colorScaleHTML():'') + statusLegendHTML();
   renderCrumbs();
+  renderControls();
 }
+
+/* ---------- control bar: path hint · ID toggle · active-filter chips ---------- */
+function renderControls(){
+  $('#pathHint').textContent = PATHS[state.pathType].hint;
+  document.querySelectorAll('#idToggle [data-id]').forEach(b=>b.classList.toggle('active',b.dataset.id===state.idType));
+  const chips=[];
+  [...state.statusFilter].forEach(k=>chips.push(`<span class="achip" data-rmfilter="${k}">${STATUS[k].abbr} <b>✕</b></span>`));
+  if(state.includeDeleted) chips.push(`<span class="achip" data-rmdeleted="1">Incl. deleted <b>✕</b></span>`);
+  if(state.search) chips.push(`<span class="achip" data-rmsearch="1">“${state.search}” <b>✕</b></span>`);
+  const bar=$('#activeChips');
+  bar.innerHTML = chips.length? chips.join('')+`<button class="achip-clear" id="chipsClear">Clear all</button>` : '';
+  const on = state.statusFilter.size || state.includeDeleted || state.search;
+  $('#filtersBtn').classList.toggle('on', !!on);
+  const n = visibleItems().length;
+  $('#filtersCount').textContent = ' · ' + n;
+  $('#filtersBtn').title = n + ' items match the current filters — status, deleted and search all scope the item set (and roll up through the grid).';
+}
+function renderFilterPop(){
+  const statuses=['cost_inflation','declining','overfunded'].map(k=>`
+    <label class="fp-chk"><input type="checkbox" data-status="${k}" ${state.statusFilter.has(k)?'checked':''}>
+      <span class="sicon statmark s-${k}">${STATUS[k].icon}</span>${STATUS[k].label}</label>`).join('');
+  $('#filterPop').innerHTML = `
+    <div class="fp-h">Filter items</div>
+    <div class="fp-search"><span>⌕</span><input id="fpSearch" placeholder="Search name or ${state.idType}…" value="${state.search.replace(/"/g,'&quot;')}"></div>
+    <div class="fp-sec">Flagged status</div>${statuses}
+    <div class="fp-sec">Availability</div>
+    <label class="fp-chk"><input type="checkbox" id="fpDeleted" ${state.includeDeleted?'checked':''}><span class="fp-swatch"></span>Include deleted items</label>
+    <div class="fp-foot"><button class="fp-clear" id="fpClear">Clear</button><button class="fp-done" id="fpDone">Done</button></div>`;
+}
+function openFilterPop(){
+  renderFilterPop();
+  const pop=$('#filterPop'), btn=$('#filtersBtn'), r=btn.getBoundingClientRect();
+  pop.hidden=false;
+  let left=r.right+window.scrollX-300; if(left<12) left=12;
+  pop.style.left=left+'px'; pop.style.top=(r.bottom+window.scrollY+6)+'px';
+}
+function closeFilterPop(){ $('#filterPop').hidden=true; }
 
 function renderMiller(levels, detailNode){
   const H = levels.length;
@@ -736,14 +878,8 @@ function renderMiller(levels, detailNode){
   $('#miller').style.gridTemplateColumns = Array(H).fill('minmax(208px,1fr)').join(' ') + ' minmax(232px,250px)';
   const paneHTML = levels.map(p=>{
     const sorted=sortNodes(p.nodes);
-    const head = p.leaf
-      ? `<div class="pane-head"><span class="ttl">${p.title}</span>
-           <div class="pane-toggle" id="leafToggle">
-             <button data-mode="items" class="${p.mode==='items'?'active':''}">Items</button>
-             <button data-mode="vendors" class="${p.mode==='vendors'?'active':''}">Vendors</button>
-           </div></div>`
-      : `<div class="pane-head"><span class="ttl">${p.title}</span><span class="cnt">${p.nodes.length} ${p.nodes[0].kind}s</span></div>`;
-    return `<div class="pane">${head}<div class="pane-body">${sorted.map(n=>rowHTML(n,pulseW,p.pulse)).join('')}</div></div>`;
+    const head = `<div class="pane-head"><span class="ttl">${p.title}</span><span class="cnt">${p.nodes.length} ${p.nodes[0]?p.nodes[0].kind:''}${p.nodes.length===1?'':'s'}</span></div>`;
+    return `<div class="pane">${head}<div class="pane-body">${sorted.length?sorted.map(n=>rowHTML(n,pulseW,p.pulse)).join(''):'<div class="pane-empty">No matches</div>'}</div></div>`;
   }).join('');
   $('#miller').innerHTML = paneHTML + detailPaneHTML(detailNode);
 }
@@ -815,25 +951,17 @@ function heatCell(node,k,isTotal){
 function renderHeat(levels){
   const lvl=levels[levels.length-1];
   let rows=sortNodes(lvl.nodes);
-  if(lvl.kind==='vendor' && state.statusFilter.has('review')) rows=rows.filter(v=>v.review);
-  else if(lvl.kind==='item'){
-    const active=[...state.statusFilter];
-    if(active.length) rows=rows.filter(n=>n.review && n.drivers.some(d=>active.includes(d.key)));
-  }
   const cols=KPIS;
   const grid=`minmax(210px,250px) repeat(${cols.length}, minmax(82px,1fr))`;
-  const scope = state.path.length ? state.path[state.path.length-1].name : currentDept().id;
+  const dims=PATHS[state.pathType].dims;
+  const scope = dims.map(d=>state.sel[d]).filter(Boolean).slice(-1)[0] || 'All groups';
   const totalNode = rollup(rows, 'Total');
   const plural = {group:'groups',category:'categories',vendor:'vendors',item:'items'};
   const kindLbl = rows.length===1 ? lvl.kind : (plural[lvl.kind]||lvl.kind+'s');
 
-  const leafToggle = lvl.leaf ? `<div class="pane-toggle" id="leafToggle">
-       <button data-mode="items" class="${lvl.mode==='items'?'active':''}">Items</button>
-       <button data-mode="vendors" class="${lvl.mode==='vendors'?'active':''}">Vendors</button></div>`:'';
   const palOpts = Object.entries(PALETTES).map(([k,p])=>`<option value="${k}" ${state.palette===k?'selected':''}>${p.label}</option>`).join('');
   const headBar = `<div class="heat-head"><span class="ttl">${lvl.title}</span>
-      <div class="tools">${leafToggle}
-        ${statusToggleHTML(lvl)}
+      <div class="tools">
         <div class="palsel"><span>Palette</span><select id="palSel">${palOpts}</select></div>
         <span class="cnt">${rows.length} ${kindLbl} · biggest drops first</span></div></div>`;
   const caption = `<div class="heat-cap"><b>Top “Total” row</b> = the ${rows.length} ${kindLbl} below rolled up — summed for $ / unit metrics, sales-weighted blended average for rates (AGP %, market share, markdown…). It updates as you drill because it always reflects the rows on screen.</div>`;
@@ -908,12 +1036,9 @@ function detailPaneHTML(node){
 }
 
 function renderCrumbs(){
-  const dept=currentDept();
-  const parts=[`<span class="crumb home clickable" data-crumb="__root">${dept.id}</span>`];
-  state.path.forEach(n=>{
-    parts.push('<span class="sep">▸</span>');
-    parts.push(`<span class="crumb clickable" data-crumb="${n.id}">${cap(n.kind)} · ${n.name}</span>`);
-  });
+  const dims=PATHS[state.pathType].dims;
+  const parts=[`<span class="crumb home clickable" data-crumb="__root">All ${DIMLABEL[dims[0]].toLowerCase()}s</span>`];
+  for(const dim of dims){ const v=state.sel[dim]; if(v==null) break; parts.push('<span class="sep">▸</span>'); parts.push(`<span class="crumb clickable" data-crumb="dim:${dim}">${DIMLABEL[dim]} · ${v}</span>`); }
   $('#crumbs').innerHTML=parts.join('');
 }
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
@@ -921,18 +1046,11 @@ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 /* ---------- interactions ---------- */
 function initSelectors(){
   $('#rankSel').innerHTML=KPIS.map(k=>`<option value="${k.key}">${k.label}</option>`).join('');
+  $('#pathSel').innerHTML=Object.entries(PATHS).map(([k,p])=>`<option value="${k}" ${state.pathType===k?'selected':''}>${p.label}</option>`).join('');
 }
 $('#miller').addEventListener('click',e=>{
   const kpi=e.target.closest('[data-kpi]');
   if(kpi){state.rankBy=kpi.dataset.kpi;$('#rankSel').value=kpi.dataset.kpi;render();return;}
-  const tog=e.target.closest('[data-mode]');
-  if(tog){
-    state.leafMode=tog.dataset.mode;
-    const g=state.path.find(n=>n.kind==='group'), c=state.path.find(n=>n.kind==='category');
-    state.path=[g,c].filter(Boolean);   // switching Items/Vendors clears any selected vendor/item below
-    state.inspect=c||g||null;
-    render();return;
-  }
   const pulse=e.target.closest('[data-pulse]');
   if(pulse){state.inspect=nodeById(pulse.dataset.pulse);render();e.stopPropagation();return;}
   const row=e.target.closest('[data-node]');
@@ -940,24 +1058,21 @@ $('#miller').addEventListener('click',e=>{
   drillTo(nodeById(row.dataset.node));
 });
 function drillTo(node){
-  const k=node.kind;
-  const g=state.path.find(n=>n.kind==='group'), c=state.path.find(n=>n.kind==='category'), v=state.path.find(n=>n.kind==='vendor');
-  const keep=[];
-  if(k==='group'){ keep.push(node); }
-  else if(k==='category'){ if(g)keep.push(g); keep.push(node); }
-  else if(k==='vendor'){ if(g)keep.push(g); if(c)keep.push(c); keep.push(node); }
-  else if(k==='item'){ if(g)keep.push(g); if(c)keep.push(c); if(v)keep.push(v); keep.push(node); }
-  state.path=keep;
-  state.inspect=node;
-  render();
+  if(!node) return;
+  if(node.kind==='item'){ state.inspect=node; render(); return; }   // items open the trend drawer via their icon
+  const dims=PATHS[state.pathType].dims, di=dims.indexOf(node.dim);
+  state.sel[node.dim]=node.name;
+  for(let j=di+1;j<dims.length;j++) delete state.sel[dims[j]];       // clear deeper selections
+  state.inspect=node; render();
 }
 $('#crumbs').addEventListener('click',e=>{
   const c=e.target.closest('[data-crumb]');if(!c)return;
-  if(c.dataset.crumb==='__root'){state.path=[];state.inspect=null;render();return;}
-  const node=nodeById(c.dataset.crumb);
-  const idx=state.path.indexOf(node);
-  state.path=state.path.slice(0,idx+1);
-  state.inspect=node;render();
+  const dims=PATHS[state.pathType].dims;
+  if(c.dataset.crumb==='__root'){ state.sel={}; state.inspect=null; render(); return; }
+  const dim=c.dataset.crumb.replace('dim:','');
+  const di=dims.indexOf(dim);
+  for(let j=di;j<dims.length;j++) delete state.sel[dims[j]];         // click a crumb → back to that level
+  state.inspect=null; render();
 });
 $('#rankSel').addEventListener('change',e=>{state.rankBy=e.target.value;render();});
 
@@ -969,18 +1084,8 @@ $('#viewToggle').addEventListener('click',e=>{
 
 /* heat-grid interactions mirror the miller ones */
 $('#heat').addEventListener('click',e=>{
-  const flt=e.target.closest('[data-filter]');
-  if(flt){ const k=flt.dataset.filter; state.statusFilter.has(k)?state.statusFilter.delete(k):state.statusFilter.add(k); render(); return; }
   const kpi=e.target.closest('[data-kpi]');
   if(kpi){state.rankBy=kpi.dataset.kpi;$('#rankSel').value=kpi.dataset.kpi;render();return;}
-  const tog=e.target.closest('[data-mode]');
-  if(tog){
-    state.leafMode=tog.dataset.mode;
-    const g=state.path.find(n=>n.kind==='group'), c=state.path.find(n=>n.kind==='category');
-    state.path=[g,c].filter(Boolean);
-    state.inspect=c||g||null;
-    render();return;
-  }
   const row=e.target.closest('[data-node]');
   if(row) drillTo(nodeById(row.dataset.node));
 });
@@ -993,6 +1098,26 @@ document.getElementById('drawerBk').addEventListener('click',closeDrawer);
 const _drawerBody=document.querySelector('#drawer .drawer-body');
 _drawerBody.addEventListener('mousemove',chartHover);
 _drawerBody.addEventListener('mouseleave',hideTtip);
+
+/* path selector · ID toggle · filters popover */
+$('#pathSel').addEventListener('change',e=>{ state.pathType=e.target.value; state.sel={}; state.inspect=null; render(); });
+$('#idToggle').addEventListener('click',e=>{ const b=e.target.closest('[data-id]'); if(!b)return; state.idType=b.dataset.id; render(); });
+$('#filtersBtn').addEventListener('click',e=>{ e.stopPropagation(); const p=$('#filterPop'); p.hidden? openFilterPop() : closeFilterPop(); });
+$('#filterPop').addEventListener('click',e=>{
+  const st=e.target.closest('[data-status]');
+  if(st){ const k=st.dataset.status; st.checked?state.statusFilter.add(k):state.statusFilter.delete(k); render(); return; }
+  if(e.target.id==='fpDeleted'){ state.includeDeleted=e.target.checked; render(); return; }
+  if(e.target.id==='fpClear'){ state.statusFilter.clear(); state.includeDeleted=false; state.search=''; render(); renderFilterPop(); return; }
+  if(e.target.id==='fpDone'){ closeFilterPop(); return; }
+});
+$('#filterPop').addEventListener('input',e=>{ if(e.target.id==='fpSearch'){ state.search=e.target.value; render(); } });
+$('#activeChips').addEventListener('click',e=>{
+  const rf=e.target.closest('[data-rmfilter]'); if(rf){ state.statusFilter.delete(rf.dataset.rmfilter); render(); return; }
+  if(e.target.closest('[data-rmdeleted]')){ state.includeDeleted=false; render(); return; }
+  if(e.target.closest('[data-rmsearch]')){ state.search=''; render(); return; }
+  if(e.target.id==='chipsClear'){ state.statusFilter.clear(); state.includeDeleted=false; state.search=''; render(); return; }
+});
+document.addEventListener('click',e=>{ if(!e.target.closest('#filterPop') && !e.target.closest('#filtersBtn')) closeFilterPop(); }, true);
 
 initSelectors();
 render();
