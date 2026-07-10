@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>More Metrics & Basket — layout options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{ --ink:#1b2430; --text:#2c3742; --muted:#5c6a7a; --faint:#95a0b0; --line:#e6e9f0; --blue:#2f6bd6; --pos:#2f8a56; --neg:#b0554f; }
+*{box-sizing:border-box;}
+body{margin:0;background:#eef1f5;color:var(--text);font:14px/1.45 Inter,system-ui,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;}
+.page{max-width:1520px;margin:0 auto;padding:24px 22px 60px;}
+.section{background:#f5f7fa;border:1px solid #e7eaf1;border-radius:16px;padding:14px 16px 18px;}
+.section-h{display:flex;align-items:center;gap:12px;margin:2px 2px 14px;flex-wrap:wrap;}
+.section-h .title{font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;color:#9098a6;font-weight:800;}
+.switch{margin-left:auto;display:inline-flex;border:1px solid #d8dde6;border-radius:9px;overflow:hidden;background:#fff;}
+.switch button{border:0;background:transparent;color:var(--muted);font-size:.7rem;font-weight:700;padding:6px 12px;cursor:pointer;border-right:1px solid #eef1f6;}
+.switch button:last-child{border-right:0;}
+.switch button.active{background:var(--ink);color:#fff;}
+.optnote{font-size:.72rem;color:var(--faint);margin:0 2px 13px;min-height:1em;}
+.blocklab{font-size:.58rem;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b1;font-weight:800;margin:16px 2px 9px;}
+
+.pctxt{font-size:.72rem;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.pctxt.pos{color:var(--pos);} .pctxt.neg{color:var(--neg);}
+
+/* ---- uniform tile grid ---- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(198px,1fr));gap:12px;align-items:stretch;}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px 11px;box-shadow:0 1px 2px rgba(20,30,50,.04);display:flex;flex-direction:column;min-height:var(--th,186px);}
+.tile.basket{background:linear-gradient(180deg,#eef3fb,#fbfcff 62%);border-color:#dde6f4;}
+.tile .lab{font-size:.585rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;line-height:1.25;min-height:1.5em;}
+.tile .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:5px;}
+.tile .val{font-size:1.16rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+.tile .foot{font-size:.61rem;color:var(--faint);font-weight:500;margin-top:4px;font-variant-numeric:tabular-nums;}
+.spark{width:100%;flex:1 1 auto;min-height:44px;height:auto;display:block;margin:8px 0 3px;overflow:visible;}
+.spark .area.pos{fill:rgba(47,138,86,.10);} .spark .area.neg{fill:rgba(176,85,79,.10);}
+.spark .ln.pos{stroke:var(--pos);} .spark .ln.neg{stroke:var(--neg);}
+.spark .ln{fill:none;stroke-width:1.7;vector-effect:non-scaling-stroke;}
+.spark .lyln{fill:none;stroke:#c4cddb;stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke;}
+.spark .pk{fill:var(--pos);} .spark .tr{fill:var(--neg);}
+.spark .wlab{font-size:5.4px;font-weight:700;fill:var(--faint);paint-order:stroke;stroke:#fff;stroke-width:.6px;}
+/* basket levels */
+.levels{margin-top:9px;border-top:1px solid #dfe6f1;}
+.lvl{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #e9edf4;}
+.lvl:last-child{border-bottom:0;}
+.lvl .lv-lab{font-size:.66rem;color:var(--muted);font-weight:500;min-width:0;line-height:1.2;}
+.lvl .lv-r{display:flex;flex-direction:column;align-items:flex-end;line-height:1.12;flex-shrink:0;}
+.lvl .lv-vr{display:flex;align-items:baseline;gap:6px;}
+.lvl .lv-v{font-size:.82rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+.lvl .lv-d{font-size:.62rem;font-weight:600;font-variant-numeric:tabular-nums;}
+.lvl .lv-d.pos{color:var(--pos);} .lvl .lv-d.neg{color:var(--neg);}
+.lvl .lv-ly{font-size:.55rem;color:var(--faint);font-weight:600;font-variant-numeric:tabular-nums;margin-top:1px;}
+
+/* ---- option C: basket matrix ---- */
+.bmatrix{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.brow{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;align-items:stretch;border-bottom:1px solid #eef1f6;}
+.brow:last-child{border-bottom:0;}
+.brow.head{background:#f7f9fc;}
+.brow.head .bc{font-size:.57rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:800;padding:11px 16px;}
+.bc{padding:11px 16px;text-align:right;border-left:1px solid #f1f4f8;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px;}
+.bc.name{text-align:left;align-items:flex-start;justify-content:center;border-left:0;}
+.bc.name .nm{font-size:.76rem;font-weight:700;color:var(--ink);}
+.bc .v{font-size:.9rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;}
+.bc .r2{display:flex;align-items:baseline;gap:6px;}
+.bc .d{font-size:.62rem;font-weight:700;font-variant-numeric:tabular-nums;}
+.bc .d.pos{color:var(--pos);} .bc .d.neg{color:var(--neg);}
+.bc .ly{font-size:.55rem;color:var(--faint);font-weight:600;font-variant-numeric:tabular-nums;}
+.bc .dash{color:#c8cfda;font-weight:700;}
+.brow:hover:not(.head){background:#f6f9fd;}
+
+/* embed mode — dropped into the MyDesk KPI board (chrome hidden, blends in) */
+body.embed{background:transparent;}
+body.embed .page{padding:0;max-width:none;}
+body.embed .section{background:transparent;border:0;border-radius:0;padding:0;}
+body.embed .section-h,body.embed .optnote{display:none;}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="section">
+    <div class="section-h">
+      <span class="title">More Metrics &amp; Basket</span>
+      <div class="switch" id="switch">
+        <button data-opt="1" class="active">1 · One uniform grid</button>
+        <button data-opt="2">2 · Split blocks</button>
+        <button data-opt="3">3 · Basket matrix</button>
+      </div>
+    </div>
+    <div class="optnote" id="optnote"></div>
+    <div id="stage"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const EMBED=new URLSearchParams(location.search).has('embed');
+if(EMBED) document.body.classList.add('embed');
+function postHeight(){ if(EMBED){ try{ parent.postMessage({type:'basketHeight',h:document.documentElement.scrollHeight},'*'); }catch(e){} } }
+function fmt(v,f){switch(f){
+  case 'm2':return '$'+v.toFixed(2);
+  case 'm0':return '$'+Math.round(v).toLocaleString();
+  case 'n1':return v.toFixed(1);
+  case 'n2':return v.toFixed(2);
+  case 'pct':return v.toFixed(1)+'%';
+  default:return String(v);}}
+const pctOf=(cy,ly)=> ly?(cy/ly-1)*100:0;
+const cls=p=>p>=0?'pos':'neg', ar=p=>p>=0?'▲':'▼';
+const pStr=p=>(p<0?'−':'+')+Math.abs(p).toFixed(1)+'%';
+
+function rng(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return((h^=h>>>16)>>>0)/4294967296;};}
+function series(seed,start,end){const r=rng(seed),amp=Math.abs(end||1),ph=r()*6.28;const a=[];for(let w=0;w<52;w++){const t=w/51;a.push(start+(end-start)*t+Math.sin(t*6.28+ph)*amp*0.06+(r()-0.5)*amp*0.05);}a[51]=end;return a;}
+
+const TREND=[
+  {lab:'COGS',cy:'$540.4M',delta:'−0.2%',color:'pos',ly:'$541.7M',cyN:540.4,lyN:541.7},
+  {lab:'Allowances',cy:'$74.9M',delta:'−13.9%',color:'neg',ly:'$87.0M',cyN:74.9,lyN:87.0},
+  {lab:'Deadnet Cost',cy:'$465.5M',delta:'+2.4%',color:'neg',ly:'$454.7M',cyN:465.5,lyN:454.7},
+  {lab:'Deadnet / Unit',cy:'$1.30',delta:'−0.8%',color:'pos',ly:'$1.31',cyN:1.30,lyN:1.31},
+  {lab:'Sales Mix %',cy:'52.2%',delta:'−0.6pp',color:'neg',ly:'52.8%',cyN:52.2,lyN:52.8},
+  {lab:'BOG %',cy:'40.7%',delta:'+10.1pp',color:'pos',ly:'30.6%',cyN:40.7,lyN:30.6},
+  {lab:'Markdown $',cy:'$87.0M',delta:'+7.9%',color:'neg',ly:'$80.6M',cyN:87.0,lyN:80.6},
+  {lab:'CPI - P',cy:'1.03',delta:'+0.03',color:'neg',ly:'1.00',cyN:1.03,lyN:1.00},
+  {lab:'CPI - W',cy:'1.01',delta:'+0.01',color:'neg',ly:'1.00',cyN:1.01,lyN:1.00},
+];
+function smooth(a){return a.map((v,i)=>{const s=Math.max(0,i-1),e=Math.min(a.length-1,i+1);let sum=0,n=0;for(let j=s;j<=e;j++){sum+=a[j];n++;}return sum/n;});}
+function bez(pts){ // Catmull-Rom → cubic bezier
+  if(pts.length<2)return '';
+  let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2;
+    const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
+    const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+    d+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+function spark(m){
+  const w=190,h=46,pad=6;
+  let cy=smooth(series(m.lab+'|cy',m.lyN,m.cyN)); cy[51]=m.cyN;
+  let ly=smooth(series(m.lab+'|ly',m.lyN*0.97,m.lyN)); ly[51]=m.lyN;
+  const all=cy.concat(ly),min=Math.min(...all),max=Math.max(...all),rg=(max-min)||1;
+  const X=i=>pad+i/51*(w-2*pad),Y=v=>h-pad-(v-min)/rg*(h-2*pad);
+  const cyPts=cy.map((v,i)=>[X(i),Y(v)]),lyPts=ly.map((v,i)=>[X(i),Y(v)]);
+  const cyD=bez(cyPts),lyD=bez(lyPts);
+  const areaD=`${cyD} L${X(51).toFixed(1)},${(h-pad).toFixed(1)} L${X(0).toFixed(1)},${(h-pad).toFixed(1)} Z`;
+  const pkI=cy.indexOf(Math.max(...cy)),trI=cy.indexOf(Math.min(...cy));
+  const anc=x=>x>w-24?'end':(x<24?'start':'middle');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <path class="area ${m.color}" d="${areaD}"/>
+    <path class="lyln" d="${lyD}"/>
+    <path class="ln ${m.color}" d="${cyD}"/>
+    <circle class="pk" cx="${X(pkI).toFixed(1)}" cy="${Y(cy[pkI]).toFixed(1)}" r="2.3"/>
+    <circle class="tr" cx="${X(trI).toFixed(1)}" cy="${Y(cy[trI]).toFixed(1)}" r="2.3"/>
+    <text class="wlab" x="${X(pkI).toFixed(1)}" y="${(Y(cy[pkI])-3).toFixed(1)}" text-anchor="${anc(X(pkI))}">W${pkI+1}</text>
+    <text class="wlab" x="${X(trI).toFixed(1)}" y="${(Y(cy[trI])+8).toFixed(1)}" text-anchor="${anc(X(trI))}">W${trI+1}</text>
+  </svg>`;
+}
+const trendTile=m=>`<div class="tile">
+    <div class="lab">${m.lab}</div>
+    <div class="top"><span class="val">${m.cy}</span><span class="pctxt ${m.color}">${m.delta}</span></div>
+    <div class="foot">vs ${m.ly} LY</div>
+    ${spark(m)}
+  </div>`;
+
+const L=(lab,cyN,lyN,f)=>({lab,cyN,lyN,f});
+const BASKET=[
+  {name:'Avg Basket Spend', levels:[ L('Division',47.82,45.67,'m2'), L('Baskets w/ selected item',191,188,'m0'), L('Selected item in basket',9.18,9.03,'m2') ]},
+  {name:'Items per Basket', levels:[ L('Division',12.4,13.5,'n1'), L('Baskets w/ selected item',39.69,40.14,'n2'), L('Selected item units',3.22,3.28,'n2') ]},
+  {name:'Household Trips / Week', levels:[ L('Division',2.8,2.6,'n1'), L('Selected-item buyers',0.39,0.39,'n2') ]},
+  {name:'% Items in Basket (Produce)', levels:[ L('Division',34.2,33.5,'pct'), L('Selected-item buyers',41.6,40.2,'pct') ]},
+  {name:'$ Value in Basket (Produce)', levels:[ L('Division',16.35,15.20,'m2'), L('Selected-item buyers',21.40,20.05,'m2') ]},
+  {name:'% Households Buying ≥1×/Week', levels:[ L('Division',42.7,40.8,'pct') ]},
+  {name:'% Revenue from Top 100 Items', levels:[ L('Division',67.8,68.3,'pct') ]},
+];
+function basketTile(fam){
+  const hero=fam.levels[0], hp=pctOf(hero.cyN,hero.lyN), rest=fam.levels.slice(1);
+  const foot = rest.length ? `Division · vs ${fmt(hero.lyN,hero.f)} LY` : `vs ${fmt(hero.lyN,hero.f)} LY`;
+  const sub = rest.length?`<div class="levels">${rest.map(l=>{const p=pctOf(l.cyN,l.lyN);return `
+    <div class="lvl"><span class="lv-lab">${l.lab}</span>
+      <span class="lv-r"><span class="lv-vr"><span class="lv-v">${fmt(l.cyN,l.f)}</span><span class="lv-d ${cls(p)}">${ar(p)} ${pStr(p)}</span></span><span class="lv-ly">vs ${fmt(l.lyN,l.f)} LY</span></span>
+    </div>`;}).join('')}</div>`:'';
+  return `<div class="tile basket">
+    <div class="lab">${fam.name}</div>
+    <div class="top"><span class="val">${fmt(hero.cyN,hero.f)}</span><span class="pctxt ${cls(hp)}">${ar(hp)} ${pStr(hp)}</span></div>
+    <div class="foot">${foot}</div>
+    ${sub}
+  </div>`;
+}
+
+/* option C: basket matrix (Division | Selected-item segment | Item-level) */
+function matrixCell(l){
+  if(!l) return `<div class="bc"><span class="dash">—</span></div>`;
+  const p=pctOf(l.cyN,l.lyN);
+  return `<div class="bc"><span class="r2"><span class="v">${fmt(l.cyN,l.f)}</span><span class="d ${cls(p)}">${ar(p)} ${pStr(p)}</span></span><span class="ly">vs ${fmt(l.lyN,l.f)} LY</span></div>`;
+}
+function basketMatrix(){
+  const rows=BASKET.map(fam=>`<div class="brow">
+    <div class="bc name"><span class="nm">${fam.name}</span></div>
+    ${matrixCell(fam.levels[0])}${matrixCell(fam.levels[1])}${matrixCell(fam.levels[2])}
+  </div>`).join('');
+  return `<div class="bmatrix">
+    <div class="brow head"><div class="bc name">Basket metric</div><div class="bc">Division</div><div class="bc">Selected-item view</div><div class="bc">Item-level</div></div>
+    ${rows}</div>`;
+}
+
+const NOTES={
+  1:'Everything in one grid, every tile locked to the same size — trend sparklines stretch to fill, basket tiles carry their sub-levels, singles keep a little space. Clean matrix, closest to the live section.',
+  2:'Trend metrics and basket metrics as two separate uniform blocks — each internally aligned, so the sparkline tiles never sit next to a shorter basket card.',
+  3:'Trend tiles stay; the basket metrics collapse into one aligned matrix (Division · selected-item view · item-level) — tightest and most scannable.',
+};
+const state={opt:'1'};
+function render(){
+  document.querySelectorAll('#switch button').forEach(b=>b.classList.toggle('active',b.dataset.opt===state.opt));
+  document.getElementById('optnote').textContent=NOTES[state.opt];
+  const st=document.getElementById('stage');
+  if(state.opt==='1'){
+    st.innerHTML=`<div class="grid">${TREND.map(trendTile).join('')}${BASKET.map(basketTile).join('')}</div>`;
+  } else if(state.opt==='2'){
+    st.innerHTML=`<div class="blocklab">Trend metrics · 52-week</div><div class="grid">${TREND.map(trendTile).join('')}</div>
+      <div class="blocklab">Basket &amp; household</div><div class="grid" style="--th:184px">${BASKET.map(basketTile).join('')}</div>`;
+  } else {
+    st.innerHTML=`<div class="blocklab">Trend metrics · 52-week</div><div class="grid">${TREND.map(trendTile).join('')}</div>
+      <div class="blocklab">Basket &amp; household</div>${basketMatrix()}`;
+  }
+}
+document.getElementById('switch').addEventListener('click',e=>{const b=e.target.closest('[data-opt]');if(b){state.opt=b.dataset.opt;render();}});
+render();
+postHeight();
+window.addEventListener('resize',postHeight);
+window.addEventListener('load',()=>setTimeout(postHeight,60));
+if(EMBED && window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+</script>
+</body>
+</html>
