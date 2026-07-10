@@ -3,13 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Merchandising Dashboard</title>
+    <title>Promo Execution — Merchandising</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="promo-plan.css" />
     <link rel="stylesheet" href="mydesk-drill.css" />
     <link rel="stylesheet" href="mydesk-kpi.css" />
+    <style>
+      /* Promo Execution page — the full dashboard renders (app.js needs every container),
+         but only the filters + the two promo sections are shown. */
+      body.promo-page main.dashboard > section{display:none !important;}
+      body.promo-page main.dashboard > section.filters,
+      body.promo-page main.dashboard > section.weekly-plan-panel,
+      body.promo-page main.dashboard > section#promoExecPanel{display:block !important;}
+    </style>
   </head>
-  <body>
+  <body class="promo-page">
     <header class="topbar">
       <div class="brand">
         <h1>Merchandising</h1>
@@ -17,9 +25,9 @@
       </div>
       <div class="topbar-actions">
         <span class="updated">Data updated through May 9, 2025</span>
+        <a class="ghost-button nav-link" href="index.html">MyDesk</a>
         <a class="ghost-button nav-link" href="national-plan.html">National 52-Week Plan</a>
         <a class="ghost-button nav-link" href="promo-plan-status.html">Plan Status</a>
-        <a class="ghost-button nav-link" href="promo-execution.html">Promo Execution</a>
         <button class="ghost-button" id="themeToggle">Dark Mode</button>
         <button class="ghost-button">Karthik Iyer</button>
         <button class="primary-button">Ask Assistant</button>
@@ -66,11 +74,10 @@
         </article>
       </section>
 
-      <!-- Moved to its own page (promo-execution.html). Kept hidden so app.js still finds #weeklyPlanTable / #scenarioStrip and renders without error. -->
-      <section class="panel weekly-plan-panel" aria-label="52 Week Promotional Plan" hidden>
+      <section class="panel weekly-plan-panel" aria-label="52 Week Promotional Plan">
         <div class="panel-heading">
           <div>
-            <h2>52 Week Promotional Plan</h2>
+            <h2>Promo Execution</h2>
             <p id="promoPlanHelper">Store tactic by week. Showing 2 divisions as preview. Weeks 1-6 are locked actuals; weeks 7-52 are forecast-prefilled from LY trends.</p>
           </div>
           <div class="plan-toggle-cluster">
@@ -91,8 +98,7 @@
         <div id="weeklyPlanTable" class="projection-wrap"></div>
       </section>
 
-      <!-- Moved to its own page (promo-execution.html). Kept hidden so app.js still finds its tables/cards and renders without error. -->
-      <section class="panel promo-panel" id="promoExecPanel" hidden>
+      <section class="panel promo-panel" id="promoExecPanel">
         <div class="panel-heading promo-exec-heading">
           <div>
             <h2>Promotion Execution vs Plan</h2>

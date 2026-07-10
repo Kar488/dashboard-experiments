@@ -31,7 +31,7 @@
     '<div class="tier">Primary KPIs</div>' +
     '<div class="grid primary" id="dxkPrimary"></div>' +
     '<div class="tier">More metrics &amp; basket</div>' +
-    '<div class="grid secondary" id="dxkSecondary"></div>';
+    '<iframe id="dxkBasketFrame" title="More metrics and basket" src="nimbalyst-local/mockups/more-metrics-basket-poc.mockup.html?embed=1" style="width:100%;border:0;display:block;height:640px;"></iframe>';
 
   const tip = document.createElement("div");
   tip.id = "dxkTip";
@@ -185,7 +185,8 @@
   }
   function render() {
     $("dxkPrimary").innerHTML = KPIS.filter((k) => k.primary).map(primaryCard).join("");
-    $("dxkSecondary").innerHTML = KPIS.filter((k) => !k.primary).concat(BASKET).map(tileHTML).join("");
+    const _sec = $("dxkSecondary");
+    if (_sec) _sec.innerHTML = KPIS.filter((k) => !k.primary).concat(BASKET).map(tileHTML).join("");
   }
 
   /* ---------- filter ---------- */
@@ -237,7 +238,24 @@
     let lx = e.clientX + 14; if (lx + 150 > window.innerWidth) lx = e.clientX - 160;
     tip.style.left = lx + "px"; tip.style.top = (e.clientY + 14) + "px";
   }
-  ["dxkPrimary", "dxkSecondary"].forEach((id) => { const g = $(id); g.addEventListener("mousemove", onTrendMove); g.addEventListener("mouseleave", hideTip); });
+  ["dxkPrimary", "dxkSecondary"].forEach((id) => { const g = $(id); if (!g) return; g.addEventListener("mousemove", onTrendMove); g.addEventListener("mouseleave", hideTip); });
+  // the enriched "More metrics & basket" view is an embedded iframe — size it to its
+  // ACTUAL rendered content (same-origin, so measure directly; postMessage is just a trigger)
+  function sizeBasketFrame() {
+    const f = document.getElementById("dxkBasketFrame");
+    if (!f) return;
+    try {
+      const d = f.contentDocument; if (!d || !d.body) return;
+      const g = d.querySelector(".grid") || d.body;
+      const h = Math.ceil(g.getBoundingClientRect().bottom) + 8;
+      if (h > 120 && h < 4000) f.style.height = h + "px";     // ignore transient 0-width / runaway values
+    } catch (e) {}
+  }
+  let _bszT;
+  const sizeBasketSoon = () => { clearTimeout(_bszT); _bszT = setTimeout(sizeBasketFrame, 40); };
+  window.addEventListener("message", (e) => { if (e.data && e.data.type === "basketHeight") sizeBasketSoon(); });
+  window.addEventListener("resize", sizeBasketSoon);
+  (function () { const f = document.getElementById("dxkBasketFrame"); if (f) { f.addEventListener("load", sizeBasketSoon); [80, 300, 700, 1400].forEach((t) => setTimeout(sizeBasketFrame, t)); } })();
 
   window.MyDeskKPI = { load(kpis) { if (Array.isArray(kpis)) { KPIS.length = 0; kpis.forEach((k) => KPIS.push(k)); KPIS.forEach((k) => { if (!k.accent) k.accent = ICDEF; if (k.base != null) { k.act = SMOOTH(series(k.key + "a", N, k.base, k.vol, k.drift, k.bump)); k.ly = SMOOTH(series(k.key + "l", N, k.base * 1.01, k.vol * 0.8, k.drift * 0.6, k.bump ? { at: k.bump.at, amp: k.bump.amp * 0.8 } : null)); } }); render(); } } };
 
