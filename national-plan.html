@@ -6,7 +6,7 @@
     <title>National 52-Week Plan Optimiser</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="promo-plan.css" />
-    <link rel="stylesheet" href="national-plan.css?v=40" />
+    <link rel="stylesheet" href="national-plan.css?v=51" />
   </head>
   <body>
     <header class="topbar">
@@ -33,7 +33,7 @@
           <div class="panel-heading">
             <div>
               <h2>Build the national 52-week plan</h2>
-              <p>The national team negotiates and optimises the plan with vendors. Pick the division, category and the objective to optimise for, then generate the plan. Divisional teams later execute it on their desks.</p>
+              <p>The national team negotiates and optimises the plan with vendors. Pick the division, one or more categories and the objective to optimise for, then generate the plan and choose the quarters or periods to visualise. Divisional teams later execute it on their desks.</p>
             </div>
           </div>
           <div class="np-scope-row">
@@ -43,13 +43,18 @@
             </span>
             <span class="plan-step-sep" aria-hidden="true"></span>
             <span class="plan-step-group">
-              <span class="plan-step-num">2.</span><span class="plan-step-label">Category</span>
-              <select class="plan-category-select" id="npCategory"></select>
+              <span class="plan-step-num">2.</span><span class="plan-step-label">Categories</span>
+              <div class="np-msel" id="npCategory"></div>
             </span>
             <span class="plan-step-sep" aria-hidden="true"></span>
             <span class="plan-step-group">
               <span class="plan-step-num">3.</span><span class="plan-step-label">Optimise for</span>
               <div class="plan-obj-capsule" id="npObjective"></div>
+            </span>
+            <span class="plan-step-sep" aria-hidden="true"></span>
+            <span class="plan-step-group">
+              <span class="plan-step-num">4.</span><span class="plan-step-label">Show results for</span>
+              <div class="np-msel np-msel-per" id="npPeriods"></div>
             </span>
           </div>
           <div class="np-scope-foot">
@@ -113,9 +118,9 @@
     <div class="np-modal-scrim" id="npModalScrim" hidden></div>
     <div class="np-modal" id="npModal" hidden role="dialog" aria-label="Guardrail detail"></div>
 
-    <script src="national-plan.js?v=27"></script>
+    <script src="national-plan.js?v=29"></script>
     <script src="explain-dataset.js"></script>
-    <script src="national-plan-views.js?v=28"></script>
-    <script src="national-plan-v2.js?v=33"></script>
+    <script src="national-plan-views.js?v=30"></script>
+    <script src="national-plan-v2.js?v=38"></script>
   </body>
 </html>

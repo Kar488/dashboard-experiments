@@ -118,6 +118,7 @@
     bin: 1,
     worklist: null,
     worklistIndex: 0,
+    worklistSearch: "",
     binCounts: null,
     loadingWorklist: false,
     pendingCart: [],
@@ -131,7 +132,11 @@
     // Per-NCRC/PA scratch values the user types on the review screen
     // (ad page, display text). Kept here so they survive re-renders
     // and so a future Finalize call can carry them in the payload.
-    reviewEdits: { adPage: {}, displayText: {}, adDetails: {}, tagDetails: {} },
+    reviewEdits: { adPage: {}, displayText: {}, adDetails: {}, tagDetails: {},
+      // Default ad/tag copy keyed by NCRC (applies to every price area)
+      // plus per-(NCRC|PA) exceptions. adExceptions[ncrc] is the ordered
+      // list of price areas the planner has broken out from the default.
+      adDefaults: {}, tagDefaults: {}, adExceptions: {} },
     // Per-row expand state on the review screen — keyed by `${ncrc}|${pa}`.
     // When true, the Ad details + Tag details sub-rows are visible
     // underneath the priced row.
@@ -143,14 +148,31 @@
     // button in the alternates panel. This drives the bottom totals row
     // and the right-panel drill-down for the currently focused PA.
     priceAreaSelections: {},  // { "PA01": "offer-id-X", ... }
+    // Planning flow: "recommended" shows the scored per-PA recommendations
+    // (system picks); "manual" flips to a build-your-own promo where the
+    // user sets one default tactic across every price area and overrides
+    // individual PAs as exceptions. Manual hides the cost ladder / promo
+    // history and skips guardrail + reliability scoring.
+    planMode: "recommended",
+    // Manual-mode default tactic (offer-shaped) applied to every price
+    // area that hasn't been individually overridden. Null until the user
+    // clicks "Apply & forecast" on the default card.
+    manualDefault: null,
+    // Inline per-PA edit in the manual builder: the PA name currently
+    // being edited in-row, plus its scratch form. Saving turns it into a
+    // customOverride; there is no popup.
+    manualEditPa: null,
+    manualEditForm: null,
     overrideMode: false,      // when true, recommendations section flips to override form
+    // Override scope: "all" applies one custom promo to every price area,
+    // "single" targets one PA. Mirrors form.priceArea ("" == all).
+    overrideScope: "all",
+    // Custom-promo form. Holds BOTH the APEX and OMS field sets (authored
+    // together, linked to the price area). priceArea "" == apply to all.
     overrideForm: {
       priceArea: "",
-      tactic: "Item Discount",
-      discountType: "dollar_off",
-      promoPrice: "",
-      minBuy: 1,
-      limit: 6
+      apexDiscount: "PP", apexFactor: "0", apexAmount: "", apexUom: "E", apexMinBuy: "1", apexLimit: "6", apexInAd: false, apexAllowanceId: "4379527",
+      omsChannel: "Store Only", omsTactic: "Item Discount", omsUom: "E", omsMinBuy: "0", omsDiscount: "PP Ea", omsAmount: "", omsLim: "6", omsLimLb: "0"
     },
     overrideResult: null,     // { units, sales, agp, disclaimer }
     overrideSubmitting: false,
@@ -1143,6 +1165,142 @@
     renderPromoDetailScreen();
   }
 
+  // -------- Promotion systems (APEX vs OMS) -------------------------
+  // A custom/manual promo can be authored against either downstream promo
+  // system. Each exposes a different field set + option list (extracted
+  // from the APEX and OMS entry screens).
+  const PROMO_SYSTEM_OPTIONS = {
+    apexDiscount: ["PP", "%", "Cents", "BXG1"],
+    omsDiscount: ["PP Ea", "% Ea", "Cents Ea", "Free Ea", "PP lb", "% lb", "Cents lb", "Free lb"],
+    uom: [["E", "E — Each"], ["W", "W — Weighted"]],
+    channel: ["Store Only", "Print Only", "Clip Click", "Digital Only"],
+    omsTactic: ["Item Discount", "BXGX", "MB"]
+  };
+
+  // Allowances the APEX promo can be funded from — the planner picks one.
+  // (Mocked; a real integration would return live NOPAs for the NCRC.)
+  const APEX_ALLOWANCES = [
+    { id: "4379527", name: "Buying allowance", tag: "PRIMARY", status: "Active", amount: 11550 },
+    { id: "4381002", name: "Off-invoice allowance", tag: "", status: "Active", amount: 8200 },
+    { id: "4390115", name: "Bill-back allowance", tag: "", status: "Pending", amount: 4300 }
+  ];
+
+  // A blank promo form carrying BOTH the APEX and OMS field sets — both
+  // systems are authored side by side and linked to the price area (no
+  // either/or toggle), so every field is namespaced by system.
+  function freshPromoForm(extra) {
+    return Object.assign({
+      // APEX
+      apexDiscount: "PP", apexFactor: "0", apexAmount: "", apexUom: "E", apexMinBuy: "1", apexLimit: "6", apexInAd: false, apexAllowanceId: "4379527",
+      // OMS
+      omsChannel: "Store Only", omsTactic: "Item Discount", omsUom: "E", omsMinBuy: "0", omsDiscount: "PP Ea", omsAmount: "", omsLim: "6", omsLimLb: "0"
+    }, extra || {});
+  }
+
+  // Collapse the fields to what the mock forecaster understands. APEX is
+  // the price-point/store promo, so it drives the forecast; the OMS tactic
+  // is surfaced in the label.
+  function promoSystemToForecast(f) {
+    f = f || {};
+    const opt = f.apexDiscount || "";
+    let discountType = "dollar_off";
+    if (/^PP/.test(opt)) discountType = "set_price";
+    else if (/^%/.test(opt)) discountType = "percent_off";
+    else if (/^Cents/.test(opt)) discountType = "dollar_off";
+    else if (/^(BXG1|Free)/.test(opt)) discountType = "set_price";
+    const tactic = f.omsTactic || (/^BXG1/.test(opt) ? "Buy X Get X" : "Item Discount");
+    return {
+      tactic, discountType,
+      promoPrice: f.apexAmount,
+      minBuy: Number(f.apexMinBuy) || 1,
+      limit: Number(f.apexLimit) || 6
+    };
+  }
+
+  // Compact per-system summaries for the manual builder table.
+  function promoSystemSummary(f) {
+    f = f || {};
+    const amtStr = (opt, amt) => {
+      if (amt === "" || amt == null) return "";
+      if (/^%/.test(opt)) return `${amt}%`;
+      if (/^Cents/.test(opt)) return `${amt}¢`;
+      return `$${Number(amt).toFixed(2)}`;
+    };
+    const aA = amtStr(f.apexDiscount, f.apexAmount);
+    const aO = amtStr(f.omsDiscount, f.omsAmount);
+    return {
+      apex: `${f.apexDiscount || "—"}${aA ? ` ${aA}` : ""}`,
+      oms: `${f.omsChannel || ""}${f.omsDiscount ? ` · ${f.omsDiscount}` : ""}${aO ? ` ${aO}` : ""}`.replace(/^ · /, "")
+    };
+  }
+
+  // APEX allowance picker — a radio list of funding allowances. `attr`
+  // routes the pick into the right form; the radio group name is derived
+  // from it so the default card and per-PA panel don't cross-select.
+  function renderApexAllowanceList(selectedId, attr) {
+    const groupName = `apexAllow-${attr.replace(/[^a-z]/gi, "")}`;
+    const sel = selectedId || APEX_ALLOWANCES[0].id;
+    return `
+      <div class="pd-allow">
+        <span class="pd-of-label">Allowance</span>
+        <div class="pd-allow-list">
+          ${APEX_ALLOWANCES.map((a) => `
+            <label class="pd-allow-item ${sel === a.id ? "is-sel" : ""}">
+              <input type="radio" name="${groupName}" ${attr}="apexAllowanceId" value="${escapeAttr(a.id)}" ${sel === a.id ? "checked" : ""} />
+              <span class="pd-allow-id">${escapeHtml(a.id)}</span>
+              <span class="pd-allow-name">${escapeHtml(a.name)}</span>
+              ${a.tag ? `<span class="pd-allow-badge">${escapeHtml(a.tag)}</span>` : ""}
+              <span class="pd-allow-meta">${escapeHtml(a.status)} &middot; $${a.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  // Both promotion systems side by side (no toggle): APEX + OMS field
+  // cards, all bound to a form via `attr`.
+  function renderPromoSystemsPair(f, attr) {
+    const O = PROMO_SYSTEM_OPTIONS;
+    const sel = (name, options, cur) => `
+      <select ${attr}="${name}">
+        ${options.map((o) => { const v = Array.isArray(o) ? o[0] : o; const l = Array.isArray(o) ? o[1] : o; return `<option value="${escapeAttr(v)}" ${cur === v ? "selected" : ""}>${escapeHtml(l)}</option>`; }).join("")}
+      </select>`;
+    const num = (name, val) => `<input type="number" step="1" min="0" ${attr}="${name}" value="${escapeAttr(val == null ? "" : val)}" />`;
+    const money = (name, val) => `<div class="pd-money"><span>$</span><input type="number" step="0.01" min="0" ${attr}="${name}" value="${escapeAttr(val == null ? "" : val)}" placeholder="-" /></div>`;
+    const field = (label, inner, cls) => `<label class="pd-of-field ${cls || ""}"><span>${escapeHtml(label)}</span>${inner}</label>`;
+    return `
+      <div class="pd-promo-systems">
+        <section class="pd-promo-sys-card">
+          <header><span class="pd-sys-tag pd-sys-apex">APEX</span> <span>Price-point promotion</span></header>
+          <div class="pd-override-fields">
+            ${field("Discount", sel("apexDiscount", O.apexDiscount, f.apexDiscount))}
+            ${field("Factor", num("apexFactor", f.apexFactor), "pd-of-field-sm")}
+            ${field("Amount", money("apexAmount", f.apexAmount))}
+            ${field("UOM", sel("apexUom", O.uom, f.apexUom), "pd-of-field-sm")}
+            ${field("Min buy", num("apexMinBuy", f.apexMinBuy), "pd-of-field-sm")}
+            ${field("Limit", num("apexLimit", f.apexLimit), "pd-of-field-sm")}
+            <label class="pd-of-field pd-of-check"><input type="checkbox" ${attr}="apexInAd" ${f.apexInAd ? "checked" : ""} /> <span>In Ad</span></label>
+          </div>
+          ${renderApexAllowanceList(f.apexAllowanceId, attr)}
+        </section>
+        <section class="pd-promo-sys-card">
+          <header><span class="pd-sys-tag pd-sys-oms">OMS</span> <span>Multi-channel promotion</span></header>
+          <div class="pd-override-fields">
+            ${field("Channel", sel("omsChannel", O.channel, f.omsChannel))}
+            ${field("Tactic", sel("omsTactic", O.omsTactic, f.omsTactic))}
+            ${field("UOM", sel("omsUom", O.uom, f.omsUom), "pd-of-field-sm")}
+            ${field("Min buy", num("omsMinBuy", f.omsMinBuy), "pd-of-field-sm")}
+            ${field("Discount", sel("omsDiscount", O.omsDiscount, f.omsDiscount))}
+            ${field("Amount", money("omsAmount", f.omsAmount))}
+            ${field("Lim", num("omsLim", f.omsLim), "pd-of-field-sm")}
+            ${field("Lim Lb", num("omsLimLb", f.omsLimLb), "pd-of-field-sm")}
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
   // Snapshot the current override form + forecast into an offer-shaped
   // object for a given Price Area. The renderer treats it like any other
   // alternate offer (radio, click-to-pick) — it just carries a Custom
@@ -1155,21 +1313,22 @@
     const pa = (data && data.offers && data.offersByPriceArea || []).find((p) => p.priceArea === paName);
     const regPrice = (pa && pa.basePrice) || (pa && pa.offers && pa.offers[0] && pa.offers[0].regPrice) || 5.5;
     const vlc = (pa && pa.vlc) || (pa && pa.offers && pa.offers[0] && pa.offers[0].netCost) || 2;
-    const v = Number(form.promoPrice) || 0;
+    const fc = promoSystemToForecast(form);
+    const v = Number(fc.promoPrice) || 0;
     let promoPrice = regPrice;
-    if (form.discountType === "set_price") promoPrice = v || regPrice;
-    else if (form.discountType === "percent_off") promoPrice = Math.max(0.1, regPrice * (1 - v / 100));
+    if (fc.discountType === "set_price") promoPrice = v || regPrice;
+    else if (fc.discountType === "percent_off") promoPrice = Math.max(0.1, regPrice * (1 - v / 100));
     else promoPrice = Math.max(0.1, regPrice - v);
     const storeSave = Math.max(0, regPrice - promoPrice);
     return {
       id: `custom-${paName}-${Date.now()}`,
       rank: "C",
-      label: `Custom · ${form.tactic}`,
+      label: `APEX+OMS · ${fc.tactic}`,
       category: "Custom",
       isRecommended: false,
       isCurrentPlan: false,
       isCustom: true,
-      storeTactic: { code: "CUSTOM", name: form.tactic, className: "custom" },
+      storeTactic: { code: "CUSTOM", name: fc.tactic, className: "custom" },
       digitalTactic: null,
       netCost: vlc,
       regPrice,
@@ -1184,8 +1343,8 @@
       unitDeltaPct: 0,
       agpDeltaPct: 0,
       vendorFunding: 0,
-      mbStore: Number(form.minBuy) || 1,
-      limitStore: Number(form.limit) || 6,
+      mbStore: fc.minBuy,
+      limitStore: fc.limit,
       hasAd: false,
       hasDisplay: false,
       guardrailScore: 0,
@@ -1193,6 +1352,46 @@
       totalScore: 0,
       // Snapshot the source form so the row can show a useful description.
       _formSnapshot: { ...form }
+    };
+  }
+
+  // Build a custom offer for a PA from explicit inline-edit values (no
+  // forecaster round-trip). Forecast is estimated from the PA's
+  // recommended offer, nudged by the discount depth so deeper cuts read
+  // as a bit more volume — enough to feel responsive in the builder.
+  function buildCustomOfferFromValues(paName, vals) {
+    const data = promoDetailState.data;
+    const pa = (data && data.offersByPriceArea || []).find((p) => p.priceArea === paName);
+    const rec = (pa && (pa.offers || []).find((o) => o.isRecommended)) || (pa && pa.offers && pa.offers[0]) || {};
+    const regPrice = (pa && pa.basePrice) || rec.regPrice || 5.5;
+    const vlc = (pa && pa.vlc) || rec.netCost || 2;
+    const fc = promoSystemToForecast(vals);
+    const v = Number(fc.promoPrice) || 0;
+    let promoPrice = regPrice;
+    if (fc.discountType === "set_price") promoPrice = v || regPrice;
+    else if (fc.discountType === "percent_off") promoPrice = Math.max(0.1, regPrice * (1 - v / 100));
+    else promoPrice = Math.max(0.1, regPrice - v);
+    const storeSave = Math.max(0, regPrice - promoPrice);
+    const depth = regPrice > 0 ? storeSave / regPrice : 0;
+    const units = Math.round((rec.forecastUnits || 0) * (1 + depth * 0.6));
+    const sales = Math.round(units * promoPrice);
+    const agp = Math.round((rec.forecastAgp || 0) * (1 + depth * 0.15));
+    return {
+      id: `custom-${paName}-${Date.now()}`,
+      rank: "C", label: `APEX+OMS · ${fc.tactic}`, category: "Custom",
+      isRecommended: false, isCurrentPlan: false, isCustom: true,
+      storeTactic: { code: "CUSTOM", name: fc.tactic, className: "custom" },
+      digitalTactic: null, netCost: vlc, regPrice,
+      promoStorePrice: Number(promoPrice.toFixed(2)), promoDigitalPrice: null,
+      storeSave: Number(storeSave.toFixed(2)), digitalSave: 0,
+      forecastUnits: units, forecastSales: sales, forecastAgp: agp,
+      salesDeltaPct: 0, unitDeltaPct: 0, agpDeltaPct: 0, vendorFunding: 0,
+      mbStore: fc.minBuy, limitStore: fc.limit,
+      minBuy: fc.minBuy, limit: fc.limit,
+      discountType: fc.discountType, promoPrice: fc.promoPrice,
+      hasAd: false, hasDisplay: false,
+      guardrailScore: 0, reliabilityScore: 0, totalScore: 0,
+      _formSnapshot: { ...vals }
     };
   }
 
@@ -1247,21 +1446,22 @@
       // Translate form fields to a promo price the mock forecaster expects.
       // For dollar/percent off we approximate from the offers table's reg price.
       const regPrice = (data.offersByPriceArea && data.offersByPriceArea[0] && data.offersByPriceArea[0].basePrice) || (data.pricing && data.pricing.basePrice) || 5.5;
+      const fc = promoSystemToForecast(form);
       let promoPrice = regPrice;
-      const v = Number(form.promoPrice) || 0;
-      if (form.discountType === "set_price") promoPrice = v || regPrice;
-      else if (form.discountType === "percent_off") promoPrice = Math.max(0.1, regPrice * (1 - v / 100));
+      const v = Number(fc.promoPrice) || 0;
+      if (fc.discountType === "set_price") promoPrice = v || regPrice;
+      else if (fc.discountType === "percent_off") promoPrice = Math.max(0.1, regPrice * (1 - v / 100));
       else promoPrice = Math.max(0.1, regPrice - v);
       const payload = {
         vendor: data.item.vendor,
         priceArea: form.priceArea || data.item.priceArea,
         ncrc: data.item.ncrc,
         week: data.item.week,
-        tactic: form.tactic,
-        discountType: form.discountType,
+        tactic: fc.tactic,
+        discountType: fc.discountType,
         promoPrice,
-        minBuy: Number(form.minBuy) || 1,
-        limit: Number(form.limit) || 6
+        minBuy: fc.minBuy,
+        limit: fc.limit
       };
       const response = await fetch("/api/promotion-detail/override", {
         method: "POST",
@@ -1495,6 +1695,7 @@
       ${renderPdShell(data)}
     `;
     if (data && data.item) renderPromoScatter();
+    setupWorklistScroll();
   }
 
   // -------- Review & finalise screen --------------------------------
@@ -1610,8 +1811,12 @@
     const skipped = buckets.decided_skipped.length;
     const unavailable = buckets.no_available.length;
 
+    // Manual override carries through: a manual plan only publishes the
+    // tactics the planner set, so the plan-summary roll-up and the two
+    // non-promoted sections are dropped, and forecast metrics are hidden.
+    const manual = promoDetailState.planMode === "manual";
     return `
-      <div class="pd-review">
+      <div class="pd-review ${manual ? "pd-review-manual" : ""}">
         <header class="pd-review-head">
           <div>
             <span class="pd-eyebrow">REVIEW &amp; FINALISE</span>
@@ -1627,13 +1832,20 @@
             </div>
           </div>
           <div class="pd-review-counts">
+            ${manual ? `<span class="pd-review-manual-badge"><i></i>MANUAL OVERRIDE</span>` : ""}
             <span class="pd-review-count priced">${priced} promoted</span>
-            <span class="pd-review-count skipped">${skipped} skipped</span>
-            <span class="pd-review-count unavailable">${unavailable} no promo available</span>
+            ${manual ? "" : `
+              <span class="pd-review-count skipped">${skipped} skipped</span>
+              <span class="pd-review-count unavailable">${unavailable} no promo available</span>
+            `}
           </div>
         </header>
 
-        ${renderReviewGrandTotal({
+        ${manual ? `
+          <div class="pd-review-manual-note">
+            <strong>Manual override.</strong> Plan summary and the non-promoted sections are hidden &mdash; a manual plan only publishes the tactics you set.
+          </div>
+        ` : renderReviewGrandTotal({
           section1: totals,
           section2: baselineSectionTotals(buckets.decided_skipped, data.offers && data.offers.noPromo),
           section3: baselineSectionTotals(buckets.no_available,    data.offers && data.offers.noPromo)
@@ -1641,10 +1853,10 @@
 
         ${renderReviewUnifiedTable({
           promoted: buckets.promoted,
-          skipped:  buckets.decided_skipped,
-          unavailable: buckets.no_available,
+          skipped:  manual ? [] : buckets.decided_skipped,
+          unavailable: manual ? [] : buckets.no_available,
           baseline: data.offers && data.offers.noPromo,
-          sortKey, fmtK, fmtUnits, totals, priced
+          sortKey, fmtK, fmtUnits, totals, priced, manual
         })}
 
         <footer class="pd-review-footer">
@@ -1660,7 +1872,10 @@
   // One table covers all three sections so the columns line up exactly.
   // Section transitions are marked by a full-width divider row instead of
   // a fresh <thead>; the section sort/totals rows live in the same body.
-  function renderReviewUnifiedTable({ promoted, skipped, unavailable, baseline, sortKey, fmtK, fmtUnits, totals, priced }) {
+  function renderReviewUnifiedTable({ promoted, skipped, unavailable, baseline, sortKey, fmtK, fmtUnits, totals, priced, manual }) {
+    // Manual override: a slimmer table with only the promoting section and
+    // no forecast/allowance columns (there are none for a manual plan).
+    if (manual) return renderManualReviewTable(promoted);
     const sortBtn = (key, label) => `
       <button type="button" class="pd-bin-chip pd-sort-chip ${sortKey === key ? "active" : ""}" data-pd-review-sort="${key}">
         <i class="pd-bin-dot pd-sort-dot-${key}"></i>
@@ -2092,67 +2307,285 @@
     `;
   }
 
-  function renderReviewExpandedRow(key, item) {
-    const ad = (promoDetailState.reviewEdits.adDetails && promoDetailState.reviewEdits.adDetails[key]) || {};
-    const tag = (promoDetailState.reviewEdits.tagDetails && promoDetailState.reviewEdits.tagDetails[key]) || {};
+  // Slimmer review table for the manual flow: only the promoting section,
+  // no forecast/allowance columns. Ad/tag "More" opens the same default +
+  // per-price-area exceptions form used in the system flow.
+  function renderManualReviewTable(promoted) {
+    return `
+      <div class="pd-review-table-wrap">
+        <table class="pd-review-table pd-review-table-manual">
+          <thead>
+            <tr>
+              <th class="pd-rev-priced">Priced</th>
+              <th class="l">Vendor</th>
+              <th class="l">NCRC</th>
+              <th class="l">NCRC description</th>
+              <th class="c">In circ.</th>
+              <th class="l">Ad page</th>
+              <th class="c">In disp.</th>
+              <th class="l">Display</th>
+              <th class="r">Stores</th>
+              <th class="l">Store tactic</th>
+              <th class="l">Digital tactic</th>
+              <th class="r">VLC</th>
+              <th class="c pd-rev-more-col"></th>
+            </tr>
+          </thead>
+          <tbody class="pd-section-body pd-section-body-promoted">
+            <tr class="pd-review-section-divider pd-rev-div-promoted">
+              <td colspan="13">
+                <div class="pd-rev-div-row"><div class="pd-rev-div-text">
+                  <strong>Items you're promoting</strong>
+                  <span class="pd-rev-div-count">${promoted.length}</span>
+                  <small>Set the store &amp; digital tactic per row. Use <em>More</em> for ad / tag details.</small>
+                </div></div>
+              </td>
+            </tr>
+            ${promoted.map(renderManualReviewRow).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderManualReviewRow(r) {
+    const { item, offer } = r;
+    if (!offer) return "";
+    const yn = (b) => b ? "Y" : "N";
+    const inCircular = !!offer.hasAd;
+    const inDisplay = !!offer.hasDisplay;
+    const adPageKey = `${item.ncrc}|${item.priceArea}`;
+    const adPage = (promoDetailState.reviewEdits.adPage && promoDetailState.reviewEdits.adPage[adPageKey]) || "";
+    const displayText = (promoDetailState.reviewEdits.displayText && promoDetailState.reviewEdits.displayText[adPageKey]) || "";
+    const vlc = offer.netCost || 0;
+    // Toggle key is per-row (NCRC|PA) so only the clicked row expands, but
+    // the ad/tag form inside is keyed by NCRC (copy is per NCRC).
+    const expandKey = `${item.ncrc}|${item.priceArea}`;
+    const expanded = !!(promoDetailState.reviewExpanded && promoDetailState.reviewExpanded[expandKey]);
+    const storeStack = `<div class="pd-review-stack"><span>${escapeHtml((offer.storeTactic && offer.storeTactic.name) || "")}</span><small>${escapeHtml(discountTypeLabel(offer))}</small></div>`;
+    const digitalStack = offer.digitalTactic
+      ? `<div class="pd-review-stack"><span>${escapeHtml(offer.digitalTactic)}</span><small>$${(offer.promoDigitalPrice || 0).toFixed(2)}</small></div>`
+      : `<span class="pd-faint">No digital</span>`;
+    return `
+      <tr class="pd-review-row pd-review-row-priced">
+        <td class="pd-rev-priced"><span class="pd-rev-pill pd-rev-pill-priced">Priced</span>${offer.isCustom ? `<span class="pd-rev-pill pd-rev-pill-custom">Custom</span>` : ""}</td>
+        <td>${escapeHtml(item.vendor)}</td>
+        <td>${escapeHtml(item.ncrc)}</td>
+        <td>${escapeHtml(item.item || "")} <em>${escapeHtml(item.packSize || "")}</em></td>
+        <td class="c">${yn(inCircular)}</td>
+        <td>${inCircular ? `<input type="text" class="pd-rev-input" maxlength="6" placeholder="PG-#" value="${escapeAttr(adPage)}" data-pd-review-field="adPage" data-pd-review-key="${escapeAttr(adPageKey)}" />` : `<span class="pd-faint">&mdash;</span>`}</td>
+        <td class="c">${yn(inDisplay)}</td>
+        <td>${inDisplay ? `<input type="text" class="pd-rev-input pd-rev-input-wide" maxlength="10" placeholder="Endcap" value="${escapeAttr(displayText)}" data-pd-review-field="displayText" data-pd-review-key="${escapeAttr(adPageKey)}" />` : `<span class="pd-faint">&mdash;</span>`}</td>
+        <td class="r">245</td>
+        <td>${storeStack}</td>
+        <td>${digitalStack}</td>
+        <td class="r">$${vlc.toFixed(2)}</td>
+        <td class="c pd-rev-more-col">
+          <button type="button" class="pd-pa-toggle-btn pd-rev-more-btn ${expanded ? "is-open" : ""}" data-pd-review-expand="${escapeAttr(expandKey)}" aria-expanded="${expanded}">
+            <span>${expanded ? "Hide" : "More"}</span><span class="pd-pa-toggle-arrow">&#9662;</span>
+          </button>
+        </td>
+      </tr>
+      ${expanded ? renderReviewExpandedRow(expandKey, item, 13) : ""}
+    `;
+  }
+
+  // Ad/tag "More details": one default set of copy applied to every price
+  // area, plus an optional list of per-price-area exceptions the planner
+  // adds only where a store group genuinely differs. Same pattern used in
+  // both the system and manual review flows.
+  function renderReviewExpandedRow(key, item, colspan) {
+    colspan = colspan || 20;
+    const ncrc = item.ncrc;
+    const allPas = (promoDetailState.data && promoDetailState.data.offersByPriceArea || []).map((p) => p.priceArea);
+    const exceptions = (promoDetailState.reviewEdits.adExceptions && promoDetailState.reviewEdits.adExceptions[ncrc]) || [];
     const adBugOptions = [
       "None", "1x rewards", "2x rewards", "3x rewards", "4x rewards",
       "5x rewards", "6x rewards", "Limit 2", "Limit 4", "Limit 6"
     ];
-    // All fields are short — single-line inputs sized to fit 2-3 rows of
-    // an auto-fit grid. No textareas; the merchant just types a brief
-    // headline / instruction string, not a paragraph.
+    const dad = (promoDetailState.reviewEdits.adDefaults && promoDetailState.reviewEdits.adDefaults[ncrc]) || {};
+    const dtag = (promoDetailState.reviewEdits.tagDefaults && promoDetailState.reviewEdits.tagDefaults[ncrc]) || {};
+    // Default fields are keyed by NCRC (adDefaults / tagDefaults).
     const af = (field, label, placeholder = "", maxlength = "") => `
       <label class="pd-rev-field">
         <span>${escapeHtml(label)}</span>
-        <input type="text" ${maxlength ? `maxlength="${maxlength}"` : ""} placeholder="${escapeAttr(placeholder)}" value="${escapeAttr(ad[field] || "")}"
-               data-pd-review-section="adDetails" data-pd-review-field="${field}" data-pd-review-key="${escapeAttr(key)}" />
+        <input type="text" ${maxlength ? `maxlength="${maxlength}"` : ""} placeholder="${escapeAttr(placeholder)}" value="${escapeAttr(dad[field] || "")}"
+               data-pd-review-section="adDefaults" data-pd-review-field="${field}" data-pd-review-key="${escapeAttr(ncrc)}" />
       </label>
     `;
     const at = (field, label, placeholder = "") => `
       <label class="pd-rev-field">
         <span>${escapeHtml(label)}</span>
-        <input type="text" maxlength="8" placeholder="${escapeAttr(placeholder)}" value="${escapeAttr(tag[field] || "")}"
-               data-pd-review-section="tagDetails" data-pd-review-field="${field}" data-pd-review-key="${escapeAttr(key)}" />
+        <input type="text" maxlength="8" placeholder="${escapeAttr(placeholder)}" value="${escapeAttr(dtag[field] || "")}"
+               data-pd-review-section="tagDefaults" data-pd-review-field="${field}" data-pd-review-key="${escapeAttr(ncrc)}" />
       </label>
     `;
     return `
       <tr class="pd-review-row-expanded">
-        <td colspan="20">
+        <td colspan="${colspan}">
           <div class="pd-rev-detail-bar">
             <span class="pd-rev-detail-eyebrow">More details</span>
-            <span class="pd-rev-detail-context">${escapeHtml(item.ncrc)} &middot; ${escapeHtml(item.priceArea || "")} &middot; ${escapeHtml(item.vendor || "")}</span>
+            <span class="pd-rev-detail-context">${escapeHtml(ncrc)} &middot; ${escapeHtml(item.vendor || "")}</span>
           </div>
-          <div class="pd-rev-detail-grid">
-            <section class="pd-rev-detail-card">
-              <header><strong>Ad details</strong></header>
-              <div class="pd-rev-detail-fields">
-                ${af("headline", "Headline", "Cool down with...", "40")}
-                ${af("bodyCopy", "Body copy", "Short marketing line", "60")}
-                ${af("imageUpc", "Image UPC", "049000028911", "20")}
-                ${af("adInstructions", "Ad instructions", "Reverse type, blue chip", "40")}
-                ${af("pricingComments", "Pricing comments", "BOGO restriction on size", "40")}
-                <label class="pd-rev-field">
-                  <span>Ad bug</span>
-                  <select data-pd-review-section="adDetails" data-pd-review-field="adBug" data-pd-review-key="${escapeAttr(key)}">
-                    ${adBugOptions.map((opt) => `<option value="${escapeAttr(opt)}" ${ad.adBug === opt ? "selected" : ""}>${escapeHtml(opt)}</option>`).join("")}
-                  </select>
-                </label>
-                ${af("couponPlu", "Coupon PLU", "70432", "8")}
+          <div class="pd-rev-scope">
+            <span class="pd-rev-scope-t"><span class="pd-md-badge">DEFAULT</span> Ad &amp; tag details</span>
+            <span class="pd-rev-scope-applies">Applies to <b>all ${allPas.length} price area${allPas.length === 1 ? "" : "s"}</b> unless overridden below</span>
+          </div>
+          <div class="pd-rev-2tables">
+            <div class="pd-rev-table1">
+              <div class="pd-rev-adtag">
+                <section class="pd-rev-detail-card">
+                  <header><strong>Ad details</strong></header>
+                  <div class="pd-rev-detail-fields">
+                    ${af("headline", "Headline", "Cool down with...", "40")}
+                    ${af("bodyCopy", "Body copy", "Short marketing line", "60")}
+                    ${af("imageUpc", "Image UPC", "049000028911", "20")}
+                    ${af("adInstructions", "Ad instructions", "Reverse type, blue chip", "40")}
+                    ${af("pricingComments", "Pricing comments", "BOGO restriction on size", "40")}
+                    <label class="pd-rev-field">
+                      <span>Ad bug</span>
+                      <select data-pd-review-section="adDefaults" data-pd-review-field="adBug" data-pd-review-key="${escapeAttr(ncrc)}">
+                        ${adBugOptions.map((opt) => `<option value="${escapeAttr(opt)}" ${dad.adBug === opt ? "selected" : ""}>${escapeHtml(opt)}</option>`).join("")}
+                      </select>
+                    </label>
+                    ${af("couponPlu", "Coupon PLU", "70432", "8")}
+                  </div>
+                </section>
+                <section class="pd-rev-detail-card pd-rev-detail-card-tags">
+                  <header><strong>Tag details</strong></header>
+                  <div class="pd-rev-detail-fields pd-rev-detail-fields-tags">
+                    ${at("bib", "BIB", "EC15")}
+                    ${at("sign", "SIGN", "SC15")}
+                    ${at("talker", "Talker", "1")}
+                    ${at("molding", "Molding", "0")}
+                  </div>
+                </section>
               </div>
-            </section>
-            <section class="pd-rev-detail-card pd-rev-detail-card-tags">
-              <header><strong>Tag details</strong></header>
-              <div class="pd-rev-detail-fields pd-rev-detail-fields-tags">
-                ${at("bib", "BIB", "EC15")}
-                ${at("sign", "SIGN", "SC15")}
-                ${at("talker", "Talker", "1")}
-                ${at("molding", "Molding", "0")}
-              </div>
-            </section>
+              ${renderReviewPaList(ncrc, allPas, exceptions)}
+            </div>
+            <div class="pd-rev-table2">
+              <div class="pd-tagprev-head"><strong>Tag &amp; digital preview</strong><span class="pd-soon-badge">Coming soon</span></div>
+              ${renderShelfFigure()}
+              ${renderDigitalFigure(dad)}
+            </div>
           </div>
         </td>
       </tr>
+    `;
+  }
+
+  // Physical shelf tag preview (row 1 of the preview column) — placeholder.
+  function renderShelfFigure() {
+    return `
+      <figure class="pd-tagprev-card pd-tagprev-shelf">
+        <div class="pd-tagprev-canvas pd-shelf">
+          <div class="pd-shelf-member">Member Price!</div>
+          <div class="pd-shelf-rule"></div>
+          <div class="pd-shelf-prices">
+            <div class="pd-shelf-p"><b>3<sup>99</sup></b><em>ea</em></div>
+            <div class="pd-shelf-bar"></div>
+            <div class="pd-shelf-p"><b>3<sup>49</sup></b><em>ea</em><span class="pd-shelf-mm">Mix &amp; Match<br>Limit 4</span></div>
+          </div>
+          <div class="pd-shelf-save">SAVE $1.50</div>
+          <div class="pd-shelf-foot"><span>$5.32<br><i>PER QUART</i></span><span class="pd-shelf-thru">Thru Tue Oct 22</span><span>$4.66<br><i>PER QUART</i></span></div>
+        </div>
+        <span class="pd-tagprev-overlay">Coming soon</span>
+      </figure>
+    `;
+  }
+
+  // Digital coupon preview (row 2 of the preview column) — placeholder.
+  function renderDigitalFigure(dad) {
+    const name = (dad && dad.headline) || "Signature SELECT";
+    const plu = (dad && dad.couponPlu) || "70432";
+    return `
+      <figure class="pd-tagprev-card pd-tagprev-digital">
+        <div class="pd-tagprev-canvas pd-digital">
+          <div class="pd-digital-top"><span class="pd-digital-foru">for U</span><b class="pd-digital-price">$3.49</b><span class="pd-digital-each">Each</span></div>
+          <div class="pd-digital-instore">In-store: $4.99</div>
+          <div class="pd-digital-name">${escapeHtml(name)} 12-12FZ</div>
+          <a class="pd-digital-offer">Offer Details</a>
+          <div class="pd-digital-row">
+            <button type="button" class="pd-digital-clip">Clip Coupon</button>
+            <span class="pd-digital-exp">Unlimited use<br>Expires soon</span>
+          </div>
+          <div class="pd-digital-plu">PLU ${escapeHtml(plu)}</div>
+        </div>
+        <span class="pd-tagprev-overlay">Coming soon</span>
+      </figure>
+    `;
+  }
+
+  // Per-price-area ad/tag list: every PA shows as a row that either
+  // inherits the default or is overridden with its own copy edited inline
+  // — the same default+exceptions model as the tactic builder, no dropdown.
+  function renderReviewPaList(ncrc, allPas, exceptions) {
+    if (!allPas.length) return "";
+    const adBugOptions = [
+      "None", "1x rewards", "2x rewards", "3x rewards", "4x rewards",
+      "5x rewards", "6x rewards", "Limit 2", "Limit 4", "Limit 6"
+    ];
+    const exField = (pa, section, field, label, placeholder, maxlength) => {
+      const key = `${ncrc}|${pa}`;
+      const store = (promoDetailState.reviewEdits[section] && promoDetailState.reviewEdits[section][key]) || {};
+      return `
+        <label class="pd-rev-field">
+          <span>${escapeHtml(label)}</span>
+          <input type="text" ${maxlength ? `maxlength="${maxlength}"` : ""} placeholder="${escapeAttr(placeholder)}" value="${escapeAttr(store[field] || "")}"
+                 data-pd-review-section="${section}" data-pd-review-field="${field}" data-pd-review-key="${escapeAttr(key)}" />
+        </label>
+      `;
+    };
+    const exAdBug = (pa) => {
+      const key = `${ncrc}|${pa}`;
+      const store = (promoDetailState.reviewEdits.adDetails && promoDetailState.reviewEdits.adDetails[key]) || {};
+      return `
+        <label class="pd-rev-field">
+          <span>Ad bug</span>
+          <select data-pd-review-section="adDetails" data-pd-review-field="adBug" data-pd-review-key="${escapeAttr(key)}">
+            ${adBugOptions.map((opt) => `<option value="${escapeAttr(opt)}" ${store.adBug === opt ? "selected" : ""}>${escapeHtml(opt)}</option>`).join("")}
+          </select>
+        </label>
+      `;
+    };
+    return `
+      <div class="pd-rev-pa-list">
+        <div class="pd-rev-pa-list-head">
+          <strong>Price areas</strong>
+          <span class="pd-rev-pa-list-sub">${exceptions.length} of ${allPas.length} overridden &middot; the rest inherit the default above</span>
+        </div>
+        ${allPas.map((pa) => {
+          const isCustom = exceptions.includes(pa);
+          return `
+            <div class="pd-rev-pa-item ${isCustom ? "is-custom" : "is-inherit"}">
+              <div class="pd-rev-pa-item-top">
+                <span class="pd-rev-pa-name">${escapeHtml(pa)}</span>
+                <span class="pd-status-badge ${isCustom ? "pd-status-custom" : "pd-status-inherit"}">${isCustom ? "Custom" : "Inherits default"}</span>
+                <span class="pd-rev-pa-actions">
+                  ${isCustom
+                    ? `<a href="#" class="pd-override-link pd-override-link-clear" data-pd-adexc-remove="${escapeAttr(ncrc)}|${escapeAttr(pa)}">Reset to default</a>`
+                    : `<a href="#" class="pd-override-link" data-pd-adexc-add="${escapeAttr(ncrc)}|${escapeAttr(pa)}">&#9998; Override</a>`}
+                </span>
+              </div>
+              ${isCustom ? `
+                <div class="pd-rev-pa-fields">
+                  ${exField(pa, "adDetails", "headline", "Headline", "Cool down with...", "40")}
+                  ${exField(pa, "adDetails", "bodyCopy", "Body copy", "Short marketing line", "60")}
+                  ${exField(pa, "adDetails", "imageUpc", "Image UPC", "049000028911", "20")}
+                  ${exField(pa, "adDetails", "adInstructions", "Ad instructions", "Reverse type", "40")}
+                  ${exField(pa, "adDetails", "pricingComments", "Pricing comments", "BOGO on size", "40")}
+                  ${exAdBug(pa)}
+                  ${exField(pa, "adDetails", "couponPlu", "Coupon PLU", "70432", "8")}
+                  ${exField(pa, "tagDetails", "bib", "BIB", "EC15", "8")}
+                  ${exField(pa, "tagDetails", "sign", "SIGN", "SC15", "8")}
+                  ${exField(pa, "tagDetails", "talker", "Talker", "1", "8")}
+                  ${exField(pa, "tagDetails", "molding", "Molding", "0", "8")}
+                </div>
+              ` : ""}
+            </div>
+          `;
+        }).join("")}
+      </div>
     `;
   }
 
@@ -2222,15 +2655,38 @@
               </span>
             </h2>
           </div>
-          ${item ? renderPdHeaderForecast(data) : ""}
+          ${item && promoDetailState.planMode !== "manual" ? renderPdHeaderForecast(data) : ""}
         </div>
+        ${renderPlanModeToggle()}
         <div class="pd-header-row pd-header-row-filters">
           <div class="pd-header-filters-left">
             ${renderPdSelectors(options)}
           </div>
-          ${renderVelocityScopeBar()}
+          ${promoDetailState.planMode === "manual" ? "" : renderVelocityScopeBar()}
         </div>
       </header>
+    `;
+  }
+
+  // Primary flow switch: system-scored recommendations vs. a manual
+  // build-your-own promo. Manual hides the cost ladder + promo history
+  // and swaps the recommendations table for the default-tactic builder.
+  function renderPlanModeToggle() {
+    const manual = promoDetailState.planMode === "manual";
+    return `
+      <div class="pd-header-row pd-planmode-row">
+        <div class="pd-planmode" role="group" aria-label="Planning flow">
+          <button type="button" class="${manual ? "" : "active"}" data-pd-plan-mode="recommended">
+            <i class="pd-planmode-dot"></i> System recommended
+          </button>
+          <button type="button" class="${manual ? "active" : ""}" data-pd-plan-mode="manual">
+            <i class="pd-planmode-dot"></i> Manual override
+          </button>
+        </div>
+        <span class="pd-planmode-note">${manual
+          ? "Manual mode &mdash; set one tactic across all price areas, override PAs as exceptions. Cost ladder &amp; promo history hidden; no guardrail scoring."
+          : "System-scored recommendations, one per price area. Switch to manual to build your own promo."}</span>
+      </div>
     `;
   }
 
@@ -2351,6 +2807,9 @@
     const hasItem = data && data.item;
     const worklist = promoDetailState.worklist || [];
     const offer = hasItem ? selectedPromoOffer() : null;
+    // The cost-ladder side panel (and its mobile trigger/overlay) only
+    // belong to the system-recommended flow — manual override hides them.
+    const showSide = promoDetailState.planMode !== "manual";
     return `
       <div class="pd-shell">
         ${renderWorklistRail()}
@@ -2358,14 +2817,14 @@
           ${hasItem ? renderPdBody(data) : worklist.length ? `<div class="pd-detail-loader"><span></span>Loading NCRC detail...</div>` : renderPdEmptyState()}
         </div>
       </div>
-      ${hasItem && offer ? `
+      ${showSide && hasItem && offer ? `
         <button type="button" class="pd-side-trigger" data-pd-action="open-side" aria-label="Open selected offer details">
           <span class="pd-side-trigger-eyebrow">SELECTED OFFER</span>
           <span class="pd-side-trigger-label">${escapeHtml(offer.label)}</span>
           <span class="pd-side-trigger-arrow">&lsaquo;</span>
         </button>
       ` : ""}
-      ${hasItem && promoDetailState.sidePanelOpen ? `
+      ${showSide && hasItem && promoDetailState.sidePanelOpen ? `
         <div class="pd-side-overlay" data-pd-action="close-side">
           <aside class="pd-side-overlay-panel" data-pd-stop-propagation>
             <button type="button" class="pd-side-overlay-close" data-pd-action="close-side" aria-label="Close">&times;</button>
@@ -2389,6 +2848,17 @@
       return cart.some((entry) => entry.key === key);
     }).length;
     const pctFull = total === 0 ? 0 : Math.round((submittedCount / total) * 100);
+    // Search filter + group by vendor so 274 NCRCs stay navigable without
+    // pagination — jump via search, orient via sticky vendor headers.
+    const q = (promoDetailState.worklistSearch || "").trim().toLowerCase();
+    const filtered = worklist.map((item, index) => ({ item, index }))
+      .filter(({ item }) => !q || `${item.ncrc} ${item.item} ${item.vendor}`.toLowerCase().indexOf(q) >= 0);
+    const groupOrder = [];
+    const byVendor = {};
+    filtered.forEach((e) => { const v = e.item.vendor || "—"; if (!byVendor[v]) { byVendor[v] = []; groupOrder.push(v); } byVendor[v].push(e); });
+    const scopeSub = promoDetailState.planMode === "manual"
+      ? `All NCRCs${promoDetailState.vendor ? ` &middot; ${escapeHtml(promoDetailState.vendor)}` : ""}`
+      : `${escapeHtml(promoDetailState.velocityKind === "sales" ? "Sales" : "AGP")} velocity, Bin ${promoDetailState.bin}${promoDetailState.vendor ? ` &middot; ${escapeHtml(promoDetailState.vendor)}` : ""}`;
     return `
       <aside class="pd-worklist">
         <header class="pd-worklist-head">
@@ -2400,13 +2870,74 @@
         <div class="pd-worklist-progressbar" aria-label="Worklist progress: ${submittedCount} of ${total} submitted">
           <span style="width: ${pctFull}%"></span>
         </div>
-        <p class="pd-worklist-sub">${escapeHtml(promoDetailState.velocityKind === "sales" ? "Sales" : "AGP")} velocity, Bin ${promoDetailState.bin}${promoDetailState.vendor ? ` &middot; ${escapeHtml(promoDetailState.vendor)}` : ""}${promoDetailState.priceArea ? ` &middot; ${escapeHtml(promoDetailState.priceArea)}` : ""}</p>
+        <p class="pd-worklist-sub">${scopeSub}</p>
+        <div class="pd-worklist-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>
+          <input type="text" placeholder="Search NCRC, item or vendor&hellip;" value="${escapeAttr(promoDetailState.worklistSearch || "")}" data-pd-worklist-search />
+          ${q ? `<button type="button" class="pd-worklist-search-clear" data-pd-worklist-search-clear aria-label="Clear search">&times;</button>` : ""}
+        </div>
+        <div class="pd-worklist-viewport">
+          <span class="pd-worklist-count" data-pd-worklist-count></span>
+          <span class="pd-worklist-vp-arrows">
+            <button type="button" class="pd-worklist-scroll-btn" data-pd-worklist-scroll="up" aria-label="Scroll up">&#9650;</button>
+            <button type="button" class="pd-worklist-scroll-btn" data-pd-worklist-scroll="down" aria-label="Scroll down">&#9660;</button>
+          </span>
+        </div>
         <div class="pd-worklist-list" role="listbox">
-          ${loading ? `<div class="pd-worklist-loading"><span></span>Loading worklist&hellip;</div>` : total === 0 ? `<div class="pd-worklist-empty">No NCRCs in this slice. Try a different bin or clear filters.</div>` : worklist.map((item, index) => renderWorklistItem(item, index, index === idx)).join("")}
+          ${loading ? `<div class="pd-worklist-loading"><span></span>Loading worklist&hellip;</div>`
+            : total === 0 ? `<div class="pd-worklist-empty">No NCRCs in this slice. Try a different bin or clear filters.</div>`
+            : filtered.length === 0 ? `<div class="pd-worklist-empty">No matches for &ldquo;${escapeHtml(q)}&rdquo;.</div>`
+            : groupOrder.map((v) => `
+                <div class="pd-wl-group">
+                  <div class="pd-wl-group-head">${escapeHtml(v)} <span>${byVendor[v].length}</span></div>
+                  ${byVendor[v].map(({ item, index }) => renderWorklistItem(item, index, index === idx)).join("")}
+                </div>
+              `).join("")}
         </div>
         ${renderCartSummary()}
       </aside>
     `;
+  }
+
+  // Live "X–Y of N in view" indicator + arrow enable/disable for the
+  // scrollbar-less worklist. Called after each render and on scroll.
+  function updateWorklistViewport() {
+    const list = document.querySelector(".pd-worklist-list");
+    const label = document.querySelector("[data-pd-worklist-count]");
+    if (!list || !label) return;
+    const items = Array.prototype.slice.call(list.querySelectorAll(".pd-worklist-item"));
+    const total = items.length;
+    if (!total) { label.textContent = ""; return; }
+    const lr = list.getBoundingClientRect();
+    let first = -1, last = -1;
+    items.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      if (r.bottom > lr.top + 6 && r.top < lr.bottom - 6) { if (first < 0) first = i; last = i; }
+    });
+    if (first < 0) { first = 0; last = 0; }
+    label.innerHTML = `<strong>${first + 1}&ndash;${last + 1}</strong> of ${total} in view`;
+    const up = document.querySelector('[data-pd-worklist-scroll="up"]');
+    const down = document.querySelector('[data-pd-worklist-scroll="down"]');
+    if (up) up.disabled = list.scrollTop <= 1;
+    if (down) down.disabled = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+  }
+
+  function setupWorklistScroll() {
+    const list = document.querySelector(".pd-worklist-list");
+    if (!list) return;
+    // Idempotent property assignment — safe to call on every render.
+    list.onscroll = updateWorklistViewport;
+    ["up", "down"].forEach((dir) => {
+      const btn = document.querySelector(`[data-pd-worklist-scroll="${dir}"]`);
+      if (btn) btn.onclick = () => {
+        const l = document.querySelector(".pd-worklist-list");
+        if (!l) return;
+        const step = Math.max(140, l.clientHeight * 0.85);
+        l.scrollTop += (dir === "up" ? -step : step);
+        updateWorklistViewport();
+      };
+    });
+    updateWorklistViewport();
   }
 
   function renderCartSummary() {
@@ -2442,9 +2973,9 @@
         <span class="pd-wl-body">
           <span class="pd-wl-ncrc">${escapeHtml(item.ncrc)}</span>
           <span class="pd-wl-name">${escapeHtml(item.item)} <em>${escapeHtml(item.packSize || "")}</em></span>
-          <span class="pd-wl-meta">${escapeHtml(item.vendor)}</span>
           <span class="pd-wl-rec">Rec: ${escapeHtml(item.recommendedOfferLabel || "-")}</span>
         </span>
+        <span class="pd-wl-caret" aria-hidden="true"></span>
       </button>
     `;
   }
@@ -2513,6 +3044,18 @@
   }
 
   function renderPdBody(data) {
+    // Manual override drops the cost-ladder rail and the promo-history
+    // block, giving the builder the full width.
+    const manual = promoDetailState.planMode === "manual";
+    if (manual) {
+      return `
+        <div class="pd-layout pd-layout-manual">
+          <div class="pd-main">
+            ${renderOffersBlock(data)}
+          </div>
+        </div>
+      `;
+    }
     return `
       <div class="pd-layout">
         <div class="pd-main">
@@ -2727,9 +3270,15 @@
     const byPa = data.offersByPriceArea || [];
     if (!byPa.length && !(data.offers && data.offers.top && data.offers.top.length)) return "";
 
-    // Override view (the user flipped from recommendations)
-    if (promoDetailState.overrideMode) {
-      return renderOverrideView(data);
+    // "Override the recommendation" (system flow) now uses the same
+    // builder as manual override — default card + per-PA inline override.
+    if (promoDetailState.overrideMode && byPa.length) {
+      return renderManualBuilder(data, byPa);
+    }
+
+    // Manual override flow: default tactic card + per-PA inheritance table
+    if (promoDetailState.planMode === "manual" && byPa.length) {
+      return renderManualBuilder(data, byPa);
     }
 
     // Default by-price-area recommendations view
@@ -2737,6 +3286,159 @@
 
     // Legacy fallback: render the old top-5 table if no per-PA breakdown exists.
     return renderLegacyTop5(data);
+  }
+
+  // ---- Manual override builder -------------------------------------
+  // One default tactic set once, applied to every price area, with the
+  // ability to override individual PAs as exceptions.
+  function manualDiscountLabel(f) {
+    const v = Number(f.promoPrice) || 0;
+    if (f.discountType === "set_price") return `Set $${v.toFixed(2)}`;
+    if (f.discountType === "percent_off") return `${v.toFixed(0)}% off`;
+    return `$${v.toFixed(2)} off`;
+  }
+
+  // Resolve what a PA is currently running under the manual builder:
+  // its own custom override if it has one, otherwise the shared default.
+  function manualRowForPa(pa) {
+    const custom = promoDetailState.customOverrides[pa.priceArea] || null;
+    const rec = pa.offers.find((o) => o.isRecommended) || pa.offers[0] || {};
+    const def = promoDetailState.manualDefault || promoDetailState.overrideForm;
+    if (custom) {
+      const s = promoSystemSummary(custom._formSnapshot || {});
+      return {
+        isCustom: true, apex: s.apex, oms: s.oms,
+        sales: custom.forecastSales || rec.forecastSales || 0,
+        units: custom.forecastUnits || rec.forecastUnits || 0,
+        agp: custom.forecastAgp || rec.forecastAgp || 0
+      };
+    }
+    const s = promoSystemSummary(def);
+    return {
+      isCustom: false, apex: s.apex, oms: s.oms,
+      // Inheriting rows preview the recommender's per-PA volume as the
+      // expected outcome for the default tactic in that price area.
+      sales: rec.forecastSales || 0,
+      units: rec.forecastUnits || 0,
+      agp: rec.forecastAgp || 0
+    };
+  }
+
+  function renderManualBuilder(data, byPa) {
+    // The same builder backs both the Manual-override flow and the
+    // "Override the recommendation" action in the System-recommended flow;
+    // in the latter we show a back link + override disclaimer.
+    const override = promoDetailState.overrideMode;
+    const customCount = byPa.filter((pa) => promoDetailState.customOverrides[pa.priceArea]).length;
+    const editingPa = (promoDetailState.manualEditPa && byPa.some((p) => p.priceArea === promoDetailState.manualEditPa))
+      ? promoDetailState.manualEditPa : null;
+    return `
+      <section class="pd-section pd-manual">
+        ${override ? `
+          <div class="pd-manual-topbar">
+            <div>
+              <h3>Override recommendation</h3>
+              <p>Build a custom promo across every price area, or override individual price areas below.</p>
+            </div>
+            <button type="button" class="pd-override-flip" data-pd-override-toggle="close">&larr; Back to recommendations</button>
+          </div>
+        ` : ""}
+        <div class="pd-manual-default">
+          <div class="pd-manual-default-head">
+            <div class="pd-md-title">
+              <span class="pd-md-badge">DEFAULT</span>
+              <strong>Promo tactic &mdash; applies to all ${byPa.length} price area${byPa.length === 1 ? "" : "s"}</strong>
+              <p>Set once here. Every price area inherits this unless you override it below.</p>
+            </div>
+            <span class="pd-md-count">${customCount} of ${byPa.length} price areas customised</span>
+          </div>
+          <div class="pd-manual-fields">
+            ${renderPromoSystemsPair(promoDetailState.overrideForm, "data-pd-override-field")}
+            <div class="pd-manual-default-actions">
+              <button type="button" class="pd-btn-secondary" data-pd-manual-reset ${customCount ? "" : "disabled"}>Reset all exceptions</button>
+              <button type="button" class="pd-btn-primary" data-pd-manual-apply>Apply &amp; forecast</button>
+            </div>
+          </div>
+        </div>
+        ${override ? `<p class="pd-override-disclaimer"><strong>Override mode.</strong> Results are not optimised by the recommender. Linked items in store may be impacted. No guardrail or reliability scores will be shown.</p>` : ""}
+        ${editingPa ? renderManualEditPanel(editingPa) : ""}
+        <p class="pd-manual-cascade">&#8627; Changes to the default cascade to every <b>Inherits default</b> row automatically. Customised rows keep their own values.</p>
+
+        <div class="pd-section-head pd-rec-head">
+          <div>
+            <h3>Price areas</h3>
+            <p>One row per price area for ${escapeHtml(data.item.ncrc)}. Override a row to break from the default; reset to snap it back.</p>
+          </div>
+        </div>
+        <div class="pd-pa-table-wrap">
+          <table class="pd-pa-cols-table pd-manual-table">
+            <thead>
+              <tr>
+                <th>PA</th>
+                <th>APEX promo</th>
+                <th>OMS promo</th>
+                <th>Status</th>
+                <th class="r"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${byPa.map((pa) => {
+                const isEditing = editingPa === pa.priceArea;
+                const r = manualRowForPa(pa);
+                return `
+                  <tr class="pd-manual-row ${isEditing ? "is-editing-row" : r.isCustom ? "is-custom" : "is-inherit"}">
+                    <td class="pa-col"><strong>${escapeHtml(pa.priceArea)}</strong></td>
+                    <td class="pd-manual-promo"><span class="pd-sys-tag pd-sys-apex">APEX</span> ${escapeHtml(r.apex)}</td>
+                    <td class="pd-manual-promo"><span class="pd-sys-tag pd-sys-oms">OMS</span> ${escapeHtml(r.oms)}</td>
+                    <td>${isEditing
+                      ? `<span class="pd-status-badge pd-status-custom">Editing&hellip;</span>`
+                      : r.isCustom
+                      ? `<span class="pd-status-badge pd-status-custom">Custom</span>`
+                      : `<span class="pd-status-badge pd-status-inherit">Inherits default</span>`}</td>
+                    <td class="r pd-manual-actions">
+                      ${isEditing ? "" : r.isCustom
+                        ? `<a href="#" class="pd-override-link pd-override-link-clear" data-pd-override-clear="${escapeAttr(pa.priceArea)}">Reset</a>
+                           <a href="#" class="pd-override-link" data-pd-manual-edit="${escapeAttr(pa.priceArea)}">&#9998; Edit</a>`
+                        : `<a href="#" class="pd-override-link" data-pd-manual-edit="${escapeAttr(pa.priceArea)}">&#9998; Override</a>`}
+                    </td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+            <tfoot>
+              <tr class="pd-pa-totals-row">
+                <td class="pa-col"><strong>Total</strong><span class="pd-totals-sub">${byPa.length} price areas &middot; ${customCount} customised</span></td>
+                <td></td><td></td><td></td><td class="r"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
+  // Per-PA override editor — a full-width card styled like the default
+  // card so the fields line up (no cramped in-table layout).
+  function renderManualEditPanel(paName) {
+    const f = promoDetailState.manualEditForm || {};
+    return `
+      <div class="pd-manual-default pd-manual-editpanel">
+        <div class="pd-manual-default-head">
+          <div class="pd-md-title">
+            <span class="pd-md-badge pd-md-badge-edit">OVERRIDE</span>
+            <strong>Overriding ${escapeHtml(paName)}</strong>
+            <p>Break this price area out from the default. Forecast recalculates on save.</p>
+          </div>
+        </div>
+        <div class="pd-manual-fields">
+          ${renderPromoSystemsPair(f, "data-pd-manual-edit-field")}
+          <div class="pd-manual-default-actions">
+            <button type="button" class="pd-btn-secondary" data-pd-manual-edit-cancel>Cancel</button>
+            <button type="button" class="pd-btn-primary" data-pd-manual-edit-save>Save override</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   function renderByPriceAreaView(data, byPa) {
@@ -3003,50 +3705,24 @@
         <div class="pd-section-head pd-rec-head">
           <div>
             <h3>Override recommendation</h3>
-            <p>Specify a custom tactic, discount, min-buy and limit. The forecaster will return units, sales, and AGP for your override, but skip the guardrail and reliability scoring.</p>
+            <p>Build a custom promo and choose whether it applies to <strong>every price area</strong> or just <strong>one</strong>. The forecaster returns units, sales and AGP for your override, but skips guardrail and reliability scoring.</p>
           </div>
           <button type="button" class="pd-override-flip" data-pd-override-toggle="close">&larr; Back to recommendations</button>
         </div>
         <form class="pd-override-form" data-pd-override-submit>
-          <div class="pd-override-fields">
-            <label class="pd-of-field">
-              <span>Price Area</span>
-              <select name="priceArea" data-pd-override-field="priceArea">
-                <option value="">All price areas (apply to each)</option>
+          <div class="pd-override-scope">
+            <span class="pd-of-label">Apply to</span>
+            <div class="pd-segmented pd-override-scope-seg" role="group" aria-label="Override scope">
+              <button type="button" class="${!form.priceArea ? "active" : ""}" data-pd-override-scope="all">All price areas</button>
+              <button type="button" class="${form.priceArea ? "active" : ""}" data-pd-override-scope="single">One price area</button>
+            </div>
+            ${form.priceArea ? `
+              <select name="priceArea" class="pd-override-scope-pa" data-pd-override-field="priceArea">
                 ${vendorPriceAreas.map((p) => `<option value="${escapeAttr(p)}" ${form.priceArea === p ? "selected" : ""}>${escapeHtml(p)}</option>`).join("")}
               </select>
-            </label>
-            <label class="pd-of-field">
-              <span>Tactic</span>
-              <select name="tactic" data-pd-override-field="tactic">
-                <option ${form.tactic === "Item Discount" ? "selected" : ""}>Item Discount</option>
-                <option ${form.tactic === "Buy X Get X" ? "selected" : ""}>Buy X Get X</option>
-                <option ${form.tactic === "Buy X Get Y" ? "selected" : ""}>Buy X Get Y</option>
-                <option ${form.tactic === "Must Buy" ? "selected" : ""}>Must Buy</option>
-                <option ${form.tactic === "Meal Deal" ? "selected" : ""}>Meal Deal</option>
-              </select>
-            </label>
-            <label class="pd-of-field">
-              <span>Discount Type</span>
-              <select name="discountType" data-pd-override-field="discountType">
-                <option value="dollar_off" ${form.discountType === "dollar_off" ? "selected" : ""}>$ off</option>
-                <option value="percent_off" ${form.discountType === "percent_off" ? "selected" : ""}>% off</option>
-                <option value="set_price" ${form.discountType === "set_price" ? "selected" : ""}>Set promo $</option>
-              </select>
-            </label>
-            <label class="pd-of-field">
-              <span>${form.discountType === "set_price" ? "Promo price ($)" : form.discountType === "percent_off" ? "Discount (%)" : "Discount ($)"}</span>
-              <input type="number" step="0.01" min="0" name="promoPrice" value="${escapeAttr(form.promoPrice)}" data-pd-override-field="promoPrice" placeholder="${form.discountType === "set_price" ? "4.50" : form.discountType === "percent_off" ? "25" : "1.00"}" />
-            </label>
-            <label class="pd-of-field">
-              <span>Min Buy</span>
-              <input type="number" min="1" step="1" name="minBuy" value="${escapeAttr(form.minBuy)}" data-pd-override-field="minBuy" />
-            </label>
-            <label class="pd-of-field">
-              <span>Limit</span>
-              <input type="number" min="1" step="1" name="limit" value="${escapeAttr(form.limit)}" data-pd-override-field="limit" />
-            </label>
+            ` : `<span class="pd-override-scope-hint">One custom promo applies to every price area. Switch to &ldquo;One price area&rdquo; to target a single PA.</span>`}
           </div>
+          ${renderPromoSystemsPair(form, "data-pd-override-field")}
           <div class="pd-override-actions">
             <button type="button" class="pd-btn-secondary" data-pd-override-reset>Reset</button>
             <button type="submit" class="pd-btn-primary" ${submitting ? "disabled" : ""}>
@@ -3669,7 +4345,7 @@
       // Reset override form
       if (event.target.closest("[data-pd-override-reset]")) {
         event.preventDefault();
-        promoDetailState.overrideForm = { priceArea: "", tactic: "Item Discount", discountType: "dollar_off", promoPrice: "", minBuy: 1, limit: 6 };
+        promoDetailState.overrideForm = freshPromoForm({ priceArea: promoDetailState.overrideForm.priceArea });
         promoDetailState.overrideResult = null;
         renderPromoDetailScreen();
         return;
@@ -3740,6 +4416,115 @@
         renderPromoDetailScreen();
         return;
       }
+      // Plan-mode flow toggle: system recommended vs manual override.
+      const planModeBtn = event.target.closest("[data-pd-plan-mode]");
+      if (planModeBtn) {
+        promoDetailState.planMode = planModeBtn.dataset.pdPlanMode;
+        // Leaving/entering manual resets any open override + side panel so
+        // the flow starts clean.
+        promoDetailState.overrideMode = false;
+        promoDetailState.overrideResult = null;
+        promoDetailState.sidePanelOpen = false;
+        // Seed a sensible default depth so the builder doesn't preview
+        // "$0.00 off" before the planner types a discount.
+        if (promoDetailState.planMode === "manual" && promoDetailState.overrideForm.promoPrice === "") {
+          promoDetailState.overrideForm.promoPrice = "1.00";
+        }
+        renderPromoDetailScreen();
+        return;
+      }
+      // Override scope segmented (all price areas vs one).
+      const ovrScopeBtn = event.target.closest("[data-pd-override-scope]");
+      if (ovrScopeBtn) {
+        if (ovrScopeBtn.dataset.pdOverrideScope === "all") {
+          promoDetailState.overrideForm.priceArea = "";
+        } else {
+          const d = promoDetailState.data;
+          promoDetailState.overrideForm.priceArea =
+            (d && d.offersByPriceArea && d.offersByPriceArea[0] && d.offersByPriceArea[0].priceArea) || "";
+        }
+        renderPromoDetailScreen();
+        return;
+      }
+      // Manual builder: stamp the default tactic across every price area.
+      if (event.target.closest("[data-pd-manual-apply]")) {
+        promoDetailState.manualDefault = { ...promoDetailState.overrideForm, priceArea: "" };
+        renderPromoDetailScreen();
+        return;
+      }
+      // Manual builder: clear every per-PA exception.
+      if (event.target.closest("[data-pd-manual-reset]")) {
+        promoDetailState.customOverrides = {};
+        renderPromoDetailScreen();
+        return;
+      }
+      // Manual builder: open the inline editor for a PA (seed from its
+      // current custom values, else the shared default).
+      const manualEdit = event.target.closest("[data-pd-manual-edit]");
+      if (manualEdit) {
+        event.preventDefault();
+        const pa = manualEdit.dataset.pdManualEdit;
+        const custom = promoDetailState.customOverrides[pa];
+        const def = promoDetailState.manualDefault || promoDetailState.overrideForm;
+        promoDetailState.manualEditPa = pa;
+        promoDetailState.manualEditForm = custom && custom._formSnapshot
+          ? { ...freshPromoForm(), ...custom._formSnapshot }
+          : { ...freshPromoForm(), ...def };
+        renderPromoDetailScreen();
+        return;
+      }
+      // Manual builder: cancel inline edit.
+      if (event.target.closest("[data-pd-manual-edit-cancel]")) {
+        promoDetailState.manualEditPa = null;
+        promoDetailState.manualEditForm = null;
+        renderPromoDetailScreen();
+        return;
+      }
+      // Manual builder: save inline edit as this PA's custom override.
+      if (event.target.closest("[data-pd-manual-edit-save]")) {
+        const pa = promoDetailState.manualEditPa;
+        if (pa) {
+          const offer = buildCustomOfferFromValues(pa, promoDetailState.manualEditForm || {});
+          promoDetailState.customOverrides[pa] = offer;
+          promoDetailState.priceAreaSelections[pa] = offer.id;
+        }
+        promoDetailState.manualEditPa = null;
+        promoDetailState.manualEditForm = null;
+        renderPromoDetailScreen();
+        return;
+      }
+      // Review ad/tag: override a specific price area (break it out from
+      // the default). The PA is encoded on the button as "NCRC|PA".
+      const adexcAdd = event.target.closest("[data-pd-adexc-add]");
+      if (adexcAdd) {
+        event.preventDefault();
+        const parts = adexcAdd.dataset.pdAdexcAdd.split("|");
+        const ncrc = parts[0];
+        const pa = parts[1];
+        if (pa) {
+          if (!promoDetailState.reviewEdits.adExceptions[ncrc]) promoDetailState.reviewEdits.adExceptions[ncrc] = [];
+          if (!promoDetailState.reviewEdits.adExceptions[ncrc].includes(pa)) {
+            promoDetailState.reviewEdits.adExceptions[ncrc].push(pa);
+          }
+          renderPromoDetailScreen();
+        }
+        return;
+      }
+      // Review ad/tag: remove a per-price-area exception.
+      const adexcRemove = event.target.closest("[data-pd-adexc-remove]");
+      if (adexcRemove) {
+        event.preventDefault();
+        const parts = adexcRemove.dataset.pdAdexcRemove.split("|");
+        const ncrc = parts[0];
+        const pa = parts[1];
+        const list = promoDetailState.reviewEdits.adExceptions[ncrc] || [];
+        promoDetailState.reviewEdits.adExceptions[ncrc] = list.filter((p) => p !== pa);
+        const k = `${ncrc}|${pa}`;
+        if (promoDetailState.reviewEdits.adDetails) delete promoDetailState.reviewEdits.adDetails[k];
+        if (promoDetailState.reviewEdits.tagDetails) delete promoDetailState.reviewEdits.tagDetails[k];
+        renderPromoDetailScreen();
+        return;
+      }
       // Velocity scope buttons
       const velocityBtn = event.target.closest("[data-pd-velocity-kind]");
       if (velocityBtn) {
@@ -3755,6 +4540,24 @@
       const worklistItem = event.target.closest("[data-pd-worklist-index]");
       if (worklistItem) {
         gotoWorklistIndex(Number(worklistItem.dataset.pdWorklistIndex));
+        return;
+      }
+      // Clear the worklist search.
+      if (event.target.closest("[data-pd-worklist-search-clear]")) {
+        promoDetailState.worklistSearch = "";
+        renderPromoDetailScreen();
+        const inp = document.querySelector("[data-pd-worklist-search]");
+        if (inp) inp.focus();
+        return;
+      }
+      // Worklist scroll arrows (scrollbar is hidden).
+      const wlScroll = event.target.closest("[data-pd-worklist-scroll]");
+      if (wlScroll) {
+        const list = document.querySelector(".pd-worklist-list");
+        if (list) {
+          const step = Math.max(120, list.clientHeight * 0.8);
+          list.scrollBy({ top: wlScroll.dataset.pdWorklistScroll === "up" ? -step : step, behavior: "smooth" });
+        }
         return;
       }
       // Typeahead toggle / pick
@@ -3838,6 +4641,16 @@
     });
 
     document.addEventListener("input", (event) => {
+      // Worklist search — filters the list live; re-render then restore
+      // focus + caret so typing stays smooth.
+      const wlSearch = event.target.closest("[data-pd-worklist-search]");
+      if (wlSearch) {
+        promoDetailState.worklistSearch = wlSearch.value;
+        renderPromoDetailScreen();
+        const inp = document.querySelector("[data-pd-worklist-search]");
+        if (inp) { inp.focus(); const v = inp.value; try { inp.setSelectionRange(v.length, v.length); } catch (e) {} }
+        return;
+      }
       const ti = event.target.closest("[data-pd-typeahead-input]");
       if (ti) {
         const kind = ti.dataset.pdTypeaheadInput;
@@ -3852,9 +4665,17 @@
       const ovrField = event.target.closest("[data-pd-override-field]");
       if (ovrField) {
         const field = ovrField.dataset.pdOverrideField;
-        promoDetailState.overrideForm[field] = ovrField.value;
-        // For discountType changes the input placeholder/label updates — re-render.
-        if (field === "discountType") renderPromoDetailScreen();
+        promoDetailState.overrideForm[field] = ovrField.type === "checkbox" ? ovrField.checked : ovrField.value;
+        if (field === "apexAllowanceId") renderPromoDetailScreen();
+        return;
+      }
+      // Manual builder inline-edit fields (scratch form, no popup).
+      const meField = event.target.closest("[data-pd-manual-edit-field]");
+      if (meField) {
+        if (!promoDetailState.manualEditForm) promoDetailState.manualEditForm = {};
+        const field = meField.dataset.pdManualEditField;
+        promoDetailState.manualEditForm[field] = meField.type === "checkbox" ? meField.checked : meField.value;
+        if (field === "apexAllowanceId") renderPromoDetailScreen();
         return;
       }
       // Review-screen inline edits. Supports both flat keys
@@ -3883,8 +4704,16 @@
       const ovrField = event.target.closest("[data-pd-override-field]");
       if (ovrField) {
         const field = ovrField.dataset.pdOverrideField;
-        promoDetailState.overrideForm[field] = ovrField.value;
-        if (field === "discountType") renderPromoDetailScreen();
+        promoDetailState.overrideForm[field] = ovrField.type === "checkbox" ? ovrField.checked : ovrField.value;
+        if (field === "apexAllowanceId") renderPromoDetailScreen();
+        return;
+      }
+      const meField = event.target.closest("[data-pd-manual-edit-field]");
+      if (meField) {
+        if (!promoDetailState.manualEditForm) promoDetailState.manualEditForm = {};
+        const field = meField.dataset.pdManualEditField;
+        promoDetailState.manualEditForm[field] = meField.type === "checkbox" ? meField.checked : meField.value;
+        if (field === "apexAllowanceId") renderPromoDetailScreen();
         return;
       }
       const planCat = event.target.closest("[data-plan-category]");

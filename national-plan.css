@@ -2175,3 +2175,140 @@ body.dark .npv2-fg-alw { background: rgba(214,90,150,0.07) !important; border-le
 /* 3) the derived Promo cost values centered horizontally + TOP-aligned to match the
    top-aligned input cells (cell padding-top 9px + input padding-top 11px ≈ 20px) */
 .npv2-fg-costc { flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; padding-top: 20px !important; text-align: center; }
+
+/* ---------- scope multi-selects (categories & periods) ---------- */
+.np-msel { position: relative; display: inline-block; }
+.np-msel-field { display: inline-flex; align-items: center; gap: 6px; min-width: 290px; min-height: 30px; padding: 2px 8px; border: 1px solid #d8e1ee; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--ink); }
+.np-msel-per .np-msel-field { min-width: 180px; }
+.np-msel-field:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.np-msel-caret { margin-left: auto; color: var(--muted); font-size: 0.66rem; }
+.np-msel-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--blue-soft); color: var(--blue); border-radius: 5px; padding: 2px 6px; font-size: 0.74rem; font-weight: 620; white-space: nowrap; }
+.np-msel-x { border: 0; background: transparent; color: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; padding: 0 1px; border-radius: 3px; }
+.np-msel-x:hover { background: rgba(23,105,232,0.16); }
+.np-msel-morechip { background: var(--soft); color: var(--muted); border-radius: 5px; padding: 2px 7px; font-size: 0.72rem; font-weight: 700; }
+.np-msel-label { white-space: nowrap; }
+.np-msel-pop { position: absolute; z-index: 60; top: calc(100% + 5px); left: 0; width: 344px; max-height: 380px; display: flex; flex-direction: column; background: #fff; border: 1px solid #d8e1ee; border-radius: 10px; box-shadow: 0 14px 34px rgba(15,23,42,0.16); padding: 8px; }
+.np-msel-pop[hidden] { display: none; }
+.np-msel-search { height: 30px; padding: 0 10px; border: 1px solid #d8e1ee; border-radius: 6px; font: inherit; font-size: 0.78rem; margin-bottom: 6px; }
+.np-msel-search:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+.np-msel-list { overflow-y: auto; flex: 1; }
+.np-msel-sect { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--muted); padding: 7px 6px 4px; }
+.np-msel-row { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 0.78rem; color: var(--ink); }
+.np-msel-row:hover { background: var(--soft); }
+.np-msel-row input { accent-color: var(--blue); margin: 0; flex: 0 0 auto; }
+.np-msel-name { flex: 1; }
+.np-msel-badge { font-style: normal; font-size: 0.56rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: var(--blue-soft); color: var(--blue); border-radius: 4px; padding: 1px 5px; }
+.np-msel-sub { font-style: normal; font-size: 0.68rem; color: var(--muted); }
+.np-msel-hint { font-size: 0.7rem; color: var(--muted); padding: 8px 6px; font-style: italic; }
+.np-msel-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); margin-top: 6px; padding: 7px 6px 1px; font-size: 0.7rem; color: var(--muted); }
+.np-msel-foot .np-link-btn[disabled] { opacity: 0.45; cursor: default; }
+.np-msel-pop-per { width: 302px; }
+.np-per-quarters { display: grid; grid-template-columns: 1fr 1fr; }
+.np-per-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 2px 4px; }
+.np-per-cell { border: 1px solid #d8e1ee; background: #fff; border-radius: 6px; padding: 5px 0; font-size: 0.72rem; font-weight: 600; color: var(--ink); cursor: pointer; font-family: inherit; }
+.np-per-cell:hover { border-color: var(--blue); color: var(--blue); }
+.np-per-cell.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.np-per-cell.is-on:hover { color: #fff; }
+body.dark .np-msel-field, body.dark .np-msel-pop, body.dark .np-msel-search, body.dark .np-per-cell { background: #16213a; border-color: #2c3a52; color: #e6ecf5; }
+body.dark .np-msel-row { color: #e6ecf5; }
+body.dark .np-msel-row:hover { background: #1b2740; }
+body.dark .np-msel-chip, body.dark .np-msel-badge { background: rgba(80,140,255,0.18); color: #9db9ff; }
+body.dark .np-msel-morechip { background: #1b2740; color: #9aa8c0; }
+body.dark .np-per-cell.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.dark .np-msel-foot { border-color: #2c3a52; }
+
+/* ---------- step 2 — the four asks + collapsed system-learnt reference ----------
+   One shared scale across all four cards: title 0.8rem, every control exactly 36px
+   tall in a fixed 44px control zone, control text 0.8rem, note 0.7rem. */
+.np-ask4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin: 6px 0 16px; }
+.np-ask4-card { border: 1px solid var(--line); border-radius: 12px; background: var(--paper); padding: 13px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.np-ask4-head { display: flex; align-items: center; gap: 8px; }
+.np-ask4-num { width: 20px; height: 20px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.np-ask4-head h4 { margin: 0; font-size: 0.8rem; font-weight: 650; }
+.np-ask4-ctl { min-height: 44px; display: flex; align-items: center; }
+.np-ask4-note { margin: auto 0 0; font-size: 0.7rem; color: var(--muted); line-height: 1.5; }
+.np-ask4-input { display: inline-flex; align-items: center; gap: 6px; height: 36px; border: 1px solid #d8e1ee; border-radius: 999px; background: #fff; padding: 0 14px; width: fit-content; box-sizing: border-box; }
+.np-ask4-input:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(23,105,232,0.14); }
+.np-ask4-input input { border: 0; outline: none; width: 58px; font: inherit; font-size: 0.8rem; font-weight: 700; color: var(--ink); background: transparent; }
+.np-ask4-cur, .np-ask4-unit { font-size: 0.74rem; font-weight: 700; color: var(--muted); }
+.np-ask4-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.np-ask4-chip { display: inline-flex; align-items: center; gap: 7px; height: 36px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 999px; padding: 0 13px; background: var(--soft); }
+.np-ask4-chipname { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.np-ask4-chip b { font-size: 0.8rem; font-weight: 700; color: var(--ink); }
+.np-ask4-chip small { font-size: 0.68rem; color: var(--muted); }
+.np-ask4-seg { display: inline-flex; align-items: center; height: 36px; box-sizing: border-box; border: 1px solid #d8e1ee; border-radius: 999px; padding: 3px; width: fit-content; background: #fff; }
+.np-ask4-seg button { border: 0; background: transparent; height: 28px; padding: 0 16px; border-radius: 999px; font: inherit; font-size: 0.74rem; font-weight: 620; color: var(--muted); cursor: pointer; }
+.np-ask4-seg button.is-on { background: var(--blue); color: #fff; }
+/* locked switch — same 36px pill silhouette as the other controls, muted not faded */
+.np-ask4-locked { display: inline-flex; align-items: center; gap: 8px; height: 36px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 999px; padding: 0 13px; background: var(--soft); cursor: not-allowed; margin-top: 0; }
+.np-ask4-locked .np-c3-toggle-tr { width: 30px; height: 17px; background: #c4ccd6; }
+.np-ask4-locked .np-c3-toggle-tr::after { width: 13px; height: 13px; }
+.np-ask4-locked .np-c3-toggle-lbl { font-size: 0.74rem; font-weight: 620; color: var(--muted); }
+.np-c3-sysbtn { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; border: 1px dashed var(--line-strong); border-radius: 10px; background: transparent; padding: 9px 13px; font: inherit; font-size: 0.76rem; font-weight: 600; color: var(--muted); cursor: pointer; }
+.np-c3-sysbtn:hover { color: var(--ink); border-color: var(--blue); }
+.np-c3-syscaret { color: var(--blue); }
+.np-c3-syssub { font-weight: 500; font-size: 0.68rem; color: var(--muted); }
+.np-c3-sys { margin-top: 10px; }
+.np-c3-sysrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.np-c3-sysrow .np-c3-tabs { flex: 1; border-bottom: 0; }
+body.dark .np-ask4-card { background: #131d33; border-color: #25324a; }
+body.dark .np-ask4-input, body.dark .np-ask4-seg { background: #16213a; border-color: #2c3a52; }
+body.dark .np-ask4-input input { color: #e6ecf5; }
+body.dark .np-ask4-chip, body.dark .np-ask4-locked { background: #1b2740; border-color: #2c3a52; }
+body.dark .np-ask4-chip b { color: #e6ecf5; }
+body.dark .np-c3-sysbtn { border-color: #2c3a52; }
+
+/* ---------- v2 grid: sticky weekly totals · calmer outputs · events total · inputs toggle ---------- */
+.npv2-fg tfoot th, .npv2-fg tfoot td { position: sticky; bottom: 0; z-index: 4; background: linear-gradient(180deg, #f7fafd, #eef3fa) !important; border-top: 2px solid #c6d2e3 !important; }
+.npv2-fg tfoot .npv2-fg-totlab { left: 0; z-index: 7; text-align: left !important; padding: 6px 12px !important; vertical-align: middle !important; height: auto; }
+/* width-0 / min-width-100% wrapper — the pinned column is width: max-content, so this
+   cell must contribute NO intrinsic width of its own or it widens the whole block */
+.npv2-totlab-in { width: 0; min-width: 100%; overflow: hidden; }
+/* totals type matches the week cells (same size as the cell price line) */
+.npv2-fg-tot { text-align: center; padding: 4px 1px !important; vertical-align: middle !important; }
+.npv2-fg-tot b { display: block; font-size: 0.68rem; font-weight: 700; color: var(--ink); line-height: 1.3; font-variant-numeric: tabular-nums; }
+.npv2-fg-tot span { display: block; font-size: 0.58rem; color: var(--muted); line-height: 1.3; font-variant-numeric: tabular-nums; }
+.npv2-totlab-t { font-size: 0.72rem; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.npv2-totlab-sec { margin-top: 2px; font-size: 0.6rem; color: var(--muted); line-height: 1.35; }
+body.dark .npv2-fg tfoot th, body.dark .npv2-fg tfoot td { background: linear-gradient(180deg, #1a2740, #141f33) !important; border-top-color: #2c3a52 !important; }
+body.dark .npv2-fg-tot b, body.dark .npv2-totlab-t { color: #e6ecf5; }
+
+/* outputs-vs-LY block — downplayed so it stops competing with the calendar */
+.npv2-fg-outc b { font-size: 0.72rem !important; font-weight: 650 !important; }
+.npv2-fg-outc small { font-size: 0.52rem !important; }
+.npv2-fg-outc i { font-size: 0.54rem !important; font-weight: 500 !important; opacity: 0.8; }
+
+/* events — one total input with the learnt store/digital/combined split underneath */
+.npv2-fg-evc { flex-direction: column !important; align-items: stretch !important; }
+.npv2-fg-evsplit { display: block; margin-top: 1px; font-size: 0.52rem; color: var(--muted); text-align: center; white-space: nowrap; }
+
+/* single events column — the one cell fills the whole group (whose width comes from
+   the "Events · R⇄" caption), so the split line fits and no white gap is left */
+.npv2-fg-ev .npv2-fg-gcells { display: flex; }
+.npv2-fg-ev .npv2-fg-gcells > * { flex: 1 1 auto !important; width: auto !important; min-width: 90px !important; }
+/* width-0 / min-width-100%: the input contributes no intrinsic width, then stretches
+   to the cell — otherwise its ~150px default size inflates the whole events group */
+.npv2-fg-evc .npv2-fg-input { width: 0 !important; min-width: 100% !important; box-sizing: border-box; }
+
+/* redemption allowance — placeholder column, disabled until the data lands.
+   The "soon" badge lives ONCE in the column header, not on every row. */
+.npv2-fg-soon { position: relative; opacity: 0.55; cursor: not-allowed; }
+.npv2-fg-soon .npv2-fg-input { color: var(--muted); background: transparent; cursor: not-allowed; }
+.npv2-fg-soonb { display: block; font-style: normal; font-size: 0.46rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #b48a2f; line-height: 1.1; }
+/* strategy-card secondary row now holds 4 metrics (AIV · List · Funding · Spend rate) */
+.npv2-strat-grid2 { grid-template-columns: repeat(4, auto) !important; gap: 2px 18px !important; }
+/* inputs hidden — the pinned block is width: max-content, so it shrinks on its own */
+
+/* Strategy-card secondary metrics (AGP % · HHs · AUR) */
+.npv2-strat-sep { height: 1px; background: var(--line); margin: 8px 0 7px; }
+body.dark .npv2-strat-sep { background: #2c3a52; }
+.npv2-strat-grid2 { display: grid; grid-template-columns: repeat(3, auto); gap: 2px 26px; }
+.npv2-strat-m2 { display: flex; flex-direction: column; line-height: 1.3; }
+.npv2-strat-m2l { font-size: 0.48rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; }
+.npv2-strat-m2v { font-size: 0.74rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+body.dark .npv2-strat-m2v { color: #e6ecf5; }
+.npv2-strat-m2ly { font-size: 0.5rem; color: var(--faint); }
+.npv2-strat-m2d { font-size: 0.5rem; font-weight: 600; }
+/* Collapsed (scrolled) state — keep only the primary row on the active card */
+.npv2-fg-tools.is-scrolled .npv2-strat .npv2-strat-sep,
+.npv2-fg-tools.is-scrolled .npv2-strat .npv2-strat-grid2 { display: none; }

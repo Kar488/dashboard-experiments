@@ -20,7 +20,9 @@
   const km = (vM) => { const k = vM * 1000; return Math.abs(k) >= 1000 ? "$" + (k / 1000).toFixed(2) + "M" : "$" + Math.round(k) + "K"; };
 
   let flip = { open: false, m: 0, animating: false };
-  const ff = { vendor: "all", rog: "all", cls: "all", sortBy: null, bin: "all" };   // front-grid filters + sort
+  const ff = { cat: "all", vendor: "all", rog: "all", cls: "all", sub: "all", sortBy: null, bin: "all" };   // front-grid filters + sort
+  // sub-class — a finer split under class, derived from the item's demand form
+  const SUBCLASS_LABEL = { bar: "Core / everyday", bag: "Multipack", tub: "Club & seasonal" };
   const mfilter = { vendor: "all", cls: "all" };           // month-detail filters
   const SHELL = "npV2Shell", MFACE = "npV2MonthFace", FLIPEL = "npV2Flip", FRONT = "npV2Front", WRAP = "npV2FgWrap";
 
@@ -73,9 +75,10 @@
   const ALLOWCOLS = [
     { k: "offInvoice", label: "Off-inv", edit: true },
     { k: "scan", label: "Scan", edit: true },
+    { k: "redemption", label: 'Redem<i class="npv2-fg-soonb">soon</i>', soon: true },   // redemption allowance — placeholder, coming later
     { k: "shipToStore", label: "Ship", edit: true }
   ];
-  const ALWTITLE = { offInvoice: "off-invoice", scan: "scan", shipToStore: "ship-to-store" };
+  const ALWTITLE = { offInvoice: "off-invoice", scan: "scan", redemption: "redemption", shipToStore: "ship-to-store" };
   // allowance group header doubles as the Regular↔Deep toggle (which promo cost you're breaking up)
   function allowCap() {
     const deep = NP.state.v2allowMode === "deep";
@@ -89,19 +92,37 @@
     return '<div class="npv2-fg-cell npv2-fg-costc" data-cost="' + o.uid + ":" + (deep ? "deep" : "reg") + '" title="Promo cost $/u — ' + (deep ? "deep-discount" : "regular") + ' weeks (built from the allowances)"><b>' + NP.fmt.price(v) + "</b></div>";
   }
   function allowCellHTML(c, o, eDraft) {
+    if (c.soon) return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-soon" title="Redemption allowance ($/u) — coming later"><input class="npv2-fg-input" type="text" value="—" disabled></div>';
     const deep = NP.state.v2allowMode === "deep";
     const lad = deep ? deepLadderOf(o) : eDraft.ladder;
     const dollar = (lad[c.k] || 0) * eDraft.vlc;
     return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit" data-cell="' + o.uid + ":alw:" + c.k + '" title="' + esc((deep ? "Deep" : "Regular") + " " + (ALWTITLE[c.k] || c.k) + " allowance ($/u) — builds the promo cost") + '">' +
       '<input class="npv2-fg-input npv2-fg-alwin" type="text" inputmode="decimal" data-uid="' + o.uid + '" data-alw="' + c.k + '" value="' + dollar.toFixed(2) + '"></div>';
   }
+  // events — the merchant enters ONE total; the learnt store/digital/combined split
+  // is shown underneath and edits are distributed proportionally to that split.
+  function evSplitOf(e, deep) { return deep ? [e.deepEvents, e.deepDigEvents, e.deepBothEvents] : [e.events, e.digEvents, e.bothEvents]; }
+  function evFields(deep) { return deep ? ["deepEvents", "deepDigEvents", "deepBothEvents"] : ["events", "digEvents", "bothEvents"]; }
   function evCols() {
     const deep = NP.state.v2evMode === "deep";
-    return [
-      { k: deep ? "deepEvents" : "events", label: "Store", edit: true, val: (o, e) => String(deep ? e.deepEvents : e.events) },
-      { k: deep ? "deepDigEvents" : "digEvents", label: "Dig", edit: true, val: (o, e) => String(deep ? e.deepDigEvents : e.digEvents) },
-      { k: deep ? "deepBothEvents" : "bothEvents", label: "S+D", edit: true, val: (o, e) => String(deep ? e.deepBothEvents : e.bothEvents) }
-    ];
+    return [{ k: deep ? "deepEvTotal" : "evTotal", label: "Total / yr", edit: true, val: (o, e) => { const s = evSplitOf(e, deep); return String(s[0] + s[1] + s[2]); } }];
+  }
+  function evCellHTML(o, eDraft) {
+    const deep = NP.state.v2evMode === "deep";
+    const sp = evSplitOf(eDraft, deep), tot = sp[0] + sp[1] + sp[2], k = deep ? "deepEvTotal" : "evTotal";
+    const edited = evFields(deep).some((f) => NP.isEdited(o, f));
+    return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit npv2-fg-evc' + (edited ? " is-edited" : "") + '" data-cell="' + o.uid + ":" + k + '" title="' + esc((deep ? "Deep-discount" : "Regular") + " promo events / yr — enter the total; the learnt store · digital · combined split underneath is kept proportional") + '">' +
+      '<input class="npv2-fg-input" type="text" inputmode="numeric" data-uid="' + o.uid + '" data-field="' + k + '" value="' + tot + '">' +
+      '<span class="npv2-fg-evsplit" data-evsplit="' + o.uid + '">S ' + sp[0] + " · D " + sp[1] + " · S+D " + sp[2] + "</span></div>";
+  }
+  function distributeEvents(o, raw, deep) {
+    let t = Math.round(parseFloat(raw)); if (isNaN(t)) t = 0; t = Math.max(0, Math.min(60, t));
+    const cur = evSplitOf(NP.effective(o, NP.state.draft), deep), sum = cur[0] + cur[1] + cur[2];
+    const w = sum > 0 ? cur.map((x) => x / sum) : [0.5, 0.3, 0.2];
+    const s = Math.round(t * w[0]), d = Math.round(t * w[1]);
+    const parts = [s, d, Math.max(0, t - s - d)];
+    evFields(deep).forEach((f, i) => NP.applyEdit(o.uid, f, parts[i]));
+    return parts;
   }
   const INTITLE = { vlc: "Vendor list cost / unit", deadNet: "Promo cost — regular weeks", deepDeadNet: "Promo cost — deep-discount weeks", events: "Regular store events / yr", digEvents: "Regular digital events / yr", bothEvents: "Regular store & digital / yr", deepEvents: "Deep store events / yr", deepDigEvents: "Deep digital events / yr", deepBothEvents: "Deep store & digital / yr" };
   // events column header doubles as the Regular↔Deep toggle (events are coupled to the cost columns)
@@ -111,9 +132,11 @@
   }
   function frontItems() {
     let items = NP.cat().items.slice();
+    if (ff.cat !== "all") items = items.filter((o) => o.catId === ff.cat);
     if (ff.vendor !== "all") items = items.filter((o) => o.vendor === ff.vendor);
     if (ff.rog !== "all") items = items.filter((o) => o.rog === ff.rog);
     if (ff.cls !== "all") items = items.filter((o) => o.cluster === ff.cls);
+    if (ff.sub !== "all") items = items.filter((o) => o.form === ff.sub);
     const metric = ff.sortBy || "sales";
     if (ff.bin !== "all") { const bins = NP.binsFor(); items = items.filter((o) => bins[o.uid][metric] === +ff.bin); }
     if (ff.sortBy) {
@@ -158,24 +181,29 @@
   function grpBody(cls, cellsHTML) {
     return '<div class="npv2-fg-grp npv2-fg-' + cls + '"><div class="npv2-fg-gcap"></div><div class="npv2-fg-gcells">' + cellsHTML + "</div></div>";
   }
+  function inputsOn() { return NP.state.v2inputs !== false; }
   function idCell(o, res, ly, eDraft) {
     return '<th class="npv2-fg-id"><div class="npv2-fg-idin">' +
       '<div class="npv2-fg-name"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + '</span><span class="np-rc-id npv2-fg-base">Base ' + NP.fmt.price(o.basePrice) + "</span></div>" +
       grpBody("out", OUTCOLS.map((c) => outCellHTML(c, res, ly)).join("")) +
-      grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
-      grpBody("cost", costCellHTML(o, false) + costCellHTML(o, true)) +
-      grpBody("alw", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft)).join("")) +
-      grpBody("ev", evCols().map((c) => inCellHTML(c, o, eDraft)).join("")) +
+      (inputsOn()
+        ? grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
+          grpBody("cost", costCellHTML(o, false) + costCellHTML(o, true)) +
+          grpBody("alw", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft)).join("")) +
+          grpBody("ev", evCellHTML(o, eDraft))
+        : "") +
       "</div></th>";
   }
   function idHead() {
     return '<th class="npv2-fg-id npv2-fg-idhead npv2-fg-snap" rowspan="2"><div class="npv2-fg-idin">' +
       '<div class="npv2-fg-name npv2-fg-nameh">NCRC · item</div>' +
       grpHead("out", "Outputs vs LY", OUTCOLS) +
-      grpHead("vlc", "List", [VLCCOL]) +
-      grpHead("cost", "Promo cost $/u", COSTCOLS) +
-      grpHead("alw", allowCap(), ALLOWCOLS) +
-      grpHead("ev", evCap(), evCols()) +
+      (inputsOn()
+        ? grpHead("vlc", "List", [VLCCOL]) +
+          grpHead("cost", "Promo cost $/u", COSTCOLS) +
+          grpHead("alw", allowCap(), ALLOWCOLS) +
+          grpHead("ev", evCap(), evCols())
+        : "") +
       "</div></th>";
   }
   function ribbonCell(o, c, isEv, ixf, lyset, noAlw) {
@@ -214,9 +242,9 @@
         '<div class="npv2-wk-tags">' + arr + optIcon + lockI + warnI + "</div>" +
       "</div></td>";
   }
-  function sel(label, id, opts, cur) {
+  function sel(label, id, opts, cur, allLab) {
     const options = opts.map((o) => { const v = Array.isArray(o) ? o[0] : o, lab = Array.isArray(o) ? o[1] : o; return '<option value="' + esc(v) + '"' + (cur === v ? " selected" : "") + ">" + esc(lab) + "</option>"; }).join("");
-    return '<label class="npv2-fg-filter">' + label + ' <select id="' + id + '"><option value="all">All ' + label.toLowerCase() + "s</option>" + options + "</select></label>";
+    return '<label class="npv2-fg-filter">' + label + ' <select id="' + id + '"><option value="all">' + (allLab || "All " + label.toLowerCase() + "s") + "</option>" + options + "</select></label>";
   }
   // interactions: for each week, which items promote (with cluster + rank) → flag a promoted
   // cell as cannibalisation (a same-cluster rival is also on deal that week) or halo (a
@@ -241,17 +269,22 @@
     const stratRes = (o) => (strat === "optimized" || !cfV || !cfV.cfResult ? NP.resultFor(o, map) : cfV.cfResult(o, strat));
     const wkByUid = {}; items.forEach((o) => (wkByUid[o.uid] = stratWk(o)));
     const ixMap = ixOn ? buildIxMap(items, wkByUid) : null;
-    // focused period → show only its 4 weeks (the pinned block is unchanged); else all 52
+    // focused period → show only its 4 weeks (the pinned block is unchanged).
+    // Otherwise honour the scope-row period filter (NP.state.periods); empty = all 52.
     const focus = NP.state.v2period;
-    const weeks = focus == null ? Array.from({ length: 52 }, (_, w) => w)
+    const selRaw = NP.state.periods || [];
+    const selP = (focus == null && selRaw.length && selRaw.length < 13) ? selRaw.slice().sort((a, b) => a - b) : null;
+    const plist = selP || Array.from({ length: 13 }, (_, p) => p);
+    const weeks = focus == null ? plist.reduce((arr, p) => { for (let i = 0; i < 4; i++) { const w = p * 4 + i; if (w < 52) arr.push(w); } return arr; }, [])
                                 : [0, 1, 2, 3].map((i) => focus * 4 + i).filter((w) => w < 52);
     let periodHead;
     if (focus == null) {
       periodHead = "";
-      for (let p = 0; p < 13; p++) periodHead += '<th class="npv2-fg-period' + (p === 0 ? " npv2-fg-snap" : "") + '" colspan="4" data-period="' + p + '" role="button" tabindex="0" title="Zoom into period ' + (p + 1) + ' (4 weeks)">P' + (p + 1) + "</th>";
+      plist.forEach((p, i) => { periodHead += '<th class="npv2-fg-period' + (i === 0 ? " npv2-fg-snap" : "") + '" colspan="4" data-period="' + p + '" role="button" tabindex="0" title="Zoom into period ' + (p + 1) + ' (4 weeks)">P' + (p + 1) + "</th>"; });
     } else {
-      periodHead = '<th class="npv2-fg-period npv2-fg-periodback npv2-fg-snap" colspan="' + weeks.length + '" data-zoomout role="button" tabindex="0" title="Zoom back out to all 52 weeks">' +
-        '<span class="npv2-fg-zback">‹ all 52 weeks</span><b>Period ' + (focus + 1) + '</b><span class="npv2-fg-zwk">wks ' + (weeks[0] + 1) + "–" + (weeks[weeks.length - 1] + 1) + "</span></th>";
+      const backLbl = (selRaw.length && selRaw.length < 13) ? "‹ selected periods" : "‹ all 52 weeks";
+      periodHead = '<th class="npv2-fg-period npv2-fg-periodback npv2-fg-snap" colspan="' + weeks.length + '" data-zoomout role="button" tabindex="0" title="Zoom back out">' +
+        '<span class="npv2-fg-zback">' + backLbl + '</span><b>Period ' + (focus + 1) + '</b><span class="npv2-fg-zwk">wks ' + (weeks[0] + 1) + "–" + (weeks[weeks.length - 1] + 1) + "</span></th>";
     }
     let wkHead = "";
     weeks.forEach((w) => {
@@ -275,20 +308,63 @@
       body += "<tr>" + idCell(o, res, ly, eDraft) + cells + "</tr>";
     });
     if (!items.length) body = '<tr><td class="npv2-empty" colspan="' + span + '">No NCRCs match these filters.</td></tr>';
-    return '<table class="npv2-fg' + (focus != null ? " is-period" : "") + '">' + head + "<tbody>" + body + "</tbody></table>";
+    return '<table class="npv2-fg' + (focus != null ? " is-period" : "") + (inputsOn() ? "" : " is-noinputs") + '">' + head + "<tbody>" + body + "</tbody>" + totFootHTML(items, map, weeks) + "</table>";
   }
-  function lyTotals() { let r = 0, u = 0, a = 0; NP.cat().items.forEach((o) => { const x = NP.lyResult(o); r += x.revenueM; u += x.units; a += x.agpM; }); return { r: r, u: u, a: a }; }
+  // sticky weekly-totals footer — per visible week: Sales / Units / AGP. Hovering a week
+  // shows the rolling (cumulative-to-date) totals; the pinned label carries the plan-level
+  // secondary metrics: AIV, list cost per unit, funding per unit and spend rate.
+  function totFootHTML(items, map, weeks) {
+    if (!items.length) return "";
+    const per = weeks.map(() => ({ u: 0, s: 0, a: 0 }));
+    items.forEach((o) => { const ser = NP.weeklySeries(o, map); weeks.forEach((w, i) => { per[i].u += ser.units[w]; per[i].s += ser.sales[w]; per[i].a += ser.agp[w]; }); });
+    let u = 0, r = 0, listS = 0, fundS = 0;
+    items.forEach((o) => { const res = NP.resultFor(o, map), e = NP.effective(o, map); u += res.units; r += res.revenueM; listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units; });
+    const aiv = u ? (r * 1000) / u : 0, listU = u ? listS / u : 0, fundU = u ? fundS / u : 0, rate = r ? (fundS / 1000) / r : 0;
+    let cu = 0, cs = 0, ca = 0;
+    const cells = weeks.map((w, i) => {
+      cu += per[i].u; cs += per[i].s; ca += per[i].a;
+      const tip = "Wk " + (w + 1) + " — Sales " + km(per[i].s) + " · Units " + NP.fmt.u(per[i].u) + " · AGP " + km(per[i].a) +
+        "   ·   rolling to date: Sales " + km(cs) + " · Units " + NP.fmt.u(cu) + " · AGP " + km(ca);
+      return '<td class="npv2-fg-tot" title="' + esc(tip) + '"><b>' + km(per[i].s) + "</b><span>" + NP.fmt.u(per[i].u) + "</span><span>" + km(per[i].a) + "</span></td>";
+    }).join("");
+    // keep this cell's content NARROW — the pinned column is width: max-content, so a
+    // long single line here would widen the whole frozen block (the width-0 wrapper
+    // stops the cell contributing to the auto column width at all).
+    const lab = '<th class="npv2-fg-id npv2-fg-totlab" title="Plan-level: AIV $' + aiv.toFixed(2) + " · List $" + listU.toFixed(2) + "/u · Funding $" + fundU.toFixed(2) + "/u · Spend rate " + (rate * 100).toFixed(1) + '%"><div class="npv2-totlab-in">' +
+      '<div class="npv2-totlab-t">Weekly totals</div>' +
+      '<div class="npv2-totlab-sec">Sales · Units · AGP per week · hover for the rolling total</div></div></th>';
+    return "<tfoot><tr>" + lab + cells + "</tr></tfoot>";
+  }
+  function lyTotals() { let r = 0, u = 0, a = 0, h = 0; NP.cat().items.forEach((o) => { const x = NP.lyResult(o); r += x.revenueM; u += x.units; a += x.agpM; h += x.hhK; }); return { r: r, u: u, a: a, h: h }; }
   // ROW 1 — distribution strategies as selectable cards, each with its Sales/Units/AGP + Δ vs LY
   function stratCardsHTML() {
     const cfV = window.NPViews; if (!cfV || !cfV.cfStrategies) return "";
     const cur = NP.state.cf.strategy || "optimized", ly = lyTotals();
     const met = (lab, cv, lv, money) => { const f = money ? km : NP.fmt.u, d = lv ? (cv - lv) / lv : 0, dd = cv - lv; return '<div class="npv2-strat-m"><span class="npv2-strat-ml">' + lab + '</span><span class="npv2-strat-mv">' + f(cv) + '</span><span class="npv2-strat-mly">LY ' + f(lv) + '</span><span class="npv2-strat-md ' + (d >= 0 ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(d) + " · " + (dd >= 0 ? "+" : "") + f(dd) + "</span></div>"; };
+    // Secondary metrics — derived, more compact (value + LY + delta only)
+    const met2 = (lab, cvS, lvS, dcls, dtxt) => '<div class="npv2-strat-m2"><span class="npv2-strat-m2l">' + lab + '</span><span class="npv2-strat-m2v">' + cvS + '</span><span class="npv2-strat-m2ly">LY ' + lvS + '</span><span class="npv2-strat-m2d ' + dcls + '">' + dtxt + '</span></div>';
+    // secondary metrics: AIV · list cost / unit · funding / unit · spend rate
+    const pc = (() => { let u = 0, listS = 0, fundS = 0; const map = NP.displayMap(); NP.cat().items.forEach((o) => { const res = NP.resultFor(o, map), e = NP.effective(o, map); u += res.units; listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units; }); return { listU: u ? listS / u : 0, fundU: u ? fundS / u : 0, fundM: fundS / 1000 }; })();
+    const secondary = (t) => {
+      const aiv = t.units ? (t.revenueM * 1000) / t.units : 0, lyAiv = ly.u ? (ly.r * 1000) / ly.u : 0, aivD = lyAiv ? (aiv - lyAiv) / lyAiv : 0;
+      const lyListU = pc.listU * 0.985, listD = lyListU ? (pc.listU - lyListU) / lyListU : 0;
+      const lyFundU = pc.fundU * 0.94, fundD = lyFundU ? (pc.fundU - lyFundU) / lyFundU : 0;
+      const rate = t.revenueM ? pc.fundM / t.revenueM : 0, lyRate = ly.r ? (pc.fundM * 0.94) / ly.r : 0, ppd = (rate - lyRate) * 100;
+      return '<div class="npv2-strat-grid2">' +
+        met2("AIV", "$" + aiv.toFixed(2), "$" + lyAiv.toFixed(2), aivD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(aivD)) +
+        met2("List $/u", "$" + pc.listU.toFixed(2), "$" + lyListU.toFixed(2), listD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(listD)) +
+        met2("Funding $/u", "$" + pc.fundU.toFixed(2), "$" + lyFundU.toFixed(2), fundD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(fundD)) +
+        met2("Spend rate", (rate * 100).toFixed(1) + "%", (lyRate * 100).toFixed(1) + "%", ppd >= 0 ? "np-pos" : "np-neg", (ppd >= 0 ? "+" : "") + ppd.toFixed(1) + "pp") +
+        "</div>";
+    };
     return '<div class="npv2-strat-row" id="npV2Strats">' + cfV.cfStrategies().map((s) => {
       const t = cfV.cfTotals(s.id);
       return '<button type="button" class="npv2-strat' + (cur === s.id ? " is-active" : "") + '" data-strat="' + s.id + '">' +
         '<span class="npv2-strat-name">' + esc(s.name) + (s.tag ? ' <em>' + esc(s.tag) + "</em>" : "") + "</span>" +
         '<span class="npv2-strat-sub">vs last year</span>' +
-        '<div class="npv2-strat-grid">' + met("Sales", t.revenueM, ly.r, true) + met("Units", t.units, ly.u, false) + met("AGP", t.agpM, ly.a, true) + "</div></button>";
+        '<div class="npv2-strat-grid">' + met("Sales", t.revenueM, ly.r, true) + met("Units", t.units, ly.u, false) + met("AGP", t.agpM, ly.a, true) + "</div>" +
+        '<div class="npv2-strat-sep"></div>' +
+        secondary(t) + "</button>";
     }).join("") + '</div><div class="npv2-rule"></div>';
   }
   // heatmap legend — same gentle colours as the ribbon
@@ -377,6 +453,16 @@
   /* ---- inline editing of the pinned inputs (band-aware, like V1) ---- */
   function onEditInput(e) {
     const inp = e.target, uid = inp.dataset.uid, field = inp.dataset.field, o = NP.cat().items.find((x) => x.uid === uid);
+    if (field === "evTotal" || field === "deepEvTotal") {
+      const deep = field === "deepEvTotal";
+      const parts = distributeEvents(o, inp.value, deep);
+      const cell = inp.closest(".npv2-fg-inc");
+      if (cell) {
+        cell.classList.toggle("is-edited", evFields(deep).some((f) => NP.isEdited(o, f)));
+        const spEl = cell.querySelector("[data-evsplit]"); if (spEl) spEl.textContent = "S " + parts[0] + " · D " + parts[1] + " · S+D " + parts[2];
+      }
+      updateScenarioUI(); return;
+    }
     NP.applyEdit(uid, field, inp.value);
     const cell = inp.closest(".npv2-fg-inc");
     if (cell) { const edited = NP.isEdited(o, field); cell.classList.toggle("is-edited", edited); cell.classList.toggle("is-outband", edited && !NP.inBand(o, field, inp.value)); }
@@ -406,6 +492,7 @@
   }
   function onEditBlur(e) {
     const inp = e.target, field = inp.dataset.field, o = NP.cat().items.find((x) => x.uid === inp.dataset.uid), d = NP.effective(o, NP.state.draft);
+    if (field === "evTotal" || field === "deepEvTotal") { const sp = evSplitOf(d, field === "deepEvTotal"); inp.value = String(sp[0] + sp[1] + sp[2]); hideBand(); return; }
     const dec = field === "vlc" || field === "deadNet" || field === "deepDeadNet";
     if (d[field] != null) inp.value = dec ? Number(d[field]).toFixed(2) : String(d[field]);
     hideBand();
@@ -423,9 +510,12 @@
   function renderFront() {
     const front = document.getElementById(FRONT); if (!front) return;
     const map = NP.displayMap(), all = NP.cat().items;
+    const cats = (NP.state.categoryIds || [NP.state.categoryId]).map((id) => [id, (NP.DATA[id] ? NP.DATA[id].name : id).split(" — ")[0]]);
     const vendors = [...new Set(all.map((o) => o.vendor))].sort();
     const rogs = [...new Set(all.map((o) => o.rog))].sort();
     const clusters = [...new Set(all.map((o) => o.cluster))].map((c) => [c, NP.CLUSTER_LABEL[c] || c]);
+    const subs = [...new Set(all.map((o) => o.form))].map((f) => [f, SUBCLASS_LABEL[f] || f]);
+    if (ff.cat !== "all" && !cats.some((c) => c[0] === ff.cat)) ff.cat = "all";
     if (ff.vendor !== "all" && !vendors.includes(ff.vendor)) ff.vendor = "all";
     if (ff.rog !== "all" && !rogs.includes(ff.rog)) ff.rog = "all";
     const items = frontItems();
@@ -440,13 +530,14 @@
             '<button type="button" class="npv2-fg-btn" id="npV2Cmp">Compare</button>' +
           "</div>" +
           '<div class="npv2-fg-gr">' +
+            '<button type="button" class="npv2-ix-cap' + (inputsOn() ? " is-on" : "") + '" id="npV2InputsT" title="Show or hide the pinned deal-input columns (list, promo cost, allowances, events) to focus on the calendar"><span class="npv2-ix-dot"></span>Inputs ' + (inputsOn() ? "on" : "off") + "</button>" +
             '<button type="button" class="npv2-ix-cap' + (NP.state.v2ix ? " is-on" : "") + '" id="npV2Ix" title="Highlight where the optimiser separates cluster rivals (cannibalisation) and co-promotes complements (halo)"><span class="npv2-ix-dot"></span>Interactions ' + (NP.state.v2ix ? "on" : "off") + "</button>" +
             '<span class="npv2-fg-ixkey"' + (NP.state.v2ix ? "" : " hidden") + '><i class="npv2-ixk npv2-ixk-h"></i>halo <i class="npv2-ixk npv2-ixk-c"></i>cannib.</span>' +
           "</div>" +
         "</div>" +
         // row 3 — filters (left) · sort (right)
         '<div class="npv2-fg-trow">' +
-          '<div class="npv2-fg-gl">' + sel("Vendor", "npV2FgVendor", vendors, ff.vendor) + sel("ROG", "npV2FgRog", rogs, ff.rog) + sel("Class", "npV2FgClass", clusters, ff.cls) + "</div>" +
+          '<div class="npv2-fg-gl">' + sel("Category", "npV2FgCat", cats, ff.cat, "All selected categories") + sel("Vendor", "npV2FgVendor", vendors, ff.vendor) + sel("ROG", "npV2FgRog", rogs, ff.rog) + sel("Class", "npV2FgClass", clusters, ff.cls) + sel("Sub-class", "npV2FgSub", subs, ff.sub, "All sub-classes") + "</div>" +
           '<div class="npv2-fg-gr">' + sortControlsHTML() + "</div>" +
         "</div>" +
         '<div class="npv2-fg-dirty" id="npV2Dirty" hidden><span>You have unsaved edits.</span><button type="button" class="npv2-fg-dlink" id="npV2RerunB">Rerun forecast to see the impact →</button><button type="button" class="npv2-fg-dlink npv2-fg-dmut" id="npV2Discard">Discard edits</button></div>' +
@@ -460,9 +551,11 @@
         '<div class="npv2-planpanel" id="npV2PlanPanel" aria-label="V1 52-week plan"></div>' +
       "</div>";
     front.querySelectorAll("[data-strat]").forEach((b) => (b.onclick = () => { NP.state.cf.strategy = b.dataset.strat; renderFront(); }));
+    const kts = front.querySelector("#npV2FgCat"); if (kts) kts.onchange = () => { ff.cat = kts.value; renderFront(); };
     const vs = front.querySelector("#npV2FgVendor"); vs.onchange = () => { ff.vendor = vs.value; renderFront(); };
     const rs = front.querySelector("#npV2FgRog"); rs.onchange = () => { ff.rog = rs.value; renderFront(); };
     const cs = front.querySelector("#npV2FgClass"); cs.onchange = () => { ff.cls = cs.value; renderFront(); };
+    const sbs = front.querySelector("#npV2FgSub"); if (sbs) sbs.onchange = () => { ff.sub = sbs.value; renderFront(); };
     // editable pinned inputs (VLC, events) — allowance inputs are handled separately below
     front.querySelectorAll(".npv2-fg-input:not(.npv2-fg-alwin)").forEach((inp) => {
       inp.addEventListener("input", onEditInput);
@@ -485,6 +578,7 @@
     front.querySelector("#npV2Discard").onclick = () => NP.revert();
     front.querySelector("#npV2Cmp").onclick = openCompareOverlay;
     const ixb = front.querySelector("#npV2Ix"); if (ixb) ixb.onclick = () => { NP.state.v2ix = !NP.state.v2ix; renderFront(); };
+    const inb = front.querySelector("#npV2InputsT"); if (inb) inb.onclick = () => { NP.state.v2inputs = NP.state.v2inputs === false; renderFront(); };
     front.querySelectorAll("[data-evtoggle]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); NP.state.v2evMode = NP.state.v2evMode === "deep" ? "reg" : "deep"; renderFront(); }));
     front.querySelectorAll("[data-breakup]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); openBreakup(); }));
     front.querySelectorAll("[data-sortby]").forEach((b) => (b.onclick = () => { ff.sortBy = ff.sortBy === b.dataset.sortby ? null : b.dataset.sortby; renderFront(); }));
@@ -577,16 +671,16 @@
   /* horizontal drag-to-pan — the "swipe" gesture; capture only after a real drag so taps on
      week cells still open the detail. CSS scroll-snap + overscroll-behavior do the rest. */
   function bindDrag(wrap) {
-    let down = false, drag = false, sx = 0, sl = 0, pid = null;
+    let down = false, drag = false, sx = 0, sy = 0, sl = 0, st = 0, pid = null;
     wrap.addEventListener("pointerdown", (e) => {
       if (e.target.closest("input, select, button, a")) return;
-      down = true; drag = false; sx = e.clientX; sl = wrap.scrollLeft; pid = e.pointerId;
+      down = true; drag = false; sx = e.clientX; sy = e.clientY; sl = wrap.scrollLeft; st = wrap.scrollTop; pid = e.pointerId;
     });
     wrap.addEventListener("pointermove", (e) => {
       if (!down) return;
-      const dx = e.clientX - sx;
-      if (!drag && Math.abs(dx) > 5) { drag = true; wrap.classList.add("is-grab"); try { wrap.setPointerCapture(pid); } catch (x) {} }
-      if (drag) { wrap.scrollLeft = sl - dx; e.preventDefault(); }
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!drag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) { drag = true; wrap.classList.add("is-grab"); try { wrap.setPointerCapture(pid); } catch (x) {} }
+      if (drag) { wrap.scrollLeft = sl - dx; wrap.scrollTop = st - dy; e.preventDefault(); }
     });
     const end = () => { if (drag) { wrap.classList.remove("is-grab"); wrap.__suppressClick = true; } down = false; drag = false; };
     wrap.addEventListener("pointerup", end);

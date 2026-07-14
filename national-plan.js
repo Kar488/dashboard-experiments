@@ -65,11 +65,123 @@
     { v: "KEURIG DR PEPPER", n: "DR PEPPER 12PK", brand: "Dr Pepper", form: "bag", pack: "12-12FZ", cluster: "cola", bin: 2 },
     { v: "OWN BRANDS", n: "REFRESHE COLA 2L", brand: "Own Label", form: "bar", pack: "2L PET", cluster: "cola", bin: 3 }
   ];
+  /* -- the 8 current focus categories (curated catalogues) -- */
+  const PAPER = [
+    { v: "PROCTER & GAMBLE", n: "BOUNTY SELECT-A-SIZE 6 ROLL", brand: "Bounty", form: "bar", pack: "6CT", cluster: "coreline", bin: 1, hero: true },
+    { v: "PROCTER & GAMBLE", n: "BOUNTY ESSENTIALS 4 ROLL", brand: "Bounty", form: "bar", pack: "4CT", cluster: "valueline", bin: 2 },
+    { v: "KIMBERLY-CLARK", n: "SCOTT CHOOSE-A-SHEET 6 ROLL", brand: "Scott", form: "bar", pack: "6CT", cluster: "coreline", bin: 2 },
+    { v: "KIMBERLY-CLARK", n: "VIVA SIGNATURE CLOTH 4 ROLL", brand: "Viva", form: "bag", pack: "4CT", cluster: "premiumline", bin: 3 },
+    { v: "GEORGIA-PACIFIC", n: "BRAWNY TEAR-A-SQUARE 4 ROLL", brand: "Brawny", form: "bag", pack: "4CT", cluster: "premiumline", bin: 2 },
+    { v: "GEORGIA-PACIFIC", n: "SPARKLE PICK-A-SIZE 6 ROLL", brand: "Sparkle", form: "bar", pack: "6CT", cluster: "valueline", bin: 3 },
+    { v: "OWN BRANDS", n: "OWN LABEL PAPER TOWELS 8 ROLL", brand: "Own Label", form: "bar", pack: "8CT", cluster: "valueline", bin: 2 },
+    { v: "OWN BRANDS", n: "OWN LABEL BIG ROLL 2PK", brand: "Own Label", form: "bar", pack: "2CT", cluster: "valueline", bin: 3 }
+  ];
+  const BATH_TISSUE = [
+    { v: "PROCTER & GAMBLE", n: "CHARMIN ULTRA SOFT 12 MEGA", brand: "Charmin", form: "bar", pack: "12CT", cluster: "premiumline", bin: 1, hero: true },
+    { v: "PROCTER & GAMBLE", n: "CHARMIN ULTRA STRONG 6 MEGA", brand: "Charmin", form: "bar", pack: "6CT", cluster: "premiumline", bin: 2 },
+    { v: "KIMBERLY-CLARK", n: "COTTONELLE ULTRA COMFORT 12 ROLL", brand: "Cottonelle", form: "bar", pack: "12CT", cluster: "coreline", bin: 1 },
+    { v: "KIMBERLY-CLARK", n: "SCOTT 1000 12 ROLL", brand: "Scott", form: "bar", pack: "12CT", cluster: "valueline", bin: 2 },
+    { v: "GEORGIA-PACIFIC", n: "QUILTED NORTHERN ULTRA PLUSH 12", brand: "Quilted Northern", form: "bar", pack: "12CT", cluster: "premiumline", bin: 2 },
+    { v: "GEORGIA-PACIFIC", n: "ANGEL SOFT 16 MEGA", brand: "Angel Soft", form: "bar", pack: "16CT", cluster: "valueline", bin: 2 },
+    { v: "OWN BRANDS", n: "OWN LABEL BATH TISSUE 12 ROLL", brand: "Own Label", form: "bar", pack: "12CT", cluster: "valueline", bin: 3 }
+  ];
+  const COOKIES = [
+    { v: "MONDELEZ", n: "OREO ORIGINAL", brand: "Oreo", form: "bag", pack: "14.3OZ", cluster: "coreline", bin: 1, hero: true },
+    { v: "MONDELEZ", n: "CHIPS AHOY ORIGINAL", brand: "Chips Ahoy!", form: "bag", pack: "13OZ", cluster: "coreline", bin: 1 },
+    { v: "MONDELEZ", n: "NUTTER BUTTER FAMILY SIZE", brand: "Nutter Butter", form: "bag", pack: "16OZ", cluster: "coreline", bin: 3 },
+    { v: "FERRERO", n: "KEEBLER CHIPS DELUXE", brand: "Keebler", form: "bag", pack: "11.3OZ", cluster: "valueline", bin: 3 },
+    { v: "FERRERO", n: "KEEBLER FUDGE STRIPES", brand: "Keebler", form: "bag", pack: "11.5OZ", cluster: "valueline", bin: 2 },
+    { v: "CAMPBELL SNACKS", n: "PEPPERIDGE FARM MILANO", brand: "Milano", form: "bag", pack: "7.5OZ", cluster: "premiumline", bin: 2 },
+    { v: "MCKEE FOODS", n: "LITTLE DEBBIE OATMEAL CREME PIES", brand: "Little Debbie", form: "bag", pack: "12CT", cluster: "multipack", bin: 2 },
+    { v: "OWN BRANDS", n: "OWN LABEL SANDWICH COOKIES", brand: "Own Label", form: "bag", pack: "20OZ", cluster: "valueline", bin: 3 }
+  ];
+  const CRACKERS = [
+    { v: "MONDELEZ", n: "RITZ ORIGINAL", brand: "Ritz", form: "bag", pack: "13.7OZ", cluster: "coreline", bin: 1, hero: true },
+    { v: "MONDELEZ", n: "WHEAT THINS ORIGINAL", brand: "Wheat Thins", form: "bag", pack: "8.5OZ", cluster: "coreline", bin: 2 },
+    { v: "MONDELEZ", n: "TRISCUIT ORIGINAL", brand: "Triscuit", form: "bag", pack: "8.5OZ", cluster: "premiumline", bin: 3 },
+    { v: "KELLANOVA", n: "CHEEZ-IT ORIGINAL", brand: "Cheez-It", form: "bag", pack: "12.4OZ", cluster: "coreline", bin: 1 },
+    { v: "KELLANOVA", n: "CLUB CRACKERS ORIGINAL", brand: "Club", form: "bag", pack: "13.7OZ", cluster: "valueline", bin: 3 },
+    { v: "CAMPBELL SNACKS", n: "GOLDFISH CHEDDAR", brand: "Goldfish", form: "bag", pack: "6.6OZ", cluster: "coreline", bin: 1 },
+    { v: "LANCE", n: "TOASTCHEE SANDWICH CRACKERS", brand: "Lance", form: "bag", pack: "8CT", cluster: "multipack", bin: 3 },
+    { v: "OWN BRANDS", n: "OWN LABEL SALTINES", brand: "Own Label", form: "bag", pack: "16OZ", cluster: "valueline", bin: 3 }
+  ];
+  const CANNED_VEG = [
+    { v: "DEL MONTE", n: "DEL MONTE CUT GREEN BEANS", brand: "Del Monte", form: "tub", pack: "14.5OZ", cluster: "coreline", bin: 1, hero: true },
+    { v: "DEL MONTE", n: "DEL MONTE GOLDEN SWEET CORN", brand: "Del Monte", form: "tub", pack: "15.25OZ", cluster: "coreline", bin: 1 },
+    { v: "B&G FOODS", n: "GREEN GIANT SWEET PEAS", brand: "Green Giant", form: "tub", pack: "15OZ", cluster: "coreline", bin: 2 },
+    { v: "B&G FOODS", n: "GREEN GIANT SLICED MUSHROOMS", brand: "Green Giant", form: "tub", pack: "4OZ", cluster: "premiumline", bin: 3 },
+    { v: "SENECA FOODS", n: "LIBBY'S MIXED VEGETABLES", brand: "Libby's", form: "tub", pack: "15OZ", cluster: "valueline", bin: 3 },
+    { v: "OWN BRANDS", n: "OWN LABEL WHOLE KERNEL CORN", brand: "Own Label", form: "tub", pack: "15.25OZ", cluster: "valueline", bin: 2 },
+    { v: "OWN BRANDS", n: "OWN LABEL CUT GREEN BEANS", brand: "Own Label", form: "tub", pack: "14.5OZ", cluster: "valueline", bin: 2 }
+  ];
+  const LUNCHBOX = [
+    { v: "KRAFT HEINZ", n: "LUNCHABLES TURKEY & CHEDDAR", brand: "Lunchables", form: "bag", pack: "3.2OZ", cluster: "coreline", bin: 1, hero: true },
+    { v: "KRAFT HEINZ", n: "LUNCHABLES EXTRA CHEESY PIZZA", brand: "Lunchables", form: "bag", pack: "4.2OZ", cluster: "coreline", bin: 2 },
+    { v: "KRAFT HEINZ", n: "P3 PROTEIN PACK", brand: "P3", form: "bag", pack: "2OZ", cluster: "premiumline", bin: 3 },
+    { v: "SMITHFIELD", n: "ARMOUR LUNCHMAKERS CRACKER CRUNCHERS", brand: "LunchMakers", form: "bag", pack: "2.4OZ", cluster: "valueline", bin: 3 },
+    { v: "MATERNE", n: "GOGO SQUEEZ APPLESAUCE 12PK", brand: "GoGo squeeZ", form: "bag", pack: "12CT", cluster: "multipack", bin: 2 },
+    { v: "GENERAL MILLS", n: "YOPLAIT GO-GURT VARIETY 16PK", brand: "Go-Gurt", form: "bag", pack: "16CT", cluster: "multipack", bin: 2 },
+    { v: "OWN BRANDS", n: "OWN LABEL LUNCH SNACK KIT", brand: "Own Label", form: "bag", pack: "3OZ", cluster: "valueline", bin: 3 }
+  ];
+  const ICE_CREAM = [
+    { v: "UNILEVER", n: "BEN & JERRY'S CHOC FUDGE BROWNIE", brand: "Ben & Jerry's", form: "bar", pack: "16OZ", cluster: "premiumline", bin: 1, hero: true },
+    { v: "UNILEVER", n: "BREYERS NATURAL VANILLA", brand: "Breyers", form: "bar", pack: "48OZ", cluster: "coreline", bin: 1 },
+    { v: "FRONERI", n: "HAAGEN-DAZS VANILLA BEAN", brand: "Häagen-Dazs", form: "bar", pack: "14OZ", cluster: "premiumline", bin: 2 },
+    { v: "FRONERI", n: "DRUMSTICK VANILLA VARIETY 8CT", brand: "Drumstick", form: "bar", pack: "8CT", cluster: "multipack", bin: 2 },
+    { v: "WELLS ENTERPRISES", n: "BLUE BUNNY LOADED SUNDAE", brand: "Blue Bunny", form: "bar", pack: "16OZ", cluster: "coreline", bin: 3 },
+    { v: "TILLAMOOK", n: "TILLAMOOK OLD-FASHIONED VANILLA", brand: "Tillamook", form: "bar", pack: "48OZ", cluster: "premiumline", bin: 2 },
+    { v: "OWN BRANDS", n: "OWN LABEL NEAPOLITAN", brand: "Own Label", form: "bar", pack: "48OZ", cluster: "valueline", bin: 2 }
+  ];
+  const CANNED_FRUIT = [
+    { v: "DEL MONTE", n: "DEL MONTE SLICED PEACHES", brand: "Del Monte", form: "tub", pack: "15.25OZ", cluster: "coreline", bin: 1, hero: true },
+    { v: "DEL MONTE", n: "DEL MONTE FRUIT COCKTAIL", brand: "Del Monte", form: "tub", pack: "15.25OZ", cluster: "coreline", bin: 2 },
+    { v: "DOLE PACKAGED", n: "DOLE PINEAPPLE CHUNKS", brand: "Dole", form: "tub", pack: "20OZ", cluster: "coreline", bin: 1 },
+    { v: "DOLE PACKAGED", n: "DOLE MANDARIN ORANGES", brand: "Dole", form: "tub", pack: "15OZ", cluster: "premiumline", bin: 2 },
+    { v: "SENECA FOODS", n: "LIBBY'S SLICED PEARS", brand: "Libby's", form: "tub", pack: "15OZ", cluster: "valueline", bin: 3 },
+    { v: "OWN BRANDS", n: "OWN LABEL SLICED PEACHES", brand: "Own Label", form: "tub", pack: "15.25OZ", cluster: "valueline", bin: 3 }
+  ];
+
+  /* Curated categories — the 8 focus categories pinned in the picker, plus the
+     two original demo categories (still searchable in the full catalogue). */
   const CATEGORIES = [
+    { id: "paper", name: "Paper", items: PAPER, seed: 3101, focus: true },
+    { id: "bathtissue", name: "Bath Tissue", items: BATH_TISSUE, seed: 3202, focus: true },
+    { id: "cookies", name: "Cookies", items: COOKIES, seed: 3303, focus: true },
+    { id: "crackers", name: "Crackers", items: CRACKERS, seed: 3404, focus: true },
+    { id: "cannedveg", name: "Canned Vegetables", items: CANNED_VEG, seed: 3505, focus: true },
+    { id: "lunchbox", name: "On-the-Go Lunchbox", items: LUNCHBOX, seed: 3606, focus: true },
+    { id: "icecream", name: "Packaged Ice Cream", items: ICE_CREAM, seed: 3707, focus: true },
+    { id: "cannedfruit", name: "Canned Fruit", items: CANNED_FRUIT, seed: 3808, focus: true },
     { id: "confectionery", name: "Confectionery — Bars, Bags & Tubs", items: CONFECTIONERY, seed: 4021 },
     { id: "softdrinks", name: "Carbonated Soft Drinks", items: SOFTDRINKS, seed: 7720 }
   ];
-  const CLUSTER_LABEL = { singles: "Singles / impulse bars", sharingbag: "Sharing bags & pouches", tubs: "Sharing tubs", cola: "Cola & dark sodas", lemonlime: "Lemon-lime & flavours" };
+  const CLUSTER_LABEL = {
+    singles: "Singles / impulse bars", sharingbag: "Sharing bags & pouches", tubs: "Sharing tubs", cola: "Cola & dark sodas", lemonlime: "Lemon-lime & flavours",
+    coreline: "Core line-up", premiumline: "Premium & specialty", valueline: "Value & club pack", multipack: "Multipacks & variety"
+  };
+
+  /* Full searchable catalogue (~690 categories). The long tail is name-only here;
+     a synthetic item catalogue is generated on demand the first time one is picked. */
+  const EXTRA_BASE = [
+    "Bagged Salads", "Baking Mixes", "Baking Needs", "BBQ Sauce & Marinades", "Beer & Cider", "Bottled Water", "Breakfast Bars", "Butter & Spreads",
+    "Candles & Air Care", "Canned Beans", "Canned Meat", "Canned Seafood", "Canned Soup", "Cat Food", "Cereal — Ready to Eat", "Cereal — Hot",
+    "Cheese — Natural", "Cheese — Processed", "Coffee — Ground & Whole Bean", "Coffee — Single Serve", "Condiments", "Cooking Oils", "Deli Meats",
+    "Deodorants", "Diapers & Training Pants", "Dish Care", "Dog Food", "Dressings & Toppings", "Drink Mixes", "Eggs", "Energy Drinks", "Facial Tissue",
+    "Feminine Care", "Flour & Sugar", "Foils & Wraps", "Frozen Appetizers", "Frozen Breakfast", "Frozen Desserts", "Frozen Dinners & Entrees",
+    "Frozen Fruit", "Frozen Meat & Seafood", "Frozen Pizza", "Frozen Potatoes", "Frozen Vegetables", "Fruit Snacks", "Granola & Trail Mix",
+    "Hair Care", "Hand & Body Lotion", "Hispanic Foods", "Honey & Syrup", "Hot Dogs & Sausage", "Household Cleaners", "Isotonic Drinks",
+    "Jams & Jellies", "Juice — Refrigerated", "Juice — Shelf Stable", "Laundry Care", "Mac & Cheese", "Mayonnaise", "Meat Snacks & Jerky",
+    "Milk — Dairy", "Milk — Plant Based", "Nuts & Seeds", "Oral Care", "Pancake & Waffle", "Pasta & Noodles", "Pasta Sauce", "Peanut Butter",
+    "Pickles & Olives", "Popcorn", "Pudding & Gelatin", "Refrigerated Dough", "Rice & Grains", "Salsa & Dips", "Salty Snacks — Chips",
+    "Salty Snacks — Pretzels", "Seasonings & Spices", "Shaving Needs", "Soap & Body Wash", "Spirits", "Sports Nutrition", "Spring Water — Case Pack",
+    "Tea — Bags & Loose", "Tea — Ready to Drink", "Tortillas & Flatbreads", "Trash Bags", "Vitamins & Supplements", "Wine", "Yogurt"
+  ];
+  const EXTRA_SEG = ["", " — Premium", " — Value & Club Pack", " — Organic & Natural", " — Single Serve", " — Family Size", " — Multipacks", " — Seasonal & Holiday"];
+  const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const CATALOGUE = CATEGORIES.map((c) => ({ id: c.id, name: c.name, focus: !!c.focus }));
+  EXTRA_BASE.forEach((base) => EXTRA_SEG.forEach((seg) => { CATALOGUE.push({ id: "cat-" + slugify(base + seg), name: base + seg }); }));
+  const CAT_BY_ID = {}; CATALOGUE.forEach((c) => { CAT_BY_ID[c.id] = c; });
+  const FOCUS_CATEGORIES = CATALOGUE.filter((c) => c.focus);
 
   /* Divisions — the national plan is built for a division (or the national roll-up).
      Each division is a share of national demand; selecting one scopes every forecast
@@ -108,11 +220,35 @@
       const recEvents = Math.round(clamp(lyEvents - (it.form === "tub" ? 0 : 2) + (rng() * 4 - 2), it.form === "tub" ? 4 : 6, it.form === "tub" ? 12 : 22));
       const ladder = { offInvoice: round(0.22 + rng() * 0.12, 3), billBack: round(0.015 + rng() * 0.02, 3), priceBreak: round(rng() * 0.02, 3), freight: round(0.012 + rng() * 0.008, 3), scan: round(0.03 + rng() * 0.03, 3), shipToStore: round(0.01 + rng() * 0.02, 3), newItem: round(0.005 + rng() * 0.015, 3) };
       const headerFlat = round(0.5 + rng() * 2, 2);   // flat $ per store/week — separate from the per-unit promo cost
-      return { uid: cat.id + "-" + idx, ncrc: "NCRC " + (ncrcSeq += 7 + Math.floor(rng() * 5)), item: it.n, brand: it.brand, vendor: it.v, rog: ROGS[hashStr(cat.id + "-" + idx) % ROGS.length], form: it.form, pack: it.pack, cluster: it.cluster, hero: !!it.hero, bin: it.bin, baseUnitsK, basePrice, vlc, lyDepth, recDepth, lyEvents, recEvents, ladder, headerFlat, liftCoef: FORM_LIFT[it.form] * (0.85 + rng() * 0.3), hhRate: FORM_HHRATE[it.form] * (0.9 + rng() * 0.2) };
+      return { uid: cat.id + "-" + idx, catId: cat.id, ncrc: "NCRC " + (ncrcSeq += 7 + Math.floor(rng() * 5)), item: it.n, brand: it.brand, vendor: it.v, rog: ROGS[hashStr(cat.id + "-" + idx) % ROGS.length], form: it.form, pack: it.pack, cluster: it.cluster, hero: !!it.hero, bin: it.bin, baseUnitsK, basePrice, vlc, lyDepth, recDepth, lyEvents, recEvents, ladder, headerFlat, liftCoef: FORM_LIFT[it.form] * (0.85 + rng() * 0.3), hhRate: FORM_HHRATE[it.form] * (0.9 + rng() * 0.2) };
     });
     return { id: cat.id, name: cat.name, items };
   }
-  const DATA = {}; CATEGORIES.forEach((c) => { DATA[c.id] = enrich(c); });
+  /* synthetic item catalogue for long-tail categories picked via search */
+  function genericCatalogue(name, seedHash) {
+    const rng = mulberry32(seedHash ^ 0x5f3759df);
+    const short = name.split(" — ")[0].toUpperCase();
+    const VEND = [["KRAFT HEINZ", "Kraft"], ["GENERAL MILLS", "Big G"], ["CONAGRA BRANDS", "Conagra"], ["UNILEVER", "Unilever"], ["NESTLE USA", "Nestlé"], ["J.M. SMUCKER", "Smucker's"], ["OWN BRANDS", "Own Label"]];
+    const VAR = ["ORIGINAL", "CLASSIC", "FAMILY SIZE", "VALUE PACK", "PREMIUM SELECT", "VARIETY 12CT", "SINGLE SERVE", "CLUB PACK", "MULTIPACK 6CT", "SEASONAL FAVORITES"];
+    const FORMS = ["bar", "bar", "bag", "bag", "tub"];
+    const CL = ["coreline", "premiumline", "valueline"];
+    const n = 7 + Math.floor(rng() * 4);
+    const items = [];
+    for (let i = 0; i < n; i++) {
+      const vd = VEND[i % VEND.length];
+      items.push({ v: vd[0], n: short + " " + VAR[i], brand: vd[1], form: FORMS[Math.floor(rng() * FORMS.length)], pack: (8 + Math.floor(rng() * 24)) + "OZ", cluster: CL[i % 3], bin: i === 0 ? 1 : 1 + Math.floor(rng() * 3), hero: i === 0 });
+    }
+    return items;
+  }
+  const DATA = {};
+  function ensureData(id) {
+    if (DATA[id]) return DATA[id];
+    const cur = CATEGORIES.find((c) => c.id === id), def = CAT_BY_ID[id] || { id, name: id };
+    const seed = cur ? cur.seed : (hashStr(id) % 9000) + 101;
+    DATA[id] = enrich({ id, name: def.name, items: cur ? cur.items : genericCatalogue(def.name, hashStr(id)), seed });
+    return DATA[id];
+  }
+  CATEGORIES.forEach((c) => ensureData(c.id));
 
   /* --------------------------------------------------------- response model */
   function deadNetOf(o) { const l = o.ladder; return round(o.vlc * (1 - LADDER_KEYS.reduce((s, k) => s + (l[k] || 0), 0)), 3); }
@@ -249,7 +385,7 @@
     _schedCache = { key, sched: buildSchedule(cat, map) };
     return _schedCache.sched;
   }
-  function rankedClusters(catId) { return rankedClustersOf(DATA[catId || state.categoryId]); }
+  function rankedClusters(catId) { return rankedClustersOf(catId ? ensureData(catId) : cat()); }
 
   // 52-week tactic plan for an NCRC (optimised). 'ly' => last-year placement/posture.
   function weekPlan(o, map, ly) {
@@ -257,7 +393,7 @@
     const h = hashStr(o.uid);
     let weeks, offset = {};
     if (ly) { weeks = pickWeeks(o.form, e.events, "shift"); }
-    else { const s = scheduleFor(DATA[o.uid.split("-")[0]], map)[o.uid] || { weeks: new Set(), offset: {} }; weeks = s.weeks; offset = s.offset; }
+    else { const s = scheduleFor(ensureData(o.catId), map)[o.uid] || { weeks: new Set(), offset: {} }; weeks = s.weeks; offset = s.offset; }
     const arr = [];
     for (let w = 0; w < 52; w++) {
       const promoted = weeks.has(w), locked = w < CURRENT_WEEK;
@@ -307,7 +443,7 @@
 
   // quintile bins (1 = top) per metric, across the category
   function binsFor(catId) {
-    const c = DATA[catId || state.categoryId], items = c.items, n = items.length, res = {};
+    const c = catId ? ensureData(catId) : cat(), items = c.items, n = items.length, res = {};
     items.forEach((o) => { res[o.uid] = {}; });
     const assign = (key, valFn) => { items.slice().sort((a, b) => valFn(b) - valFn(a)).forEach((o, i) => { res[o.uid][key] = Math.min(5, Math.floor(i / (n / 5)) + 1); }); };
     const base = (o) => resultFor(o, {});
@@ -406,8 +542,7 @@
   const OBJECTIVES = [
     { id: "sales", label: "Sales", short: "Sales", metric: "revenueM", fmtName: "Sales" },
     { id: "units", label: "Units", short: "Units", metric: "units", fmtName: "Units" },
-    { id: "agp", label: "AGP", short: "AGP", metric: "agpM", fmtName: "AGP" },
-    { id: "hh", label: "HHs", short: "HHs", metric: "hhK", fmtName: "Households" }
+    { id: "agp", label: "AGP", short: "AGP", metric: "agpM", fmtName: "AGP" }
   ];
   const STEPS = [
     { n: 1, title: "Scope & objective" },
@@ -417,7 +552,7 @@
     { n: 6, title: "Why it beats LY" }
   ];
   const state = {
-    step: 1, generated: false, division: "national", categoryId: "confectionery", objective: "sales",
+    step: 1, generated: false, division: "national", categoryIds: ["paper"], categoryId: "paper", objective: "sales", periods: [],
     draft: {}, scenarios: [], scnSeq: 0, activeScenario: "base",
     showAllow: false, deadNetVersion: "v1", flip: {}, v2: true, v2plan: false, v2period: null, v2ix: false, v2evMode: "reg", v2allowMode: "reg",
     grid: { vendor: "all", rog: "all" },
@@ -426,7 +561,24 @@
     explain: { m: null, b: "plan", scope: "all" },
     cf: { strategy: "optimized", clustersOpen: false, expanded: {}, tab: {}, approved: {}, molOpen: false, focal: null }
   };
-  function cat() { return DATA[state.categoryId]; }
+  /* cat() — the working dataset. With one category selected it is that category;
+     with several it is a merged pseudo-category (uids stay unique per source). */
+  let mergedCache = { key: "", val: null };
+  function cat() {
+    const ids = (state.categoryIds && state.categoryIds.length ? state.categoryIds : [state.categoryId]).filter(Boolean);
+    const key = ids.join("|");
+    if (mergedCache.key === key && mergedCache.val) return mergedCache.val;
+    ids.forEach(ensureData);
+    let val;
+    if (ids.length === 1) val = DATA[ids[0]];
+    else {
+      const items = [];
+      ids.forEach((id) => { items.push.apply(items, DATA[id].items); });
+      val = { id: key, name: DATA[ids[0]].name.split(" — ")[0] + " +" + (ids.length - 1) + " more", items };
+    }
+    mergedCache = { key, val };
+    return val;
+  }
   function divMeta() { return DIVISIONS.find((d) => d.id === state.division) || DIVISIONS[0]; }
   function divisionFactor() { return divMeta().factor; }
   function draftOf(uid) { return state.draft[uid] || (state.draft[uid] = {}); }
@@ -513,7 +665,7 @@
     }).join('<span class="np-step-line" aria-hidden="true"></span>');
     const obj = objMeta();
     host.innerHTML = '<div class="np-stepper-inner">' + tabs + "</div>" +
-      '<div class="np-stepper-obj">' + (state.generated ? '<span>Division</span><b>' + divMeta().short + "</b><span class=\"np-obj-sep\"></span><span>Category</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimising for</span><b class=\"np-obj-pill\">" + obj.fmtName + "</b>" : '<span class="np-stepper-hint">Pick a division, category &amp; objective to begin</span>') + "</div>";
+      '<div class="np-stepper-obj">' + (state.generated ? '<span>Division</span><b>' + divMeta().short + '</b><span class="np-obj-sep"></span><span>' + (state.categoryIds.length > 1 ? "Categories" : "Category") + "</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimising for</span><b class=\"np-obj-pill\">" + obj.fmtName + '</b><span class="np-obj-sep"></span><span>Showing</span><b>' + periodsLabel() + "</b>" : '<span class="np-stepper-hint">Pick a division, categories, objective &amp; periods to begin</span>') + "</div>";
     host.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => { const n = +b.dataset.step; if (n === 1 || state.generated) goStep(n); });
   }
   function goStep(n) { if (state.v2 && !state.v2plan && n === 3) n = 4; state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -561,19 +713,125 @@
   function deleteScenario(id) { state.scenarios = state.scenarios.filter((s) => s.id !== id); if (state.activeScenario === id) { state.activeScenario = state.scenarios.length ? state.scenarios[state.scenarios.length - 1].id : "base"; state.draft = clone(activeOv()); } renderAll(); }
 
   /* --------------------------------------------------------------- scope */
+  /* Retail calendar — 13 four-week periods; Q1 = P1–P3 … Q4 = P10–P13. */
+  const QUARTERS = [
+    { label: "Q1", periods: [0, 1, 2] }, { label: "Q2", periods: [3, 4, 5] },
+    { label: "Q3", periods: [6, 7, 8] }, { label: "Q4", periods: [9, 10, 11, 12] }
+  ];
+  function rangeCompress(list) { const out = []; list.forEach((p) => { const last = out[out.length - 1]; if (last && p === last[1] + 1) last[1] = p; else out.push([p, p]); }); return out; }
+  function periodsLabel() {
+    const sel = (state.periods || []).slice().sort((a, b) => a - b);
+    if (!sel.length || sel.length === 13) return "Full year · 52 wks";
+    const covered = QUARTERS.filter((q) => q.periods.every((p) => sel.indexOf(p) >= 0));
+    const rest = sel.filter((p) => !covered.some((q) => q.periods.indexOf(p) >= 0));
+    const parts = covered.map((q) => q.label).concat(rangeCompress(rest).map((r) => r[0] === r[1] ? "P" + (r[0] + 1) : "P" + (r[0] + 1) + "–P" + (r[1] + 1)));
+    return parts.join(", ") + " · " + sel.length * 4 + " wks";
+  }
+
+  const scopeUi = { catOpen: false, catQ: "", perOpen: false, bound: false };
+  function resetPlanState() { state.generated = false; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.step = 1; }
+  function setCategories(ids) { state.categoryIds = ids; state.categoryId = ids[0]; resetPlanState(); renderAll(); }
+
+  function catRow(c, checked) {
+    return '<label class="np-msel-row"><input type="checkbox" data-cat="' + c.id + '"' + (checked ? " checked" : "") + '><span class="np-msel-name">' + c.name + "</span>" + (c.focus ? '<em class="np-msel-badge">Focus</em>' : "") + "</label>";
+  }
+  function catListHTML() {
+    const isSel = (id) => state.categoryIds.indexOf(id) >= 0;
+    const q = scopeUi.catQ.trim().toLowerCase();
+    if (!q) {
+      const extraSel = state.categoryIds.filter((id) => !(CAT_BY_ID[id] && CAT_BY_ID[id].focus)).map((id) => CAT_BY_ID[id] || { id, name: id });
+      return '<div class="np-msel-sect">Focus categories · ' + FOCUS_CATEGORIES.length + "</div>" +
+        FOCUS_CATEGORIES.map((c) => catRow(c, isSel(c.id))).join("") +
+        (extraSel.length ? '<div class="np-msel-sect">Also selected</div>' + extraSel.map((c) => catRow(c, true)).join("") : "") +
+        '<div class="np-msel-hint">Type above to search all ' + CATALOGUE.length + " categories</div>";
+    }
+    const hits = CATALOGUE.filter((c) => c.name.toLowerCase().indexOf(q) >= 0);
+    const shown = hits.slice(0, 40);
+    return '<div class="np-msel-sect">Matches · ' + hits.length + "</div>" +
+      (shown.map((c) => catRow(c, isSel(c.id))).join("") || '<div class="np-msel-hint">No categories match your search</div>') +
+      (hits.length > shown.length ? '<div class="np-msel-hint">+' + (hits.length - shown.length) + " more — keep typing to narrow</div>" : "");
+  }
+  function bindCatRows(listEl) {
+    listEl.querySelectorAll("[data-cat]").forEach((cb) => cb.onchange = () => {
+      const id = cb.dataset.cat, ids = state.categoryIds.slice(), ix = ids.indexOf(id);
+      if (ix >= 0) { if (ids.length === 1) return; ids.splice(ix, 1); } else ids.push(id);
+      setCategories(ids);
+    });
+  }
+  function renderCatPicker() {
+    const host = document.getElementById("npCategory"); if (!host) return;
+    const names = state.categoryIds.map((id) => (CAT_BY_ID[id] || { name: id }).name.split(" — ")[0]);
+    const chips = names.slice(0, 2).map((nm, i) =>
+      '<span class="np-msel-chip">' + nm + (state.categoryIds.length > 1 ? '<button type="button" class="np-msel-x" data-uncat="' + state.categoryIds[i] + '" aria-label="Remove ' + nm + '">×</button>' : "") + "</span>").join("") +
+      (names.length > 2 ? '<span class="np-msel-morechip">+' + (names.length - 2) + "</span>" : "");
+    host.innerHTML = '<div class="np-msel-field" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="' + scopeUi.catOpen + '">' + chips + '<span class="np-msel-caret">▾</span></div>' +
+      '<div class="np-msel-pop"' + (scopeUi.catOpen ? "" : " hidden") + '>' +
+      '<input type="text" class="np-msel-search" id="npCatSearch" placeholder="Search all ' + CATALOGUE.length + ' categories…" value="' + scopeUi.catQ.replace(/"/g, "&quot;") + '" autocomplete="off">' +
+      '<div class="np-msel-list" id="npCatList">' + catListHTML() + "</div>" +
+      '<div class="np-msel-foot"><span>' + state.categoryIds.length + " selected</span>" + (state.categoryIds.length > 1 ? '<button type="button" class="np-link-btn" data-catclear>Keep first only</button>' : "") + "</div></div>";
+    const fieldEl = host.querySelector(".np-msel-field");
+    fieldEl.onclick = (e) => { if (e.target.closest("[data-uncat]")) return; scopeUi.catOpen = !scopeUi.catOpen; renderCatPicker(); };
+    fieldEl.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); scopeUi.catOpen = !scopeUi.catOpen; renderCatPicker(); } };
+    host.querySelectorAll("[data-uncat]").forEach((b) => b.onclick = (e) => {
+      e.stopPropagation();
+      const ids = state.categoryIds.filter((id) => id !== b.dataset.uncat);
+      if (ids.length) setCategories(ids);
+    });
+    const inp = host.querySelector("#npCatSearch");
+    if (inp) inp.oninput = () => { scopeUi.catQ = inp.value; const list = host.querySelector("#npCatList"); list.innerHTML = catListHTML(); bindCatRows(list); };
+    bindCatRows(host.querySelector("#npCatList"));
+    const clr = host.querySelector("[data-catclear]"); if (clr) clr.onclick = () => setCategories([state.categoryIds[0]]);
+    if (scopeUi.catOpen && inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+
+  function renderPeriodPicker() {
+    const host = document.getElementById("npPeriods"); if (!host) return;
+    const has = (p) => state.periods.indexOf(p) >= 0;
+    const qRow = (q) => { const all = q.periods.every(has); return '<label class="np-msel-row np-msel-qrow"><input type="checkbox" data-q="' + q.label + '"' + (all ? " checked" : "") + '><span class="np-msel-name">' + q.label + '</span><em class="np-msel-sub">P' + (q.periods[0] + 1) + "–P" + (q.periods[q.periods.length - 1] + 1) + "</em></label>"; };
+    const pCell = (p) => '<button type="button" class="np-per-cell' + (has(p) ? " is-on" : "") + '" data-p="' + p + '" title="Weeks ' + (p * 4 + 1) + "–" + (p * 4 + 4) + '">P' + (p + 1) + "</button>";
+    host.innerHTML = '<div class="np-msel-field" role="button" tabindex="0" aria-expanded="' + scopeUi.perOpen + '"><span class="np-msel-label">' + periodsLabel() + '</span><span class="np-msel-caret">▾</span></div>' +
+      '<div class="np-msel-pop np-msel-pop-per"' + (scopeUi.perOpen ? "" : " hidden") + '>' +
+      '<div class="np-msel-sect">Quarters</div><div class="np-per-quarters">' + QUARTERS.map(qRow).join("") + "</div>" +
+      '<div class="np-msel-sect">Periods · 4 wks each</div><div class="np-per-grid">' + Array.from({ length: 13 }, (_, p) => pCell(p)).join("") + "</div>" +
+      '<div class="np-msel-foot"><span>' + (state.periods.length && state.periods.length < 13 ? state.periods.length * 4 + " of 52 weeks" : "All 52 weeks") + '</span><button type="button" class="np-link-btn" data-perclear' + (state.periods.length ? "" : " disabled") + ">Full year</button></div></div>";
+    const fieldEl = host.querySelector(".np-msel-field");
+    fieldEl.onclick = () => { scopeUi.perOpen = !scopeUi.perOpen; renderPeriodPicker(); };
+    fieldEl.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); scopeUi.perOpen = !scopeUi.perOpen; renderPeriodPicker(); } };
+    // period selection is a visualisation filter — it does not invalidate the generated plan
+    const commit = () => { state.v2period = null; renderAll(); };
+    host.querySelectorAll("[data-q]").forEach((cb) => cb.onchange = () => {
+      const q = QUARTERS.find((x) => x.label === cb.dataset.q);
+      if (q.periods.every(has)) state.periods = state.periods.filter((p) => q.periods.indexOf(p) < 0);
+      else q.periods.forEach((p) => { if (!has(p)) state.periods.push(p); });
+      commit();
+    });
+    host.querySelectorAll("[data-p]").forEach((b) => b.onclick = () => {
+      const p = +b.dataset.p, ix = state.periods.indexOf(p);
+      if (ix >= 0) state.periods.splice(ix, 1); else state.periods.push(p);
+      commit();
+    });
+    const clr = host.querySelector("[data-perclear]"); if (clr) clr.onclick = () => { state.periods = []; commit(); };
+  }
+
   function renderScope() {
     const dsel = document.getElementById("npDivision");
     if (dsel) {
       dsel.innerHTML = DIVISIONS.map((d) => '<option value="' + d.id + '"' + (d.id === state.division ? " selected" : "") + ">" + d.name + "</option>").join("");
-      dsel.onchange = () => { state.division = dsel.value; state.generated = false; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.step = 1; renderAll(); };
+      dsel.onchange = () => { state.division = dsel.value; resetPlanState(); renderAll(); };
     }
-    const sel = document.getElementById("npCategory");
-    sel.innerHTML = CATEGORIES.map((c) => '<option value="' + c.id + '"' + (c.id === state.categoryId ? " selected" : "") + ">" + c.name + "</option>").join("");
-    sel.onchange = () => { state.categoryId = sel.value; state.generated = false; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.step = 1; renderAll(); };
+    renderCatPicker();
+    renderPeriodPicker();
     const obj = document.getElementById("npObjective");
     obj.innerHTML = OBJECTIVES.map((o) => '<button type="button" class="plan-obj-opt ' + (o.id === state.objective ? "active" : "") + '" data-obj="' + o.id + '">' + o.label + "</button>").join("");
     obj.querySelectorAll("button").forEach((b) => b.onclick = () => { state.objective = b.dataset.obj; renderAll(); });
     document.getElementById("npGenerate").onclick = generate;
+    if (!scopeUi.bound) {
+      scopeUi.bound = true;
+      document.addEventListener("mousedown", (e) => {
+        if (scopeUi.catOpen && !e.target.closest("#npCategory")) { scopeUi.catOpen = false; renderCatPicker(); }
+        if (scopeUi.perOpen && !e.target.closest("#npPeriods")) { scopeUi.perOpen = false; renderPeriodPicker(); }
+      });
+    }
   }
 
   /* ------------------------------------------------------ guardrail ribbon */

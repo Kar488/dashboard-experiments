@@ -964,7 +964,7 @@
     const ev = cfWeeks(o, strategy).filter((c) => c.promoted).length;
     return NP.respond(o, { events: ev, depth: e.depth, deadNet: e.deadNet, seasonGain: 1.02, cannib: 0.10, halo: 0.03 });
   }
-  function cfTotals(strategy) { const t = { units: 0, revenueM: 0, agpM: 0 }; NP.cat().items.forEach((o) => { const r = cfResult(o, strategy); t.units += r.units; t.revenueM += r.revenueM; t.agpM += r.agpM; }); return t; }
+  function cfTotals(strategy) { const t = { units: 0, revenueM: 0, agpM: 0, hhK: 0 }; NP.cat().items.forEach((o) => { const r = cfResult(o, strategy); t.units += r.units; t.revenueM += r.revenueM; t.agpM += r.agpM; t.hhK += r.hhK; }); return t; }
   function totObj(t) { const m = NP.objMeta().id; return m === "units" ? t.units : m === "agp" ? t.agpM : t.revenueM; }
 
   function clustersCollapsible(c, cf) {
@@ -1233,6 +1233,8 @@
   // "Show learnt values" toggle + active constraints tab — persist across step navigation in-session
   let c3Learnt = false;
   let c3Tab = "guardrails";
+  let c3SysOpen = false;                       // the 4 reference tabs collapse behind "Show system-learnt settings"
+  const c3Asks = { margin: "", complex: true }; // the merchant's own entries on step 2
   // dense constraint table — shared by Pruned & Optimiser settings so they read like the guardrails
   // table the merchant likes. cols: [{label, right}]; rows: {group} header OR {cells, off}.
   function c3Table(cols, rows) {
@@ -1381,48 +1383,66 @@
       "Each re-solves inside the same learnt guardrails, so you tilt the plan without unpicking it. Run and compare them on the " + glink(4, "52-week plan") + ".",
       '<div class="np-c3-scns">' + scns + "</div>");
 
-    // everything else: their asks, answered with where / how it's handled (grey, soft)
-    const asks = [
-      ["Maximum margin $ investment vs LY", "You enter this as allowances by sub-type on " + glink(3, "Deal inputs") + " — it's an input, not a cap, so the spend stays visible."],
-      ["Units ID % vs LY floor (e.g. −2%)", "Not a goal-seek. Held as the learned holiday / non-holiday <b>floors above</b>, which shift as forecasting variance falls."],
-      ["LY promo cost &amp; frequency to negotiate", "Cost buckets plus per-NCRC store / digital / combined event counts live on " + glink(3, "Deal inputs") + "."],
-      ["Min deep-promo frequency · front-cover (4 retail buckets)", "Front cover is a gap today; deep-promo frequency shows as learned and output values on the " + glink(4, "52-week plan") + "."],
-      ["Complex promotions allowed (yes / no)", "Learned digital caps that flex weekly with seasonality — not an on / off switch, or the forecast breaks."],
-      ["Hard-lock off double hoops", "Exposed as a <b>pruned</b> tactic — digital won't stack on a must-buy."],
-      ["Own Brands shielding &amp; exceptions", "Run as an OB-specific scenario on the " + glink(4, "52-week plan") + ", not a hard constraint."],
-      ["Promoted minimum discount % vs white tag", "Covered with deep-promo frequency — learned and output values on the " + glink(4, "52-week plan") + " above."],
-      ["Overall plan confidence score", "Reported after the run on the " + glink(4, "52-week plan") + " — the optimiser maximises it; you can't set a target like 89.5%."]
-    ];
-    const choices = '<div class="np-c3-choices"><h4>On the constraints you asked for</h4>' +
-      '<p class="np-c3-choices-intro">Everything you raised is here — most are handled as inputs, learned values or scenarios rather than hard limits, so the plan stays grounded in the forecast. Where each one lives:</p><dl>' +
-      asks.map((a) => "<dt>" + a[0] + "</dt><dd>" + a[1] + "</dd>").join("") + "</dl></div>";
+    // YOUR ASKS — the only four things the merchant sets or checks here. Everything
+    // else on this step is reference, folded behind "Show system-learnt settings".
+    const catIds = (NP.state.categoryIds && NP.state.categoryIds.length ? NP.state.categoryIds : [NP.state.categoryId]);
+    const floorFor = (id) => { const h = NP.util.hashStr(id); const reg = 1.2 + (h % 17) / 10, hol = reg + 1.2 + (h % 7) / 10; return { reg, hol }; };
+    const floorChips = catIds.map((id) => {
+      const f = floorFor(id), nm = (NP.DATA[id] ? NP.DATA[id].name : id).split(" — ")[0];
+      return '<div class="np-ask4-chip"><span class="np-ask4-chipname">' + esc(nm) + "</span><b>−" + f.reg.toFixed(1) + "%</b><small>holiday −" + f.hol.toFixed(1) + "%</small></div>";
+    }).join("");
+    const askCard = (num, title, control, note) =>
+      '<div class="np-ask4-card"><div class="np-ask4-head"><span class="np-ask4-num">' + num + "</span><h4>" + title + '</h4></div><div class="np-ask4-ctl">' + control + '</div><p class="np-ask4-note">' + note + "</p></div>";
+    const ask4 = '<div class="np-ask4">' +
+      askCard(1, "Margin $ investment vs LY",
+        '<div class="np-ask4-input"><span class="np-ask4-cur">$</span><input id="npAskMargin" type="text" inputmode="decimal" placeholder="2.50" value="' + esc(c3Asks.margin) + '"><span class="np-ask4-unit">M</span></div>',
+        "The margin you'd invest vs LY. Flows into " + glink(3, "Deal inputs") + " as allowances by sub-type — an input, not a cap, so the spend stays visible.") +
+      askCard(2, "Units ID % vs LY",
+        '<div class="np-ask4-chips">' + floorChips + "</div>",
+        "Learnt per selected category, holiday and non-holiday. The optimiser already lands on the optimal number — there is no floor for you to set.") +
+      askCard(3, "Complex promotions",
+        '<div class="np-ask4-seg" id="npAskComplex"><button type="button" data-yn="yes" class="' + (c3Asks.complex ? "is-on" : "") + '">Yes</button><button type="button" data-yn="no" class="' + (!c3Asks.complex ? "is-on" : "") + '">No</button></div>',
+        "No = single-mechanic offers only. Digital caps still flex weekly with seasonality, so the forecast holds either way.") +
+      askCard(4, "Double hoops",
+        '<label class="np-c3-toggle np-ask4-locked"><input type="checkbox" disabled><span class="np-c3-toggle-tr"></span><span class="np-c3-toggle-lbl">Locked off</span></label>',
+        "Off by default and locked — a digital clip never stacks on a must-buy; those offers are pruned automatically.") +
+      "</div>";
 
-    // one class at a time — tabs keep the dense tables but collapse the page to a single screen.
+    // reference tabs — unchanged content, but collapsed by default and framed as read-only
     const TABS = [
       { id: "guardrails", tab: "Guardrails", n: 9, sub: "learnt", html: secG },
       { id: "pruned", tab: "Pruned", n: 13, sub: "auto-removed", html: secP },
       { id: "optimiser", tab: "Optimiser settings", n: 13, sub: "dials", html: secO },
-      { id: "scenarios", tab: "Scenarios", n: 5, sub: "levers", html: secS },
-      { id: "asks", tab: "Your asks", n: asks.length, sub: "answered", html: choices }
+      { id: "scenarios", tab: "Scenarios", n: 5, sub: "levers", html: secS }
     ];
     if (!TABS.some((t) => t.id === c3Tab)) c3Tab = "guardrails";
-    const tabBar = '<div class="np-c3-tabs" role="tablist">' + TABS.map((t) =>
-      '<button type="button" class="np-c3-tab' + (c3Tab === t.id ? " is-active" : "") + '" data-tab="' + t.id + '">' +
-      '<span class="np-c3-tabl">' + t.tab + '</span><span class="np-c3-tabn">' + t.n + " " + t.sub + "</span></button>").join("") + "</div>";
     const active = TABS.find((t) => t.id === c3Tab);
+    const tabBar = '<div class="np-c3-sysrow"><div class="np-c3-tabs" role="tablist">' + TABS.map((t) =>
+      '<button type="button" class="np-c3-tab' + (c3Tab === t.id ? " is-active" : "") + '" data-tab="' + t.id + '">' +
+      '<span class="np-c3-tabl">' + t.tab + '</span><span class="np-c3-tabn">' + t.n + " " + t.sub + "</span></button>").join("") + "</div>" +
+      (c3Tab === "guardrails" ? '<label class="np-c3-toggle"><input type="checkbox" id="npC3Learnt"' + (c3Learnt ? " checked" : "") + '><span class="np-c3-toggle-tr"></span><span class="np-c3-toggle-lbl">Show learnt values</span></label>' : "") + "</div>";
+    const sysBtn = '<button type="button" class="np-c3-sysbtn" id="npC3Sys" aria-expanded="' + c3SysOpen + '"><span class="np-c3-syscaret">' + (c3SysOpen ? "▾" : "▸") + "</span>" +
+      (c3SysOpen ? "Hide" : "Show") + ' system-learnt settings<span class="np-c3-syssub">9 guardrails · 13 pruned rules · 13 optimiser dials · 5 scenarios — reference only, nothing to set</span></button>';
+    const sysBody = c3SysOpen ? '<div class="np-c3-sys">' + tabBar + '<div class="np-c3-tabbody">' + active.html + "</div></div>" : "";
 
     host.innerHTML =
       '<section class="panel np-c3' + (c3Learnt ? " show-learnt" : "") + '">' +
         '<div class="panel-heading"><div class="np-c3-htext"><h2>Constraints &amp; guardrails</h2>' +
-          "<p>For <b>" + esc(div) + " · " + esc(cn) + "</b>. You'd normally set every limit by hand before optimising — you don't need to. " +
-          "Almost everything is a <b>learnt guardrail</b> or <b>pruned automatically</b>; <b>optimiser settings</b> decide how those bite, and you steer with <b>scenarios</b>.</p></div>" +
-          (c3Tab === "guardrails" ? '<label class="np-c3-toggle"><input type="checkbox" id="npC3Learnt"' + (c3Learnt ? " checked" : "") + '><span class="np-c3-toggle-tr"></span><span class="np-c3-toggle-lbl">Show learnt values</span></label>' : "") +
+          "<p>For <b>" + esc(div) + " · " + esc(cn) + "</b>. Only these four asks need you — everything else is learnt from your data, pruned automatically or steered with scenarios, and sits behind the reference view below.</p></div>" +
         "</div>" +
-        tabBar +
-        '<div class="np-c3-tabbody">' + active.html + "</div>" +
+        ask4 +
+        sysBtn + sysBody +
       "</section>";
     host.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { c3Tab = b.dataset.tab; renderConstraints(); });
     host.querySelectorAll("[data-goto]").forEach((b) => b.onclick = () => NP.goStep(+b.dataset.goto));
+    const sysB = host.querySelector("#npC3Sys");
+    if (sysB) sysB.onclick = () => { c3SysOpen = !c3SysOpen; renderConstraints(); };
+    const mIn = host.querySelector("#npAskMargin");
+    if (mIn) mIn.oninput = () => { c3Asks.margin = mIn.value; };
+    host.querySelectorAll("#npAskComplex [data-yn]").forEach((b) => b.onclick = () => {
+      c3Asks.complex = b.dataset.yn === "yes";
+      host.querySelectorAll("#npAskComplex [data-yn]").forEach((x) => x.classList.toggle("is-on", x === b));
+    });
     const tg = host.querySelector("#npC3Learnt"), sec = host.querySelector(".np-c3");
     if (tg) tg.onchange = () => { c3Learnt = tg.checked; sec.classList.toggle("show-learnt", c3Learnt); };
     // Each tab switch rewrites this step's innerHTML, dropping the step nav — re-add it
