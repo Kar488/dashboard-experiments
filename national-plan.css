@@ -20,7 +20,8 @@ body.np-noscroll { overflow: hidden; }
   box-shadow: 0 6px 18px rgba(23,105,232,0.05);
 }
 body.dark .np-stepper { background: linear-gradient(180deg, #18243c 0%, #121d31 100%); box-shadow: none; }
-.np-stepper-inner { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+.np-stepper-inner { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; }
+.np-step-name { white-space: nowrap; }
 .np-step-tab { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 0; padding: 6px 11px; cursor: pointer; color: var(--muted); font-family: inherit; font-size: 0.8rem; border-radius: 999px; }
 .np-step-tab:not(.is-locked):not(.is-disabled):hover { background: var(--blue-soft); }
 .np-step-circ { width: 22px; height: 22px; border-radius: 50%; background: #e6ecf5; color: var(--muted); display: grid; place-items: center; font-weight: 700; font-size: 0.72rem; flex: 0 0 auto; }
