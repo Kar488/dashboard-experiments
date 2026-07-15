@@ -1638,10 +1638,11 @@ body.dark .show-all-drawer { background: #121b2a; color: #cfd6e0; border-color: 
   font-size: 0.6rem;
 }
 .wpl-field select {
-  padding: 6px 8px;
+  min-height: 28px;
+  padding: 4px 8px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 500;
   background: #fff;
 }
@@ -1770,6 +1771,9 @@ body.dark .show-all-drawer { background: #121b2a; color: #cfd6e0; border-color: 
   left: 0;
   background: #fff;
   z-index: 1;
+  /* bold row labels like the Performance Explorer's name column — outranks the
+     grouped 600-weight typography rule further down */
+  font-weight: 700;
 }
 .wpl-period-table tbody .wpl-section-row th {
   z-index: 2;
@@ -1782,31 +1786,35 @@ body.dark .show-all-drawer { background: #121b2a; color: #cfd6e0; border-color: 
 }
 .wpl-period-table th,
 .wpl-period-table td {
-  padding: 8px 8px;
-  text-align: right;
-  vertical-align: top;
-  border-bottom: 1px solid #eef1f6;
+  padding: 8px 10px;
+  text-align: center;
+  vertical-align: middle;
+  border-bottom: 1px solid #f1f3f8;
 }
+.wpl-period-table thead th { padding: 11px 10px; }
+/* soft white seams between tinted cells, like the explorer's .hg-cell borders */
+.wpl-period-table tbody td { border-left: 1px solid rgba(255, 255, 255, 0.65); }
 .wpl-period-table thead th {
-  background: var(--soft);
+  background: #fff;
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 500;
-  border-bottom: 1px solid var(--line);
-  text-align: right;
+  letter-spacing: 0.045em;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line-strong);
+  text-align: center;
   white-space: nowrap;
   vertical-align: middle;
+  line-height: 1.22;
 }
 .wpl-period-table thead th:first-child { text-align: left; }
-.wpl-period-table thead th.wpl-period-th { text-align: right; }
-.wpl-period-table thead th.wpl-period-th .wpl-period-btn { float: right; }
+.wpl-period-table thead th.wpl-period-th { text-align: center; }
 .wpl-period-table tbody th {
   text-align: left;
-  font-weight: 500;
+  font-weight: 700;
   color: var(--ink);
-  font-size: 0.78rem;
+  font-size: 0.79rem;
+  letter-spacing: -0.006em;
   background: #fff;
   white-space: nowrap;
 }
@@ -1862,13 +1870,18 @@ body.dark .show-all-drawer { background: #121b2a; color: #cfd6e0; border-color: 
 .wpl-period-table td.wpl-week-last,
 .wpl-period-table thead th.wpl-week-last { border-right: 2px solid var(--blue); }
 
-.wpl-cell { display: flex; flex-direction: column; gap: 1px; align-items: flex-end; }
-.wpl-cell .wpl-value { font-weight: 500; font-size: 0.82rem; color: var(--ink); font-variant-numeric: tabular-nums; }
-.wpl-cell .wpl-delta { font-size: 0.62rem; font-weight: 500; }
-.wpl-cell .wpl-delta.positive { color: var(--green); }
-.wpl-cell .wpl-delta.negative { color: var(--red); }
-.wpl-cell .wpl-ly { padding-top: 1px; font-size: 0.58rem; color: var(--faint); font-weight: 500; }
-.wpl-row-emphasis .wpl-cell .wpl-value { font-weight: 600; }
+/* Cell typography matches the Performance Explorer heat grid, four lines:
+   bold value · light LY value · bold Δ% · light (abs Δ), centred + tabular. */
+.wpl-cell { display: flex; flex-direction: column; gap: 1px; align-items: center; text-align: center; }
+.wpl-cell .wpl-value { font-weight: 700; font-size: 0.78rem; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; white-space: nowrap; }
+.wpl-cell .wpl-delta { font-size: 0.63rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; margin-top: 1px; }
+.wpl-cell .wpl-delta.positive { color: #2f8a56; }
+.wpl-cell .wpl-delta.negative { color: #b0554f; }
+.wpl-cell .wpl-ly { font-size: 0.63rem; color: var(--faint); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wpl-cell .wpl-dabs { font-size: 0.58rem; font-weight: 500; opacity: 0.85; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wpl-cell .wpl-dabs.positive { color: #2f8a56; }
+.wpl-cell .wpl-dabs.negative { color: #b0554f; }
+.wpl-row-emphasis .wpl-cell .wpl-value { font-weight: 800; }
 
 /* Period drill overlay */
 .period-drill-drawer { background: var(--bg); width: min(1280px, 100vw); }
@@ -2014,6 +2027,356 @@ body.dark .show-all-drawer { background: #121b2a; color: #cfd6e0; border-color: 
 }
 .wpl-week-mode .wpl-chip { min-height: 22px; padding: 3px 10px; font-size: 0.7rem; }
 .wpl-week-mode > span { margin-right: 4px; font-weight: 500; }
+
+/* ====================================================================
+ * Weekly P&L swipeable deck — P&L / KPI Trends / Store Analysis slides
+ * ==================================================================== */
+/* View switcher — one segmented capsule (matches the metric capsules), not boxes */
+.wpl-deck-navrow { display: flex; align-items: center; gap: 14px; margin: 14px 0 10px; flex-wrap: wrap; }
+.wpl-deck-nav {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.wpl-deck-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 16px 4px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.wpl-deck-tab:hover { color: var(--ink); }
+.wpl-deck-tab.is-active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.wpl-deck-tab-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.wpl-deck-tab.is-active .wpl-deck-tab-num { background: var(--blue); color: #fff; }
+.wpl-deck-tab-title { font-size: 0.76rem; font-weight: 600; line-height: 1; }
+.wpl-deck-swipehint { font-size: 0.66rem; color: var(--faint); font-weight: 500; }
+
+.wpl-deck { position: relative; overflow: hidden; touch-action: pan-y; }
+.wpl-deck.is-grab { cursor: grabbing; user-select: none; }
+/* The deck slides via scrollLeft (never transform — a composited transform layer
+   would cost the tables their subpixel text antialiasing and look blurry next to
+   the Performance Explorer). Smooth motion comes from scrollTo({behavior:smooth}). */
+.wpl-deck-track {
+  display: flex;
+  gap: 28px; /* daylight between cards mid-swipe — keep in sync with WPL_DECK_GAP */
+  width: 100%;
+}
+.wpl-slide { flex: 0 0 100%; min-width: 100%; align-self: flex-start; box-sizing: border-box; }
+
+/* Tables inside the deck: no scrollbars — drag/swipe pans the table (52-week plan
+   feel); the deck takes over once the table hits its edge. Row names pin left and
+   the Total column pins right while the 52-week body scrolls under them. */
+.wpl-deck .wpl-table-wrap {
+  max-height: none;
+  scrollbar-width: none;
+  cursor: grab;
+}
+.wpl-deck .wpl-table-wrap::-webkit-scrollbar { display: none; }
+.wpl-deck.is-grab .wpl-table-wrap { cursor: grabbing; }
+.wpl-period-table thead th.total-col {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: #e7edf6;
+  box-shadow: -8px 0 8px -8px rgba(15, 23, 42, 0.22);
+}
+.wpl-period-table td.total-col {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: #f2f7ff;
+  box-shadow: -8px 0 8px -8px rgba(15, 23, 42, 0.18);
+}
+.wpl-period-table tbody tr.wpl-row-emphasis td.total-col { background: #dfeafc; }
+
+/* Type-ahead multi-select (Department / ASM / Category / Class / Sub-class / District) */
+.wpl-msel { position: relative; min-width: 168px; }
+.wpl-msel-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-height: 28px;
+  padding: 3px 22px 3px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  position: relative;
+  font-size: 0.72rem;
+}
+.wpl-msel-field:hover { border-color: var(--blue); }
+/* undo the .wpl-field span label treatment (uppercase/spacing) inside the control */
+.wpl-msel .wpl-msel-field span {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+.wpl-msel-caret { position: absolute; right: 7px; color: var(--muted); font-size: 0.55rem; }
+.wpl-msel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-weight: 500;
+  font-size: 0.66rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+.wpl-msel-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 0.72rem; padding: 0; line-height: 1; }
+.wpl-msel-x:hover { color: var(--red); }
+.wpl-msel-morechip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  background: var(--blue-soft);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1;
+}
+.wpl-msel .wpl-msel-field span.wpl-msel-morechip { color: var(--blue); font-weight: 600; font-size: 0.62rem; }
+.wpl-msel .wpl-msel-field span.wpl-msel-all { color: var(--muted); }
+.wpl-msel-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  width: 300px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  padding: 8px;
+}
+.wpl-msel-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 0.74rem;
+  margin-bottom: 6px;
+  font-family: inherit;
+}
+.wpl-msel-list { max-height: 240px; overflow: auto; }
+.wpl-msel-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.74rem;
+  color: var(--ink);
+}
+.wpl-msel-row:hover { background: var(--soft); }
+.wpl-msel-row input { margin: 0; }
+.wpl-msel-code { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.68rem; min-width: 34px; }
+.wpl-msel-name { flex: 1; min-width: 0; }
+.wpl-msel-badge {
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-style: normal;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.wpl-msel-sect {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 6px 6px 3px;
+  font-weight: 600;
+}
+.wpl-msel-hint { font-size: 0.66rem; color: var(--muted); padding: 6px; }
+.wpl-msel-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding: 6px 4px 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.wpl-link-btn { border: 0; background: transparent; color: var(--blue); cursor: pointer; font-size: 0.68rem; font-weight: 600; padding: 0; font-family: inherit; }
+
+.wpl-kpi-filters { position: relative; z-index: 5; }
+.wpl-scale-field { min-width: 0; }
+.wpl-store-count { align-self: center; margin-left: auto; font-size: 0.7rem; color: var(--muted); font-weight: 500; }
+
+/* KPI Trends "Sort by" — select + direction toggle, sized to match the
+   multi-select fields beside it (28px control, same face) */
+.wpl-sort-field { min-width: 0; }
+.wpl-sort-control { display: inline-flex; align-items: stretch; gap: 4px; }
+.wpl-sort-control select {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: #fff;
+  font-family: inherit;
+}
+.wpl-sort-dir {
+  width: 26px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+.wpl-sort-dir:hover { border-color: var(--blue); }
+.wpl-sort-dir[disabled] { color: var(--faint); cursor: default; }
+
+/* Store Analysis sortable column headers */
+.wpl-sa-sort {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.wpl-sa-sort:hover { color: var(--blue); }
+.wpl-sa-sort.is-sorted { color: var(--blue); font-weight: 700; }
+.wpl-sa-arrow { font-size: 0.5rem; line-height: 1; }
+body.dark .wpl-sort-control select,
+body.dark .wpl-sort-dir { background: #121b2a; color: #cfd6e0; border-color: rgba(255, 255, 255, 0.14); }
+
+/* Store Analysis table — store identity columns ahead of the KPI columns */
+.wpl-store-table { min-width: 1500px; }
+.wpl-store-table td.wpl-store-loc,
+.wpl-store-table td.wpl-store-dist { text-align: left; font-size: 0.74rem; color: var(--ink); white-space: nowrap; }
+.wpl-store-table thead th.wpl-store-loc,
+.wpl-store-table thead th.wpl-store-dist { text-align: left; }
+.wpl-store-table th.wpl-store-num { font-variant-numeric: tabular-nums; }
+.wpl-cell-compact .wpl-value { font-size: 0.76rem; }
+/* The store list scrolls inside its wrap: the header pins on top and the rolled-up
+   Total row pins right under it (same as the Performance Explorer's total row). */
+.wpl-deck .wpl-store-wrap { max-height: 62vh; overflow: auto; }
+.wpl-store-totalrow th,
+.wpl-store-totalrow td {
+  position: sticky;
+  top: 34px; /* refined to the measured header height after each render */
+  z-index: 2;
+  background: #f7f9fc;
+  border-bottom: 2px solid var(--line-strong);
+  box-shadow: 0 6px 8px -8px rgba(15, 23, 42, 0.25);
+}
+.wpl-store-totalrow th.wpl-rowname { z-index: 3; background: #f7f9fc; font-weight: 700; }
+.wpl-store-totalrow td.wpl-store-loc,
+.wpl-store-totalrow td.wpl-store-dist { color: var(--muted); font-size: 0.68rem; }
+.wpl-store-totalrow .wpl-cell .wpl-value { font-weight: 800; }
+
+/* Heat legend under the deck — same scale treatment as the Performance Explorer */
+.wpl-heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px 2px;
+  font-size: 0.66rem;
+  color: var(--faint);
+}
+.wpl-heat-scale {
+  display: flex;
+  height: 11px;
+  width: 220px;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.wpl-heat-scale span { flex: 1; }
+.wpl-heat-note { margin-left: 8px; }
+.wpl-heat-picker { display: inline-flex; align-items: center; gap: 6px; }
+.wpl-deck-navrow .wpl-heat-picker { margin-left: auto; }
+.wpl-heat-picker span {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--muted);
+}
+.wpl-heat-picker select {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: #fff;
+  font-family: inherit;
+}
+body.dark .wpl-heat-picker select { background: #121b2a; color: #cfd6e0; border-color: rgba(255, 255, 255, 0.14); }
+
+/* Dark mode for the deck + pickers */
+body.dark .wpl-deck-nav { background: #121b2a; border-color: rgba(255, 255, 255, 0.08); }
+body.dark .wpl-deck-tab { color: #8b98ab; }
+body.dark .wpl-deck-tab:hover { color: #e6ecf5; }
+body.dark .wpl-deck-tab.is-active { background: #1c2941; color: #e6ecf5; }
+body.dark .wpl-msel-field,
+body.dark .wpl-msel-pop,
+body.dark .wpl-msel-search { background: #121b2a; color: #cfd6e0; border-color: rgba(255, 255, 255, 0.14); }
+body.dark .wpl-msel .wpl-msel-field span { color: #cfd6e0; }
+body.dark .wpl-msel-chip { background: #1c2941; border-color: rgba(255, 255, 255, 0.12); color: #cfd6e0; }
+body.dark .wpl-msel-row { color: #cfd6e0; }
+body.dark .wpl-msel-row:hover { background: rgba(255, 255, 255, 0.06); }
+body.dark .wpl-period-table thead th.total-col { background: #18243a; }
+body.dark .wpl-period-table td.total-col { background: #142034; }
 
 /* Chart head + chip row aligned tight */
 .wpl-chart-wrap .wpl-chip-row {
