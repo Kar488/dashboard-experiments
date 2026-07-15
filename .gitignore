@@ -4,3 +4,5 @@ server.err.log
 *.zip
 _pdf_extract.txt
 _pdfx.js
+/.nimbalyst
+/server.log
