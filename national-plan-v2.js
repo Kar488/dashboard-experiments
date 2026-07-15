@@ -206,12 +206,18 @@
         : "") +
       "</div></th>";
   }
+  // Tactic code shown in the cell, keyed by the store tactic className
+  // (national-plan.js STORE_TACTICS). This is the PROMO TACTIC, not the discount
+  // type — the discount type is carried separately by c.val (offerValueShort)
+  // and c.mech. STORE_TACTICS only ever produces item/bxgx/mb here.
+  const TAC_LABEL = { item: "ID", bxgx: "BXGX", mb: "MB" };
   function ribbonCell(o, c, isEv, ixf, lyset, noAlw) {
     // holiday is indicated on the week-number header only — no bar on every body cell
     const ev = "";
     const lock = NP.state.cf.approved && NP.state.cf.approved[o.uid + ":" + c.week] ? " is-lock" : "";
     if (!c.promoted) return '<td class="npv2-fg-wk npv2-fg-none' + (c.locked ? " is-locked" : "") + ev + '" title="Wk ' + c.week + ' · no promo"></td>';
     const mechL = c.mech ? NP.MECH_LABEL[c.mech] : "", w = c.week - 1;
+    const tac = TAC_LABEL[c.store.className];
     const ixc = ixf === "cann" ? " is-cann" : ixf === "halo" ? " is-halo" : "";
     const noal = noAlw ? " is-noalw" : "";
     // depth vs LY: ▲ deeper / ▼ shallower / = equal
@@ -221,9 +227,16 @@
     const repeat = !!(lyset && lyset.has(w));
     const stHtml = repeat ? '<span class="npv2-wk-st st-rep">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-st st-new">new</span>';
     const ixt = ixf === "cann" ? " · ⚠ cluster rival also on deal (cannibalisation)" : ixf === "halo" ? " · ✦ co-promoted with a complement (halo)" : "";
-    const tip = "Wk " + c.week + " · " + c.store.name + (c.offer ? " · " + c.offer.label : "") + (mechL ? " (" + mechL + ")" : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimised placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
     // promo prices: store at this week's depth; digital a touch deeper; plus the LY price
     const hasDig = c.digital.length > 0, digDepth = Math.min(0.5, c.depth + 0.06);
+    // Family tint (Option B): item discount running store-only = SIMPLE (blue);
+    // any complex tactic OR any digital cell = COMPLEX (amber). Reads the same
+    // per-cell digital signal (c.digital.length) the price block already uses.
+    const fam = (c.store.className === "item" && !hasDig) ? "simple" : "complex";
+    const mechLabel = tac ? '<div class="npv2-wk-mech">' + tac + "</div>" : "";
+    // tooltip: the four facts once each — week · promotion type · tactic ·
+    // discount type · offer label — then the existing depth/LY/digital/lock detail.
+    const tip = "Wk " + c.week + " · " + (fam === "simple" ? "Simple" : "Complex") + " · " + c.store.name + (mechL ? " · " + mechL : "") + (c.offer ? " · " + c.offer.label : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimised placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
     const sp = NP.fmt.price(NP.promoPriceOf(o, c.depth)), dp = NP.fmt.price(NP.promoPriceOf(o, digDepth));
     const lySp = NP.fmt.price(NP.promoPriceOf(o, lyd)), lyDp = NP.fmt.price(NP.promoPriceOf(o, Math.min(0.5, lyd + 0.06)));
     // optimised-placement indicator: new vs a repeat of last year
@@ -232,8 +245,9 @@
       : '<i class="npv2-wk-opt is-opt" title="optimised — new placement vs last year">✦</i>';
     const lockI = lock ? '<i class="npv2-wk-lk" title="locked into plan"></i>' : "";
     const warnI = noAlw ? '<i class="npv2-wk-warn" title="on promo, no vendor allowance">⚠</i>' : "";
-    return '<td class="npv2-fg-wk tactic-' + c.store.className + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="' + esc(tip) + '">' +
+    return '<td class="npv2-fg-wk tactic-' + c.store.className + " npv2-fam-" + fam + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="' + esc(tip) + '">' +
       '<div class="npv2-wk-c npv2-wk-pc">' +
+        mechLabel +
         (c.val ? '<div class="npv2-wk-tok">' + esc(c.val) + "</div>" : "") +
         '<div class="npv2-wk-pr"><span class="npv2-wk-ch">S</span><b>' + sp + "</b></div>" +
         (repeat ? '<div class="npv2-wk-lp">LY ' + lySp + "</div>" : "") +
@@ -370,9 +384,10 @@
   // heatmap legend — same gentle colours as the ribbon
   function legendHTML() {
     return '<div class="npv2-legend">' +
-      '<span class="npv2-lg"><i class="npv2-sw tactic-item"></i>Item Discount</span>' +
-      '<span class="npv2-lg"><i class="npv2-sw tactic-bxgx"></i>Buy X Get X</span>' +
-      '<span class="npv2-lg"><i class="npv2-sw tactic-mb"></i>Must Buy</span>' +
+      '<span class="npv2-lg"><i class="npv2-sw npv2-fam-simple"></i>Simple</span>' +
+      '<span class="npv2-lg"><i class="npv2-sw npv2-fam-complex"></i>Complex</span>' +
+      '<span class="npv2-lg-div"></span>' +
+      '<span class="npv2-lg npv2-lg-mechkey">ID = Item Discount · BXGX = Buy X Get X · MB = Must Buy</span>' +
       '<span class="npv2-lg npv2-lg-mech">offer <b>%</b> · <b>$</b> · <b>@$</b> · <b>FREE</b></span>' +
       '<span class="npv2-lg"><i class="npv2-lg-dg">D</i>digital</span>' +
       '<span class="npv2-lg"><i class="npv2-sw npv2-sw-lock"></i>locked</span>' +

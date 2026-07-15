@@ -2312,3 +2312,28 @@ body.dark .npv2-strat-m2v { color: #e6ecf5; }
 /* Collapsed (scrolled) state — keep only the primary row on the active card */
 .npv2-fg-tools.is-scrolled .npv2-strat .npv2-strat-sep,
 .npv2-fg-tools.is-scrolled .npv2-strat .npv2-strat-grid2 { display: none; }
+
+/* ── v2 ribbon — two-family tint + tactic text label ─────────────────────────
+   Option B: the family and the label derive from the per-cell tactic class
+   (c.store.className) + the digital marker (c.digital.length). Tints REUSE the
+   existing tactic-item (blue) and tactic-mb (amber) skin values (see ~L1875)
+   so promoted cells and legend swatches match exactly — no new hues, colour
+   variables, fonts or spacing are introduced. Backgrounds only: the halo /
+   cannibalisation / no-allowance / lock states are box-shadows and untouched. */
+.npv2-fg-wk.npv2-fam-simple  { background: #dde8f6 !important; }
+.npv2-fg-wk.npv2-fam-complex { background: #f5e8d3 !important; }
+body.dark .npv2-fg-wk.npv2-fam-simple  { background: #233650 !important; }
+body.dark .npv2-fg-wk.npv2-fam-complex { background: #44351d !important; }
+/* Tactic code label. Subordinate to the S/D promo price (0.68rem bold ink): it
+   matches the muted caption scale already used by .npv2-wk-tok / .npv2-wk-lp
+   (0.56rem, var(--muted)) so it reads as a quiet left-aligned tag, not a number.
+   var(--muted) on these tints is the same treatment .npv2-wk-tok already uses. */
+.npv2-wk-mech { font-size: 0.56rem; font-weight: 600; letter-spacing: 0.02em;
+  line-height: 1.1; text-align: left; color: var(--muted); white-space: nowrap;
+  margin: 0 0 1px; }
+/* Legend family swatches — exact cell tints (match the rules above). */
+.npv2-sw.npv2-fam-simple  { background: #dde8f6; }
+.npv2-sw.npv2-fam-complex { background: #f5e8d3; }
+body.dark .npv2-sw.npv2-fam-simple  { background: #233650; }
+body.dark .npv2-sw.npv2-fam-complex { background: #44351d; }
+.npv2-lg-mechkey { color: var(--muted); }

@@ -5,4 +5,4 @@ server.err.log
 _pdf_extract.txt
 _pdfx.js
 /.nimbalyst
-/server.log
+/server.log.DS_Store
