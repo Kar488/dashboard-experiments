@@ -60,8 +60,8 @@
      (Units/Sales/AGP vs LY) · the editable deal inputs (yellow). Only the 52-week
      ribbon scrolls — so a merchant edits an input and sees the output right beside it. */
   const OUTCOLS = [
-    { k: "units", label: "Units", money: false, get: (r) => r.units },
     { k: "sales", label: "Sales", money: true, get: (r) => r.revenueM },
+    { k: "units", label: "Units", money: false, get: (r) => r.units },
     { k: "agp", label: "AGP", money: true, get: (r) => r.agpM }
   ];
   // pinned inputs: VLC · Promo cost (Reg / Deep) · Events (Store / Dig / S+D, toggled Reg↔Deep)
@@ -331,9 +331,17 @@
     if (!items.length) return "";
     const per = weeks.map(() => ({ u: 0, s: 0, a: 0 }));
     items.forEach((o) => { const ser = NP.weeklySeries(o, map); weeks.forEach((w, i) => { per[i].u += ser.units[w]; per[i].s += ser.sales[w]; per[i].a += ser.agp[w]; }); });
-    let u = 0, r = 0, listS = 0, fundS = 0;
-    items.forEach((o) => { const res = NP.resultFor(o, map), e = NP.effective(o, map); u += res.units; r += res.revenueM; listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units; });
+    // filtered grand totals (current + LY) — the same res/ly the item rows sum, so
+    // the pinned Units/Sales/AGP footer cells reconcile to the visible rows.
+    let u = 0, r = 0, a = 0, lu = 0, lr = 0, la = 0, listS = 0, fundS = 0;
+    items.forEach((o) => {
+      const res = NP.resultFor(o, map), e = NP.effective(o, map), ly = NP.lyResult(o);
+      u += res.units; r += res.revenueM; a += res.agpM;
+      lu += ly.units; lr += ly.revenueM; la += ly.agpM;
+      listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units;
+    });
     const aiv = u ? (r * 1000) / u : 0, listU = u ? listS / u : 0, fundU = u ? fundS / u : 0, rate = r ? (fundS / 1000) / r : 0;
+    const totRes = { units: u, revenueM: r, agpM: a }, totLy = { units: lu, revenueM: lr, agpM: la };
     let cu = 0, cs = 0, ca = 0;
     const cells = weeks.map((w, i) => {
       cu += per[i].u; cs += per[i].s; ca += per[i].a;
@@ -344,9 +352,15 @@
     // keep this cell's content NARROW — the pinned column is width: max-content, so a
     // long single line here would widen the whole frozen block (the width-0 wrapper
     // stops the cell contributing to the auto column width at all).
-    const lab = '<th class="npv2-fg-id npv2-fg-totlab" title="Plan-level: AIV $' + aiv.toFixed(2) + " · List $" + listU.toFixed(2) + "/u · Funding $" + fundU.toFixed(2) + "/u · Spend rate " + (rate * 100).toFixed(1) + '%"><div class="npv2-totlab-in">' +
-      '<div class="npv2-totlab-t">Weekly totals</div>' +
-      '<div class="npv2-totlab-sec">Sales · Units · AGP per week · hover for the rolling total</div></div></th>';
+    // pinned footer: label + the Units/Sales/AGP grand totals under OUTPUTS VS LY,
+    // built with the same grpBody("out")/outCellHTML the item rows use so they line
+    // up. No cells for the List/Promo-cost/Allowance/Events groups — the <th>
+    // simply stretches across the (body-set) pinned width, leaving that area blank
+    // rather than painting empty tinted columns. Works the same Inputs on or off.
+    const lab = '<th class="npv2-fg-id npv2-fg-totlab" title="Plan-level: AIV $' + aiv.toFixed(2) + " · List $" + listU.toFixed(2) + "/u · Funding $" + fundU.toFixed(2) + "/u · Spend rate " + (rate * 100).toFixed(1) + '%"><div class="npv2-fg-idin">' +
+      '<div class="npv2-fg-name npv2-fg-totname">Totals <span class="npv2-fg-totinfo" title="Hover any week for the rolling total to date." role="img" aria-label="Hover any week for the rolling total to date."><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="7.2" x2="8" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="4.8" r="1" fill="currentColor"/></svg></span></div>' +
+      grpBody("out", OUTCOLS.map((c) => outCellHTML(c, totRes, totLy)).join("")) +
+      "</div></th>";
     return "<tfoot><tr>" + lab + cells + "</tr></tfoot>";
   }
   function lyTotals() { let r = 0, u = 0, a = 0, h = 0; NP.cat().items.forEach((o) => { const x = NP.lyResult(o); r += x.revenueM; u += x.units; a += x.agpM; h += x.hhK; }); return { r: r, u: u, a: a, h: h }; }
