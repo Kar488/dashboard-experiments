@@ -19,10 +19,10 @@
 
   /* Dead-net versions — the allowance breakup can be viewed against two negotiated
      postures of the same deal:
-       v1 "Standard"  — the optimised base ladder (editable).
+       v1 "Standard"  — the optimized base ladder (editable).
        v2 "Deep-deal" — a second, more deeply funded version (richer off-invoice,
                         bill-back & price-break) → a lower dead-net per unit. Read-only;
-                        it is an alternative the optimiser also priced, not your scenario. */
+                        it is an alternative the optimizer also priced, not your scenario. */
   const DEEP_BUY_MULT = { offInvoice: 1.22, billBack: 1.18, priceBreak: 1.15 };
   function isDeep() { return NP.state.deadNetVersion === "v2"; }
   function deepLadder(l) { const o = Object.assign({}, l); Object.keys(DEEP_BUY_MULT).forEach((k) => { o[k] = util.round((l[k] || 0) * DEEP_BUY_MULT[k], 4); }); return o; }
@@ -92,7 +92,7 @@
   }
   function scenarioChips() {
     const st = NP.state;
-    let html = '<button type="button" class="scenario-chip' + (st.activeScenario === "base" ? " is-active" : "") + '" data-scn="base">Base plan<small>optimised</small></button>';
+    let html = '<button type="button" class="scenario-chip' + (st.activeScenario === "base" ? " is-active" : "") + '" data-scn="base">Base plan<small>optimized</small></button>';
     st.scenarios.forEach((s) => { html += '<button type="button" class="scenario-chip' + (st.activeScenario === s.id ? " is-active" : "") + '" data-scn="' + s.id + '">' + esc(s.name) + '<small>your edits</small><span class="scenario-chip-remove" data-scn-del="' + s.id + '" title="Delete scenario">×</span></button>'; });
     return html;
   }
@@ -127,7 +127,7 @@
     if (!NP.state.scenarios.length || compareHidden) { wrap.hidden = true; wrap.innerHTML = ""; return; }
     wrap.hidden = false;
     const objM = NP.objMeta();
-    const scs = [{ id: "base", name: "Base plan", sub: "optimised, no edits", ov: {} }].concat(NP.state.scenarios.map((s) => ({ id: s.id, name: s.name, sub: "your edits", ov: s.ov })));
+    const scs = [{ id: "base", name: "Base plan", sub: "optimized, no edits", ov: {} }].concat(NP.state.scenarios.map((s) => ({ id: s.id, name: s.name, sub: "your edits", ov: s.ov })));
     const cols = [["Sales", (t) => fmt.m(t.revenueM), "revenueM"], ["Units", (t) => fmt.u(t.units), "units"], ["AGP", (t) => fmt.m(t.agpM), "agpM"], ["HHs", (t) => fmt.u(t.hhK), "hhK"]];
     const tots = scs.map((s) => totals(s.ov)), best = {};
     cols.forEach(([, , k]) => { best[k] = Math.max.apply(null, tots.map((t) => t[k])); });
@@ -711,7 +711,7 @@
   }
 
   /* ===================================================== VIEW 4: EXPLAIN ===== */
-  /* Data-driven "why the optimiser plan beats last year / the plan" — Store58 dataset. */
+  /* Data-driven "why the optimizer plan beats last year / the plan" — Store58 dataset. */
   const EX_MET = ["units", "sales", "AGP"], EX_MON = [false, true, true];
   const EX_BUCKETS = [["off", "Switched off"], ["new", "Added"], ["kept", "Retuned"], ["stay", "Left off"]];
   function exFmt(m, v) { v = Math.round(v); return (v < 0 ? "-" : "") + (EX_MON[m] ? "$" : "") + Math.abs(v).toLocaleString(); }
@@ -745,14 +745,14 @@
         '<p class="np-ex-sub">Contribution to the ' + EX_MET[M] + ' gap vs ' + (B === "plan" ? "planned" : "last year") + ': <strong>' + exFmt(M, bench[M]) + '</strong> → <strong>' + exFmt(M, A.tot.opt[M]) + '</strong> (<span class="' + (gain >= 0 ? "np-pos" : "np-neg") + '">' + (gain >= 0 ? "+" : "") + exFmt(M, gain) + '</span>). Click a department for the drivers.</p></div></div>' +
         exDeptBridge(A, M, B) + exDeptTable(A, M, B) + '</section>' +
       '<div class="np-ex-cols3">' +
-        '<section class="panel np-chart-card np-ex-bucketcard"><h4>What the optimiser changed <small>AGP ' + exFmt(2, A.tot.plan[2]) + " → " + exFmt(2, A.tot.opt[2]) + '</small></h4>' + exBucketBridge(A, 2) + '</section>' +
+        '<section class="panel np-chart-card np-ex-bucketcard"><h4>What the optimizer changed <small>AGP ' + exFmt(2, A.tot.plan[2]) + " → " + exFmt(2, A.tot.opt[2]) + '</small></h4>' + exBucketBridge(A, 2) + '</section>' +
         '<section class="panel np-chart-card"><h4>Promotion mechanic <small>store tactics</small></h4>' + exMechanic(A, ds) + '</section>' +
         '<section class="panel np-chart-card"><h4>Promotion depth <small>median depth</small></h4>' + exDepth(A) + '</section>' +
       '</div>' +
       '<section class="panel"><div class="panel-heading"><div><h3 class="np-ex-h">Validation &amp; confidence</h3>' +
         '<p class="np-ex-sub">Can a doubting merchant trust it? Accuracy, where the profit comes from, why the cuts are safe, and how much the forecast can be wrong before the gain disappears.</p></div></div>' +
         '<div class="np-ex-vgrid">' + exBacktest(A, M) + exEfficiency(A, ds) + exHalo(A, ds) + exDownside(A, B) + '</div></section>' +
-      '<p class="np-foot">Store ' + ds.meta.store + ', ' + esc(exScopeName()) + '. Optimiser objective = ' + ds.meta.objective + '; the units/AGP objective runs reallocate differently. Buckets and the depth/halo panels are defined vs the plan; forecast-accuracy uses sample actuals for layout.</p>';
+      '<p class="np-foot">Store ' + ds.meta.store + ', ' + esc(exScopeName()) + '. Optimizer objective = ' + ds.meta.objective + '; the units/AGP objective runs reallocate differently. Buckets and the depth/halo panels are defined vs the plan; forecast-accuracy uses sample actuals for layout.</p>';
     exBind(host);
   }
 
@@ -796,31 +796,31 @@
   function exDeptBridge(A, M, B) {
     const deps = Object.keys(A.depts).map((d) => ({ dept: d, delta: A.depts[d].opt[M] - A.depts[d][B][M] })).sort((a, b) => b.delta - a.delta);
     const steps = deps.map((d) => ({ label: d.dept, delta: d.delta, dept: d.dept }));
-    return '<div class="np-chart-card np-wf-card">' + wfRows({ label: B === "plan" ? "Plan" : "Last year", val: A.tot[B][M] }, steps, { label: "Optimiser", val: A.tot.opt[M] }, M, true) + "</div>";
+    return '<div class="np-chart-card np-wf-card">' + wfRows({ label: B === "plan" ? "Plan" : "Last year", val: A.tot[B][M] }, steps, { label: "Optimizer", val: A.tot.opt[M] }, M, true) + "</div>";
   }
   function exDeptTable(A, M, B) {
     const benchName = B === "plan" ? "LY Plan" : "Last year";
     const rows = Object.keys(A.depts).map((d) => { const bench = A.depts[d][B][M], opt = A.depts[d].opt[M]; return { d, bench, opt, dlt: opt - bench }; }).sort((a, b) => b.dlt - a.dlt);
     const t = rows.reduce((o, x) => { o.bench += x.bench; o.opt += x.opt; o.dlt += x.dlt; return o; }, { bench: 0, opt: 0, dlt: 0 });
     const rowHtml = (x, isTot) => { const p = x.bench ? x.dlt / x.bench : 0; return "<tr" + (isTot ? ' class="np-ex-tot"' : ' class="is-click" data-dept="' + esc(x.d) + '"') + "><td>" + (isTot ? "Total" : esc(x.d)) + "</td><td>" + exFmt(M, x.bench) + "</td><td>" + exFmt(M, x.opt) + '</td><td class="' + (x.dlt >= 0 ? "np-pos" : "np-neg") + '">' + (x.dlt >= 0 ? "+" : "") + exFmt(M, x.dlt) + '</td><td class="' + (p >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(p) + "</td></tr>"; };
-    return '<div class="np-ex-csub">By department · ' + EX_MET[M] + " · " + benchName + " → optimiser</div>" +
+    return '<div class="np-ex-csub">By department · ' + EX_MET[M] + " · " + benchName + " → optimizer</div>" +
       '<table class="np-ex-table"><thead><tr><th>Department</th><th>' + benchName + '</th><th>This plan</th><th>Δ</th><th>Δ %</th></tr></thead><tbody>' +
       rows.map((x) => rowHtml(x, false)).join("") + rowHtml({ d: "Total", bench: t.bench, opt: t.opt, dlt: t.dlt }, true) + "</tbody></table>";
   }
   function exBucketBridge(A, M) {
     const steps = EX_BUCKETS.map(([b, lab]) => ({ label: lab, delta: A.buckets[b][M], count: A.buckets[b][3] }));
-    return '<div class="np-wf-card">' + wfRows({ label: "Plan", val: A.tot.plan[M] }, steps, { label: "Optimiser", val: A.tot.opt[M] }, M, false) +
+    return '<div class="np-wf-card">' + wfRows({ label: "Plan", val: A.tot.plan[M] }, steps, { label: "Optimizer", val: A.tot.opt[M] }, M, false) +
       '<p class="np-foot"><b>Switched off</b> = planned promo dropped · <b>Added</b> = new · <b>Retuned</b> = kept, re-tuned · <b>Left off</b> = not promoted in either.</p></div>';
   }
   function exMechanic(A, ds) {
     const labs = ds.meta.tlab, max = Math.max(1, Math.max.apply(null, A.tac.plan.concat(A.tac.opt)));
-    return '<div class="np-tac">' + labs.map((l, i) => '<div class="np-tac-row"><span class="np-tac-lab">' + esc(l) + '</span><div class="np-tac-bars"><i class="np-tac-bar plan" data-tip="Plan: ' + A.tac.plan[i].toLocaleString() + ' item-weeks" style="width:' + (A.tac.plan[i] / max * 100) + '%"></i><i class="np-tac-bar opt" data-tip="Optimiser: ' + A.tac.opt[i].toLocaleString() + ' item-weeks" style="width:' + (A.tac.opt[i] / max * 100) + '%"></i></div><span class="np-tac-vals">' + A.tac.plan[i].toLocaleString() + " → " + A.tac.opt[i].toLocaleString() + "</span></div>").join("") +
-      '<div class="np-tac-legend"><span><i class="sw plan"></i>Plan</span><span><i class="sw opt"></i>Optimiser</span></div></div>';
+    return '<div class="np-tac">' + labs.map((l, i) => '<div class="np-tac-row"><span class="np-tac-lab">' + esc(l) + '</span><div class="np-tac-bars"><i class="np-tac-bar plan" data-tip="Plan: ' + A.tac.plan[i].toLocaleString() + ' item-weeks" style="width:' + (A.tac.plan[i] / max * 100) + '%"></i><i class="np-tac-bar opt" data-tip="Optimizer: ' + A.tac.opt[i].toLocaleString() + ' item-weeks" style="width:' + (A.tac.opt[i] / max * 100) + '%"></i></div><span class="np-tac-vals">' + A.tac.plan[i].toLocaleString() + " → " + A.tac.opt[i].toLocaleString() + "</span></div>").join("") +
+      '<div class="np-tac-legend"><span><i class="sw plan"></i>Plan</span><span><i class="sw opt"></i>Optimizer</span></div></div>';
   }
   function exDepth(A) {
-    const dd = [["Last year", A.dmed.ly, "ly"], ["Plan", A.dmed.plan, "plan"], ["Optimiser", A.dmed.opt, "opt"]], dmax = Math.max.apply(null, dd.map((x) => x[1])) * 1.12 || 1;
+    const dd = [["Last year", A.dmed.ly, "ly"], ["Plan", A.dmed.plan, "plan"], ["Optimizer", A.dmed.opt, "opt"]], dmax = Math.max.apply(null, dd.map((x) => x[1])) * 1.12 || 1;
     return '<div class="np-depth">' + dd.map(([l, v, c]) => '<div class="np-depth-row"><span class="np-depth-lab">' + l + '</span><div class="np-depth-track"><i class="np-depth-bar ' + c + '" style="width:' + (v / dmax * 100) + '%"></i></div><span class="np-depth-val">' + v.toFixed(1) + "%</span></div>").join("") +
-      '<p class="np-foot">The optimiser runs shallower median depth than plan and last year — same lift, less margin given away.</p></div>';
+      '<p class="np-foot">The optimizer runs shallower median depth than plan and last year — same lift, less margin given away.</p></div>';
   }
   /* SVG vertical bars (grouped); rects carry data-tip; optional data-<click> */
   function exVBars(labels, series, opts) {
@@ -864,13 +864,13 @@
     const optA = A.tot.opt[2], benA = A.tot[B][2], gain = optA - benA, beh = optA > 0 ? (1 - benA / optA) * 100 : 0, bn = B === "plan" ? "plan" : "last year";
     const drow = (t, v, cls) => '<div class="np-ds-row"><span>' + t + '</span><span class="' + (cls || "") + '">' + v + "</span></div>";
     return '<div class="np-chart-card"><h4>Downside check</h4><div class="np-ex-csub">how the AGP gain holds if the forecast is optimistic · auditable</div>' +
-      drow("Optimiser AGP (this scope)", exFmt(2, optA)) +
+      drow("Optimizer AGP (this scope)", exFmt(2, optA)) +
       drow((B === "plan" ? "Plan" : "Last year") + " AGP", exFmt(2, benA)) +
-      drow("Gain = optimiser − " + bn, (gain >= 0 ? "+" : "") + exFmt(2, gain), gain >= 0 ? "np-pos" : "np-neg") +
-      '<div class="np-ds-note">If the optimiser AGP forecast is optimistic (' + bn + ' assumed unbiased):</div>' +
-      drow("−10% on optimiser", (optA * 0.9 - benA >= 0 ? "+" : "") + exFmt(2, optA * 0.9 - benA), optA * 0.9 - benA >= 0 ? "np-pos" : "np-neg") +
-      drow("−20% on optimiser", (optA * 0.8 - benA >= 0 ? "+" : "") + exFmt(2, optA * 0.8 - benA), optA * 0.8 - benA >= 0 ? "np-pos" : "np-neg") +
-      '<p class="np-foot"><b>Break-even haircut ' + beh.toFixed(0) + "%.</b> The optimiser AGP can be overstated by this much before the gain vs " + bn + " disappears. These totals tie exactly to the Summary cards above.</p></div>";
+      drow("Gain = optimizer − " + bn, (gain >= 0 ? "+" : "") + exFmt(2, gain), gain >= 0 ? "np-pos" : "np-neg") +
+      '<div class="np-ds-note">If the optimizer AGP forecast is optimistic (' + bn + ' assumed unbiased):</div>' +
+      drow("−10% on optimizer", (optA * 0.9 - benA >= 0 ? "+" : "") + exFmt(2, optA * 0.9 - benA), optA * 0.9 - benA >= 0 ? "np-pos" : "np-neg") +
+      drow("−20% on optimizer", (optA * 0.8 - benA >= 0 ? "+" : "") + exFmt(2, optA * 0.8 - benA), optA * 0.8 - benA >= 0 ? "np-pos" : "np-neg") +
+      '<p class="np-foot"><b>Break-even haircut ' + beh.toFixed(0) + "%.</b> The optimizer AGP can be overstated by this much before the gain vs " + bn + " disappears. These totals tie exactly to the Summary cards above.</p></div>";
   }
   function exBind(host) {
     const t = host.querySelector("#npExTime"); if (t) t.onchange = () => { NP.state.explain.scope = t.value; NP.renderAll(); };
@@ -900,7 +900,7 @@
     const delta = d.opt[M] - d[B][M];
     let body = '<div class="np-modal-head"><div><h3>' + esc(dep) + '</h3><p>' + EX_MET[M] + " vs " + (B === "plan" ? "planned" : "last year") + '</p></div><button class="np-modal-close" type="button">×</button></div>' +
       '<div class="np-ds-big ' + (delta >= 0 ? "np-pos" : "np-neg") + '">' + (delta >= 0 ? "+" : "") + exFmt(M, delta) + "</div>" +
-      '<div class="np-ex-h" style="font-size:0.8rem">What drove it' + (B !== "plan" ? ' <span class="np-wf-n">optimiser vs plan</span>' : "") + "</div>";
+      '<div class="np-ex-h" style="font-size:0.8rem">What drove it' + (B !== "plan" ? ' <span class="np-wf-n">optimizer vs plan</span>' : "") + "</div>";
     EX_BUCKETS.forEach(([b, lab]) => { const v = d.b[b][M], n = d.b[b][3]; body += '<div class="np-ds-row"><span>' + lab + ' <span class="np-wf-n">' + n.toLocaleString() + ' items</span></span><span class="' + (v >= 0 ? "np-pos" : "np-neg") + '">' + (v >= 0 ? "+" : "") + exFmt(M, v) + "</span></div>"; });
     exModal(body);
   }
@@ -908,7 +908,7 @@
     const ds = window.NP_EXPLAIN, scopeWks = exWeeks().map((w) => w.wk);
     const items = ds.cuts.filter((c) => c.b === i && scopeWks.indexOf(c.wk) > -1).sort((a, b) => b.u - a.u);
     let body = '<div class="np-modal-head"><div><h3>Cuts needing ' + ds.meta.hlab[i] + ' / unit of basket halo to justify</h3><p>' + items.length + ' switched-off promos in this bucket · ' + esc(exScopeName()) + '</p></div><button class="np-modal-close" type="button">×</button></div>' +
-      '<p class="np-foot" style="margin:0 0 8px">Break-even halo / unit = (optimiser AGP − plan AGP) ÷ promoted units. A <b>higher</b> value means the planned promo would need an implausibly large basket effect to beat switching it off — so the cut is safer. <b>Low</b> values are the ones to review.</p>';
+      '<p class="np-foot" style="margin:0 0 8px">Break-even halo / unit = (optimizer AGP − plan AGP) ÷ promoted units. A <b>higher</b> value means the planned promo would need an implausibly large basket effect to beat switching it off — so the cut is safer. <b>Low</b> values are the ones to review.</p>';
     if (items.length) body += '<table class="np-modal-table"><thead><tr><th>Item</th><th class="np-r">Wk</th><th class="np-r">Units</th><th class="np-r">Plan AGP</th><th class="np-r">Opt AGP</th><th class="np-r">BE $/unit</th></tr></thead><tbody>' +
       items.map((c) => '<tr><td>' + esc(c.n) + '<small class="np-cut-dep"> ' + esc(c.dep) + (c.ps ? " · " + esc(c.ps) : "") + '</small></td><td class="np-r">' + c.wk + '</td><td class="np-r">' + c.u.toLocaleString() + '</td><td class="np-r ' + (c.pa < 0 ? "np-neg" : "") + '">' + exFmt(2, c.pa) + '</td><td class="np-r">' + exFmt(2, c.oa) + '</td><td class="np-r"><b>$' + c.be.toFixed(2) + "</b></td></tr>").join("") + "</tbody></table>";
     else body += '<p class="np-foot">No sample items embedded for this bucket and time scope.</p>';
@@ -918,7 +918,7 @@
   /* ============================================== VIEW 4: COUNTERFACTUAL ===== */
   function clustersOf(c) { const m = {}; c.items.forEach((o) => { (m[o.cluster] = m[o.cluster] || []).push(o); }); return m; }
   function tcase(s) { return (s || "").replace(/\w\S*/g, (t) => t.charAt(0) + t.slice(1).toLowerCase()); }
-  // vendor share of the category (by the optimised plan), sorted high→low by sales
+  // vendor share of the category (by the optimized plan), sorted high→low by sales
   function vendorStats() {
     const map = NP.displayMap(), byV = {}; let totS = 0, totU = 0;
     NP.cat().items.forEach((o) => { const r = NP.resultFor(o, map), v = byV[o.vendor] || (byV[o.vendor] = { vendor: o.vendor, sales: 0, units: 0 }); v.sales += r.revenueM; v.units += r.units; totS += r.revenueM; totU += r.units; });
@@ -937,11 +937,11 @@
     const share = (label, sp, up) => label + " · " + Math.round(sp * 100) + "% of sales · " + Math.round(up * 100) + "% of units";
     const t2s = top2.reduce((s, v) => s + v.salesPct, 0), t2u = top2.reduce((s, v) => s + v.unitsPct, 0);
     return [
-      { id: "optimized", name: "Optimised", tag: "recommended", desc: "Best {obj} across all vendors — demand, key weeks, halo & cannibalisation balanced inside the 22 guardrails. The Step-3 plan." },
+      { id: "optimized", name: "Optimized", tag: "recommended", desc: "Best {obj} across all vendors — demand, key weeks, halo & cannibalisation balanced inside the 22 guardrails. The Step-3 plan." },
       { id: "top1", name: top1 ? "Favour " + tcase(top1.vendor) : "Favour top vendor", desc: top1 ? share(tcase(top1.vendor), top1.salesPct, top1.unitsPct) : "" },
       { id: "top2", name: "Favour top 2 vendors", desc: top2.length ? share(top2.map((v) => tcase(v.vendor)).join(" + "), t2s, t2u) : "" },
       { id: "ownbrands", name: "Push own brands", desc: own ? share(tcase(own.vendor), own.salesPct, own.unitsPct) : "No own-brand vendor in this category." },
-      { id: "matchly", name: "Last year", desc: "Same weeks & event count as last year — the comparison floor, so the lift from Optimised is obvious." }
+      { id: "matchly", name: "Last year", desc: "Same weeks & event count as last year — the comparison floor, so the lift from Optimized is obvious." }
     ];
   }
   function cfStratName(id) { const s = cfStrategies().find((x) => x.id === id); return s ? s.name : id; }
@@ -950,7 +950,7 @@
     if (strategy === "matchly") return NP.weekPlan(o, null, true);
     const wk = NP.weekPlan(o, NP.displayMap(), false);
     if (strategy === "optimized") return wk;
-    // favour strategies: favoured vendors keep the full optimised cadence; others are thinned out
+    // favour strategies: favoured vendors keep the full optimized cadence; others are thinned out
     if (favouredVendors(strategy).indexOf(o.vendor) >= 0) return wk;
     const promo = []; wk.forEach((c, i) => { if (c.promoted) promo.push(i); });
     const drop = new Set(); promo.forEach((idx, k) => { if (k % 5 < 2) drop.add(idx); });
@@ -987,7 +987,7 @@
     return '<div class="np-strat-cards">' + cards + '</div>' +
       '<p class="np-cf-vendnote">Strategies tilt the plan toward vendors from this category’s line-up. For categories like produce, vendors are replaced by supply types — <strong>Organic · Conventional · Local</strong>.</p>';
   }
-  // item-level proof of learned interactions, read straight off the optimised 52-week plan below
+  // item-level proof of learned interactions, read straight off the optimized 52-week plan below
   function ixController() {
     const ix = NP.state.ix;
     const cap = (label, opts, attr, cur) => '<span class="np-ix-ctl"><span class="np-ix-ctl-lbl">' + label + '</span><span class="wpl-metric-capsule wpl-metric-capsule-sm">' +
@@ -1023,7 +1023,7 @@
       : '<b>' + focal.length + '</b> item' + (focal.length === 1 ? "" : "s") + ' · ' + BIN_BASIS[ix.binBy] + ' velocity · ' + (ix.bin === "all" ? "all bins" : "bin&nbsp;" + ix.bin + " (top = 1)");
     const open = !!NP.state.ix.open;
     return '<section class="panel np-ix-panel"><div class="np-ix"><div class="np-ix-top">' +
-        '<div class="np-ix-titlewrap"><div><h2 class="np-ix-h">How the optimiser handled item interactions</h2>' +
+        '<div class="np-ix-titlewrap"><div><h2 class="np-ix-h">How the optimizer handled item interactions</h2>' +
         '<p class="np-ix-sub">Read across the same items in the plan below — <b>bar height = discount depth</b>. See where the plan co-promotes complements and where it separates rivals or offsets their depths.</p></div></div>' +
         '<div class="np-ix-headline"><div class="np-ix-stat np-ix-stat-h"><b>' + halo.length + '</b><small>complement pairs co-promoted for halo</small></div>' +
         '<div class="np-ix-stat np-ix-stat-c"><b>' + cann.length + '</b><small>rival pairs depth-balanced &amp; separated</small></div>' +
@@ -1044,7 +1044,7 @@
     if (s) s.oninput = () => { NP.state.ix.ncrc = s.value; NP.renderAll(); const n = document.getElementById("npIxSearch"); if (n) { n.focus(); const v = n.value; try { n.setSelectionRange(v.length, v.length); } catch (e) {} } };
   }
   function ixItemLbl(o) { return '<span class="np-ix-item"><b>' + esc(o.item) + '</b><span class="np-ix-ncrc">' + o.ncrc + "</span></span>"; }
-  // reads the REAL optimised plan for both items — a literal readout of the grid below
+  // reads the REAL optimized plan for both items — a literal readout of the grid below
   function ixPair(a, b, kind, map) {
     const wa = NP.weekPlan(a, map, false), wb = NP.weekPlan(b, map, false);
     const dA = {}, dB = {};
@@ -1123,7 +1123,7 @@
     const o = NP.cat().items.find((x) => x.uid === uid); if (!o) return;
     const isCf = ctx === "cf";
     const planLabel = isCf ? cfStratName(NP.state.cf.strategy)
-      : (NP.state.activeScenario === "base" ? "Optimised plan" : (NP.state.scenarios.find((s) => s.id === NP.state.activeScenario) || { name: "scenario" }).name);
+      : (NP.state.activeScenario === "base" ? "Optimized plan" : (NP.state.scenarios.find((s) => s.id === NP.state.activeScenario) || { name: "scenario" }).name);
     const wk = isCf ? cfWeeks(o, NP.state.cf.strategy) : NP.weekPlan(o, NP.displayMap(), false);
     const c = wk[week - 1]; if (!c || !c.promoted) return;
     const locked = !!c.locked, akey = uid + ":" + week;
@@ -1209,7 +1209,7 @@
     return '<div class="np-cf-scroll"><table class="np-cf-mini"><thead><tr><th class="np-l">Week</th><th>VLC</th><th>Off-inv</th><th>Bill back</th><th>P/brk</th><th>Freight</th><th>Net cost</th><th>Retail</th><th>Dead-net</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
   }
   /* ============================================== VIEW: CONSTRAINTS (step 2) ===
-     Reframes the "constraints requested" list into how the optimiser actually works:
+     Reframes the "constraints requested" list into how the optimizer actually works:
      agreed-once global locks · learned values · per-category inputs · scenarios ·
      pruned tactics — with the original asks answered, in grey, "below the line". */
   function conRow(title, desc, right) {
@@ -1221,7 +1221,7 @@
   function tolItem(title, value, desc) {
     return '<div class="np-c3-tol"><div class="np-c3-tol-h"><span class="np-c3-tol-t">' + title + '</span><span class="np-c3-tol-v">' + value + "</span></div><p class=\"np-c3-tol-d\">" + desc + "</p></div>";
   }
-  // grain pill — at what level the optimiser makes the decision (Category / Per SKU / Vendor·item …)
+  // grain pill — at what level the optimizer makes the decision (Category / Per SKU / Vendor·item …)
   function grainTag(g) {
     const slug = g.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
     return '<span class="np-c3-grain g-' + slug + '">' + g + "</span>";
@@ -1235,7 +1235,7 @@
   let c3Tab = "guardrails";
   let c3SysOpen = false;                       // the 4 reference tabs collapse behind "Show system-learnt settings"
   const c3Asks = { margin: "", complex: true }; // the merchant's own entries on step 2
-  // dense constraint table — shared by Pruned & Optimiser settings so they read like the guardrails
+  // dense constraint table — shared by Pruned & Optimizer settings so they read like the guardrails
   // table the merchant likes. cols: [{label, right}]; rows: {group} header OR {cells, off}.
   function c3Table(cols, rows) {
     const head = "<thead><tr>" + cols.map((c) => "<th" + (c.right ? ' class="ta-r"' : "") + ">" + c.label + "</th>").join("") + "</tr></thead>";
@@ -1269,8 +1269,8 @@
     const rows = R.map((r) => ({ off: !r[5], cells: ["<b>" + r[0] + "</b>", r[1], grainTag(r[2]), basisTag(r[3]), thChip(r[4]), statusTag(r[5])] }));
     return c3Table(cols, rows);
   }
-  // OPTIMISER SETTINGS — the dials that decide how the guardrails bite. Grouped; most link to a guardrail.
-  function optimiserTable() {
+  // OPTIMIZER SETTINGS — the dials that decide how the guardrails bite. Grouped; most link to a guardrail.
+  function optimizerTable() {
     const cols = [{ label: "Setting" }, { label: "What it does" }, { label: "Links to" }, { label: "Value", right: true }, { label: "Default", right: true }];
     const rows = [
       { group: "Enforcement — how a limit bites" },
@@ -1295,7 +1295,7 @@
   }
   // the "Show learnt values" table — real discovered values, side-by-side across example categories.
   // Toggling the section's .show-learnt class swaps the plain-English "What it means" column for these
-  // numbers — the proof that the optimiser already learns this, so the merchant needn't hand-set it.
+  // numbers — the proof that the optimizer already learns this, so the merchant needn't hand-set it.
   function guardTable() {
     const C = ["Avocado", "Bacon", "Butter / Margarine"];
     // [decision, grain, plain-English meaning, [val per category], tolerance/headroom chip]
@@ -1319,9 +1319,9 @@
     }).join("") + "</tbody>";
     return '<table class="np-c3-gv">' + head + body + "</table>" +
       '<p class="np-c3-gv-cap"><b>Show learnt values</b> reveals the real numbers — here sampled across three categories. ' +
-      "The optimiser already holds these for every item and week; hand-setting them all is exactly what you don't need to do.</p>";
+      "The optimizer already holds these for every item and week; hand-setting them all is exactly what you don't need to do.</p>";
   }
-  // optimisation scenarios — the levers a merchant pulls instead of overriding limits. Each re-solves
+  // optimization scenarios — the levers a merchant pulls instead of overriding limits. Each re-solves
   // inside the SAME learnt guardrails; the % drivers are the real vendor_scenario event-lifts.
   function scenarioCard(title, badge, desc, driver, rec) {
     return '<div class="np-c3-scn' + (rec ? " is-rec" : "") + '"><div class="np-c3-scn-h"><span class="np-c3-scn-t">' + title +
@@ -1367,17 +1367,17 @@
       "Applied before the plan is costed — no input needed. The first nine are on by default; the last four are available per division but off.",
       '<div class="np-c3-tbl-wrap">' + prunedTable() + "</div>");
 
-    // OPTIMISER SETTINGS — the dials that decide how the guardrails bite. Comprehensive, grouped table.
-    const secO = conSec("Optimiser settings · how the limits bite",
+    // OPTIMIZER SETTINGS — the dials that decide how the guardrails bite. Comprehensive, grouped table.
+    const secO = conSec("Optimizer settings · how the limits bite",
       "The dials set once for the division — enforcement modes, the tolerances that wrap the learnt caps, protection floors and fallbacks. Most link straight to a guardrail above.",
-      '<div class="np-c3-tbl-wrap">' + optimiserTable() + "</div>");
+      '<div class="np-c3-tbl-wrap">' + optimizerTable() + "</div>");
 
     // SCENARIOS — the levers you pull instead of overriding. Each re-solves inside the same guardrails.
     const scns =
-      scenarioCard("Default fulcrum", "recommended", "Full optimise, no tilt — best objective across all vendors, balanced inside every guardrail above.", "", true) +
+      scenarioCard("Default fulcrum", "recommended", "Full optimize, no tilt — best objective across all vendors, balanced inside every guardrail above.", "", true) +
       scenarioCard("Lift top-3 vendors", "", "Raise the leading vendors' promo-week targets (ranked by revenue). Secondary tie-break favours them ×1.25.", "#1 +12% · #2 +6% · #3 +3%") +
       scenarioCard("Own-brand bias", "", "Top-vendor lift, plus extra promo weeks on own-brand items. Tie-break favours own brands ×1.15.", "Own brand +12%") +
-      scenarioCard("Replay last year", "benchmark", "Fix every slot to its LY decision — no optimise. The comparison floor that makes the lift obvious.", "0% lift") +
+      scenarioCard("Replay last year", "benchmark", "Fix every slot to its LY decision — no optimize. The comparison floor that makes the lift obvious.", "0% lift") +
       scenarioCard("Unconstrained", "", "Drop the soft envelope to see the ceiling. The hard physical limits (flyer space, digital cap) still hold.", "soft caps off");
     const secS = conSec("Scenarios · steer the plan instead of overriding",
       "Each re-solves inside the same learnt guardrails, so you tilt the plan without unpicking it. Run and compare them on the " + glink(4, "52-week plan") + ".",
@@ -1399,7 +1399,7 @@
         "The margin you'd invest vs LY. Flows into " + glink(3, "Deal inputs") + " as allowances by sub-type — an input, not a cap, so the spend stays visible.") +
       askCard(2, "Units ID % vs LY",
         '<div class="np-ask4-chips">' + floorChips + "</div>",
-        "Learnt per selected category, holiday and non-holiday. The optimiser already lands on the optimal number — there is no floor for you to set.") +
+        "Learnt per selected category, holiday and non-holiday. The optimizer already lands on the optimal number — there is no floor for you to set.") +
       askCard(3, "Complex promotions",
         '<div class="np-ask4-seg" id="npAskComplex"><button type="button" data-yn="yes" class="' + (c3Asks.complex ? "is-on" : "") + '">Yes</button><button type="button" data-yn="no" class="' + (!c3Asks.complex ? "is-on" : "") + '">No</button></div>',
         "No = single-mechanic offers only. Digital caps still flex weekly with seasonality, so the forecast holds either way.") +
@@ -1412,7 +1412,7 @@
     const TABS = [
       { id: "guardrails", tab: "Guardrails", n: 9, sub: "learnt", html: secG },
       { id: "pruned", tab: "Pruned", n: 13, sub: "auto-removed", html: secP },
-      { id: "optimiser", tab: "Optimiser settings", n: 13, sub: "dials", html: secO },
+      { id: "optimizer", tab: "Optimizer settings", n: 13, sub: "dials", html: secO },
       { id: "scenarios", tab: "Scenarios", n: 5, sub: "levers", html: secS }
     ];
     if (!TABS.some((t) => t.id === c3Tab)) c3Tab = "guardrails";
@@ -1422,7 +1422,7 @@
       '<span class="np-c3-tabl">' + t.tab + '</span><span class="np-c3-tabn">' + t.n + " " + t.sub + "</span></button>").join("") + "</div>" +
       (c3Tab === "guardrails" ? '<label class="np-c3-toggle"><input type="checkbox" id="npC3Learnt"' + (c3Learnt ? " checked" : "") + '><span class="np-c3-toggle-tr"></span><span class="np-c3-toggle-lbl">Show learnt values</span></label>' : "") + "</div>";
     const sysBtn = '<button type="button" class="np-c3-sysbtn" id="npC3Sys" aria-expanded="' + c3SysOpen + '"><span class="np-c3-syscaret">' + (c3SysOpen ? "▾" : "▸") + "</span>" +
-      (c3SysOpen ? "Hide" : "Show") + ' system-learnt settings<span class="np-c3-syssub">9 guardrails · 13 pruned rules · 13 optimiser dials · 5 scenarios — reference only, nothing to set</span></button>';
+      (c3SysOpen ? "Hide" : "Show") + ' system-learnt settings<span class="np-c3-syssub">9 guardrails · 13 pruned rules · 13 optimizer dials · 5 scenarios — reference only, nothing to set</span></button>';
     const sysBody = c3SysOpen ? '<div class="np-c3-sys">' + tabBar + '<div class="np-c3-tabbody">' + active.html + "</div></div>" : "";
 
     host.innerHTML =

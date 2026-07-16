@@ -1,6 +1,6 @@
-/* National Merchandising — 52-Week Plan Optimiser (super-merchant view)
-   Self-contained prototype. Mirrors the real optimiser guide:
-   grounded candidate menu, repair-and-score (not re-optimise), learned guardrails,
+/* National Merchandising — 52-Week Plan Optimizer (super-merchant view)
+   Self-contained prototype. Mirrors the real optimizer guide:
+   grounded candidate menu, repair-and-score (not re-optimize), learned guardrails,
    AGP = revenue - (units x dead-net cost per unit).                               */
 (function () {
   "use strict";
@@ -325,7 +325,7 @@
     return new Set(order.slice(0, events));
   }
 
-  /* -------- interaction-aware 52-week scheduling (the optimiser's real placement) --------
+  /* -------- interaction-aware 52-week scheduling (the optimizer's real placement) --------
      Models the two learned effects directly in the plan:
        • Cannibalisation — items in the SAME cluster are rivals, so they are staggered onto
          different weeks. The one unavoidable seasonal peak they both want is shared with
@@ -387,7 +387,7 @@
   }
   function rankedClusters(catId) { return rankedClustersOf(catId ? ensureData(catId) : cat()); }
 
-  // 52-week tactic plan for an NCRC (optimised). 'ly' => last-year placement/posture.
+  // 52-week tactic plan for an NCRC (optimized). 'ly' => last-year placement/posture.
   function weekPlan(o, map, ly) {
     const e = ly ? { events: o.lyEvents, depth: o.lyDepth } : effective(o, map);
     const h = hashStr(o.uid);
@@ -475,7 +475,7 @@
   /* ------------------------------------------------------------- guardrails */
   const GUARDRAIL_GROUPS = [
     { group: "Profit & margin", items: [
-      { key: "profitFloor", name: "Profit Protection Floor", charge: "Promos whose profit rate drops below the category's learnt floor", in: "$", cat: true, danger: "Chasing units, the optimiser slashes a staple so deep it sells volume at a loss.", value: "Floor 22.5% AGP" },
+      { key: "profitFloor", name: "Profit Protection Floor", charge: "Promos whose profit rate drops below the category's learnt floor", in: "$", cat: true, danger: "Chasing units, the optimizer slashes a staple so deep it sells volume at a loss.", value: "Floor 22.5% AGP" },
       { key: "allowanceFloor", name: "Allowance Floor", charge: "Promos where vendor allowance covers too little of the deal", in: "$", danger: "Deep promos with thin trade support — the store carries the margin.", value: "≥ 55% deal funded" },
       { key: "bleeder", name: "Bleeder Protection", charge: "Projected profit drop on items that drain profit when promoted", in: "$", danger: "'Bleeder' items get promoted and leak profit unnoticed.", value: "drained-profit items" }
     ] },
@@ -548,7 +548,7 @@
     { n: 1, title: "Scope & objective" },
     { n: 2, title: "Constraints" },
     { n: 3, title: "Deal inputs" },
-    { n: 4, title: "52-week plan" },
+    { n: 4, title: "Promotional Calendar" },
     { n: 6, title: "Why it beats LY" }
   ];
   const state = {
@@ -559,7 +559,7 @@
     res: { vendor: "all", rog: "all", binBy: null, bin: "all" },
     ix: { binBy: "sales", bin: "1", ncrc: "", open: false },
     explain: { m: null, b: "plan", scope: "all" },
-    cf: { strategy: "optimized", clustersOpen: false, expanded: {}, tab: {}, approved: {}, molOpen: false, focal: null }
+    cf: { strategy: "optimized", multiScenario: false, clustersOpen: false, expanded: {}, tab: {}, approved: {}, molOpen: false, focal: null }
   };
   /* cat() — the working dataset. With one category selected it is that category;
      with several it is a merged pseudo-category (uids stay unique per source). */
@@ -665,7 +665,7 @@
     }).join('<span class="np-step-line" aria-hidden="true"></span>');
     const obj = objMeta();
     host.innerHTML = '<div class="np-stepper-inner">' + tabs + "</div>" +
-      '<div class="np-stepper-obj">' + (state.generated ? '<span>Division</span><b>' + divMeta().short + '</b><span class="np-obj-sep"></span><span>' + (state.categoryIds.length > 1 ? "Categories" : "Category") + "</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimising for</span><b class=\"np-obj-pill\">" + obj.fmtName + '</b><span class="np-obj-sep"></span><span>Showing</span><b>' + periodsLabel() + "</b>" : '<span class="np-stepper-hint">Pick a division, categories, objective &amp; periods to begin</span>') + "</div>";
+      '<div class="np-stepper-obj">' + (state.generated ? '<span>Division</span><b>' + divMeta().short + '</b><span class="np-obj-sep"></span><span>' + (state.categoryIds.length > 1 ? "Categories" : "Category") + "</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimizing for</span><b class=\"np-obj-pill\">" + obj.fmtName + '</b><span class="np-obj-sep"></span><span>Showing</span><b>' + periodsLabel() + "</b>" : '<span class="np-stepper-hint">Pick a division, categories, objective &amp; periods to begin</span>') + "</div>";
     host.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => { const n = +b.dataset.step; if (n === 1 || state.generated) goStep(n); });
   }
   function goStep(n) { if (state.v2 && !state.v2plan && n === 3) n = 4; state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -851,7 +851,7 @@
       }).join("") + "</div></div>").join("") +
       '<p class="np-foot">Around twenty guardrails, learned from your data and locked. Each adds a charge the solver must overcome; the displayed Units / Sales / AGP stay the raw forecast — charges only steer which tactic is recommended.</p>';
     const btn = document.getElementById("npGuardToggle");
-    // "what the optimiser solved for" expansion is hidden — ribbon is a static summary.
+    // "what the optimizer solved for" expansion is hidden — ribbon is a static summary.
     if (btn) { btn.classList.add("is-static"); btn.onclick = null; btn.setAttribute("aria-expanded", "false"); }
     if (body) { body.setAttribute("hidden", ""); body.querySelectorAll("[data-gr]").forEach((b) => b.onclick = () => openGuardModal(b.dataset.gr)); }
   }

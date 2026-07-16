@@ -1401,6 +1401,12 @@ body.dark .npv2-strat.is-active { background: #18233c; }
 body.dark .npv2-strat-name { color: #e6ecf5; }
 .npv2-strat-name em { font-style: normal; font-size: 0.52rem; color: var(--blue); background: var(--blue-soft); padding: 1px 6px; border-radius: 999px; margin-left: 5px; vertical-align: middle; }
 .npv2-strat-mets { display: flex; gap: 14px; }
+/* quiet disclosure after the single strategy card — link-like, muted, small;
+   not a primary button. Reuses existing muted/blue tokens. */
+/* disclosure — deliberately quiet, tucked bottom-right; present, not attention-grabbing.
+   Fixed width so the label swap (Other scenarios ↔ Hide) doesn't nudge the cards. */
+.npv2-strat-more { align-self: flex-end; margin-left: auto; flex: 0 0 auto; width: 140px; text-align: right; background: transparent; border: 0; padding: 2px 2px; font-family: inherit; font-size: 0.66rem; font-weight: 500; color: var(--faint); cursor: pointer; white-space: nowrap; }
+.npv2-strat-more:hover { color: var(--muted); text-decoration: underline; }
 .npv2-strat-m { display: flex; flex-direction: column; line-height: 1.12; }
 .npv2-strat-m small { font-size: 0.5rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); font-weight: 700; }
 .npv2-strat-m b { font-size: 0.74rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -1590,6 +1596,9 @@ body.dark .npv2-strat-mv { color: #e6ecf5; }
 /* condensed (scrolled): only the active card, one slim line */
 .npv2-fg-tools.is-scrolled .npv2-strat-row { padding-bottom: 6px; }
 .npv2-fg-tools.is-scrolled .npv2-strat:not(.is-active) { display: none; }
+/* scrolled/condensed sticky header: the other cards are hidden here, so the
+   "Other scenarios" disclosure has nothing to expand — hide it too. */
+.npv2-fg-tools.is-scrolled .npv2-strat-more { display: none; }
 .npv2-fg-tools.is-scrolled .npv2-strat.is-active { display: flex; flex-direction: row; align-items: center; gap: 18px; padding: 5px 14px; }
 .npv2-fg-tools.is-scrolled .npv2-strat.is-active .npv2-strat-sub, .npv2-fg-tools.is-scrolled .npv2-strat.is-active .npv2-strat-mly { display: none; }
 .npv2-fg-tools.is-scrolled .npv2-strat.is-active .npv2-strat-grid { display: flex; gap: 18px; }
@@ -1829,6 +1838,14 @@ body.dark .npv2-lg-dg { background: #1c2638; color: #9fb0c4; }
 .npv2-strat-m { gap: 1px; line-height: 1.5 !important; }
 .npv2-strat-mly { margin-top: 1px; }
 .npv2-fg-tools.is-scrolled .npv2-strat.is-active { flex: 1 1 auto !important; }
+/* Collapsed strategy row: the four non-active cards are made invisible but KEEP
+   their layout slots (visibility:hidden, not display:none). So the active card
+   stays exactly 1/5 of the row — identical width and position whether collapsed
+   or expanded — and toggling shifts nothing. Only the class flips, no re-render. */
+.npv2-strat-row.is-collapsed .npv2-strat:not(.is-active) { visibility: hidden; }
+/* collapsed: pull the active card to the left regardless of which strategy it is
+   (the four hidden cards keep their slots, so width/position stay stable). */
+.npv2-strat-row.is-collapsed .npv2-strat.is-active { order: -1; }
 
 /* airy, divided toolbar — sections don't crowd */
 .npv2-fg-tools { padding: 10px 2px 2px !important; }

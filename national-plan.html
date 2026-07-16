@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>National 52-Week Plan Optimiser</title>
+    <title>National 52-Week Plan Optimizer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="promo-plan.css" />
-    <link rel="stylesheet" href="national-plan.css?v=61" />
+    <link rel="stylesheet" href="national-plan.css?v=68" />
   </head>
   <body>
     <header class="topbar">
@@ -36,7 +36,7 @@
           <div class="panel-heading">
             <div>
               <h2>Promotion Optimization plan</h2>
-              <p>Pick the division, category and the objective to optimise for, then generate the plan.</p>
+              <p>Pick the division, category and the objective to optimize for, then generate the plan.</p>
             </div>
           </div>
           <div class="np-scope-row">
@@ -51,7 +51,7 @@
             </span>
             <span class="plan-step-sep" aria-hidden="true"></span>
             <span class="plan-step-group">
-              <span class="plan-step-num">3.</span><span class="plan-step-label">Optimise for</span>
+              <span class="plan-step-num">3.</span><span class="plan-step-label">Optimize for</span>
               <div class="plan-obj-capsule" id="npObjective"></div>
             </span>
             <span class="plan-step-sep" aria-hidden="true"></span>
@@ -61,8 +61,8 @@
             </span>
           </div>
           <div class="np-scope-foot">
-            <button class="primary-button" id="npGenerate" type="button">Generate optimised plan →</button>
-            <span class="np-scope-hint">The optimiser pre-runs the best plan plus alternatives for each goal in batch, so results are instant to browse and edit.</span>
+            <button class="primary-button" id="npGenerate" type="button">Generate optimized plan →</button>
+            <span class="np-scope-hint">The optimizer pre-runs the best plan plus alternatives for each goal in batch, so results are instant to browse and edit.</span>
           </div>
         </div>
       </section>
@@ -74,9 +74,9 @@
       <section class="np-step" id="npStep3" hidden>
         <div class="panel np-guard-ribbon">
           <button class="np-guard-summary" id="npGuardToggle" type="button" aria-expanded="false">
-            <span class="np-guard-lead">🔒 Optimised within <strong id="npGuardCount">22</strong> learned guardrails</span>
+            <span class="np-guard-lead">🔒 Optimized within <strong id="npGuardCount">22</strong> learned guardrails</span>
             <span class="np-guard-mini" id="npGuardMini"></span>
-            <span class="np-guard-caret">▸ what the optimiser solved for</span>
+            <span class="np-guard-caret">▸ what the optimizer solved for</span>
           </button>
           <div class="np-guard-body" id="npGuardBody" hidden></div>
         </div>
@@ -85,7 +85,7 @@
           <div class="panel-heading np-grid-heading">
             <div>
               <h2>Deal inputs by vendor &amp; NCRC</h2>
-              <p>The discovered deal inputs behind the optimised plan, rolled to NCRC. Edit any yellow cell — edits auto-save to <strong>Your scenario</strong>.<br>Click <strong>Rerun forecast</strong> (repair-and-score) to re-estimate the affected lines against the base plan.</p>
+              <p>The discovered deal inputs behind the optimized plan, rolled to NCRC. Edit any yellow cell — edits auto-save to <strong>Your scenario</strong>.<br>Click <strong>Rerun forecast</strong> (repair-and-score) to re-estimate the affected lines against the base plan.</p>
             </div>
             <div class="np-grid-tools">
               <div class="scenario-strip" id="npScenarioStrip"></div>
@@ -121,9 +121,9 @@
     <div class="np-modal-scrim" id="npModalScrim" hidden></div>
     <div class="np-modal" id="npModal" hidden role="dialog" aria-label="Guardrail detail"></div>
 
-    <script src="national-plan.js?v=29"></script>
+    <script src="national-plan.js?v=32"></script>
     <script src="explain-dataset.js"></script>
-    <script src="national-plan-views.js?v=30"></script>
-    <script src="national-plan-v2.js?v=47"></script>
+    <script src="national-plan-views.js?v=32"></script>
+    <script src="national-plan-v2.js?v=54"></script>
   </body>
 </html>
