@@ -20,7 +20,8 @@ body.np-noscroll { overflow: hidden; }
   box-shadow: 0 6px 18px rgba(23,105,232,0.05);
 }
 body.dark .np-stepper { background: linear-gradient(180deg, #18243c 0%, #121d31 100%); box-shadow: none; }
-.np-stepper-inner { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+.np-stepper-inner { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; }
+.np-step-name { white-space: nowrap; }
 .np-step-tab { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 0; padding: 6px 11px; cursor: pointer; color: var(--muted); font-family: inherit; font-size: 0.8rem; border-radius: 999px; }
 .np-step-tab:not(.is-locked):not(.is-disabled):hover { background: var(--blue-soft); }
 .np-step-circ { width: 22px; height: 22px; border-radius: 50%; background: #e6ecf5; color: var(--muted); display: grid; place-items: center; font-weight: 700; font-size: 0.72rem; flex: 0 0 auto; }
@@ -1346,6 +1347,10 @@ body.dark .npv2-fg-colh-in { color: #d8bf72; }
 body.dark .npv2-fg-outc b { color: #e6ecf5; }
 .npv2-fg-outc small { font-size: 0.54rem; color: var(--faint); }
 .npv2-fg-outc i { font-size: 0.58rem; font-style: normal; font-weight: 600; }
+/* value/LY/Δ each stay on one line — million-scale totals must not wrap the LY
+   line ("LY $7.08M") the way thousand-scale item values happen to fit. Same rule
+   for item + total out cells, so the totals follow the item pattern exactly. */
+.npv2-fg-outc b, .npv2-fg-outc small, .npv2-fg-outc i { white-space: nowrap; }
 .npv2-fg-inc { padding: 0 !important; border-radius: 4px; align-items: stretch; }
 .npv2-fg-inc.npv2-fg-edit { background: rgba(255,211,105,0.20); }
 .npv2-fg-inc.is-edited { background: #fde7c2; }
@@ -2260,7 +2265,9 @@ body.dark .np-c3-sysbtn { border-color: #2c3a52; }
 
 /* ---------- v2 grid: sticky weekly totals · calmer outputs · events total · inputs toggle ---------- */
 .npv2-fg tfoot th, .npv2-fg tfoot td { position: sticky; bottom: 0; z-index: 4; background: linear-gradient(180deg, #f7fafd, #eef3fa) !important; border-top: 2px solid #c6d2e3 !important; }
-.npv2-fg tfoot .npv2-fg-totlab { left: 0; z-index: 7; text-align: left !important; padding: 6px 12px !important; vertical-align: middle !important; height: auto; }
+/* footer pinned cell now mirrors idCell's .npv2-fg-idin — drop the custom padding
+   so it inherits the same .npv2-fg-id padding as the body rows and stays aligned */
+.npv2-fg tfoot .npv2-fg-totlab { left: 0; z-index: 7; text-align: left !important; height: auto; }
 /* width-0 / min-width-100% wrapper — the pinned column is width: max-content, so this
    cell must contribute NO intrinsic width of its own or it widens the whole block */
 .npv2-totlab-in { width: 0; min-width: 100%; overflow: hidden; }
@@ -2270,6 +2277,15 @@ body.dark .np-c3-sysbtn { border-color: #2c3a52; }
 .npv2-fg-tot span { display: block; font-size: 0.58rem; color: var(--muted); line-height: 1.3; font-variant-numeric: tabular-nums; }
 .npv2-totlab-t { font-size: 0.72rem; font-weight: 700; color: var(--ink); white-space: nowrap; }
 .npv2-totlab-sec { margin-top: 2px; font-size: 0.6rem; color: var(--muted); line-height: 1.35; }
+/* footer label "Totals" + info affordance — reuses the .npv2-totlab-t scale/tokens */
+.npv2-fg-totname { align-self: center; font-size: 0.72rem; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.npv2-fg-totinfo { display: inline-flex; align-items: center; margin-left: 4px; color: var(--blue); cursor: help; }
+.npv2-fg-totinfo svg { width: 12px; height: 12px; display: block; }
+body.dark .npv2-fg-totname { color: #e6ecf5; }
+/* Totals value uses the compact week-cell size (.npv2-fg-tot b, 0.68rem) so the
+   million-scale numbers don't crowd; the LY and Δ lines are left to inherit the
+   item out-cell sizes (small 0.58rem, i 0.62rem) so they match the rows exactly. */
+.npv2-fg tfoot .npv2-fg-outc b { font-size: 0.68rem !important; }
 body.dark .npv2-fg tfoot th, body.dark .npv2-fg tfoot td { background: linear-gradient(180deg, #1a2740, #141f33) !important; border-top-color: #2c3a52 !important; }
 body.dark .npv2-fg-tot b, body.dark .npv2-totlab-t { color: #e6ecf5; }
 
@@ -2312,3 +2328,28 @@ body.dark .npv2-strat-m2v { color: #e6ecf5; }
 /* Collapsed (scrolled) state — keep only the primary row on the active card */
 .npv2-fg-tools.is-scrolled .npv2-strat .npv2-strat-sep,
 .npv2-fg-tools.is-scrolled .npv2-strat .npv2-strat-grid2 { display: none; }
+
+/* ── v2 ribbon — two-family tint + tactic text label ─────────────────────────
+   Option B: the family and the label derive from the per-cell tactic class
+   (c.store.className) + the digital marker (c.digital.length). Tints REUSE the
+   existing tactic-item (blue) and tactic-mb (amber) skin values (see ~L1875)
+   so promoted cells and legend swatches match exactly — no new hues, colour
+   variables, fonts or spacing are introduced. Backgrounds only: the halo /
+   cannibalisation / no-allowance / lock states are box-shadows and untouched. */
+.npv2-fg-wk.npv2-fam-simple  { background: #dde8f6 !important; }
+.npv2-fg-wk.npv2-fam-complex { background: #f5e8d3 !important; }
+body.dark .npv2-fg-wk.npv2-fam-simple  { background: #233650 !important; }
+body.dark .npv2-fg-wk.npv2-fam-complex { background: #44351d !important; }
+/* Tactic code label. Subordinate to the S/D promo price (0.68rem bold ink): it
+   matches the muted caption scale already used by .npv2-wk-tok / .npv2-wk-lp
+   (0.56rem, var(--muted)) so it reads as a quiet left-aligned tag, not a number.
+   var(--muted) on these tints is the same treatment .npv2-wk-tok already uses. */
+.npv2-wk-mech { font-size: 0.56rem; font-weight: 600; letter-spacing: 0.02em;
+  line-height: 1.1; text-align: left; color: var(--muted); white-space: nowrap;
+  margin: 0 0 1px; }
+/* Legend family swatches — exact cell tints (match the rules above). */
+.npv2-sw.npv2-fam-simple  { background: #dde8f6; }
+.npv2-sw.npv2-fam-complex { background: #f5e8d3; }
+body.dark .npv2-sw.npv2-fam-simple  { background: #233650; }
+body.dark .npv2-sw.npv2-fam-complex { background: #44351d; }
+.npv2-lg-mechkey { color: var(--muted); }

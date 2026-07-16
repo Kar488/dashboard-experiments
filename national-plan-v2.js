@@ -60,8 +60,8 @@
      (Units/Sales/AGP vs LY) · the editable deal inputs (yellow). Only the 52-week
      ribbon scrolls — so a merchant edits an input and sees the output right beside it. */
   const OUTCOLS = [
-    { k: "units", label: "Units", money: false, get: (r) => r.units },
     { k: "sales", label: "Sales", money: true, get: (r) => r.revenueM },
+    { k: "units", label: "Units", money: false, get: (r) => r.units },
     { k: "agp", label: "AGP", money: true, get: (r) => r.agpM }
   ];
   // pinned inputs: VLC · Promo cost (Reg / Deep) · Events (Store / Dig / S+D, toggled Reg↔Deep)
@@ -206,12 +206,18 @@
         : "") +
       "</div></th>";
   }
+  // Tactic code shown in the cell, keyed by the store tactic className
+  // (national-plan.js STORE_TACTICS). This is the PROMO TACTIC, not the discount
+  // type — the discount type is carried separately by c.val (offerValueShort)
+  // and c.mech. STORE_TACTICS only ever produces item/bxgx/mb here.
+  const TAC_LABEL = { item: "ID", bxgx: "BXGX", mb: "MB" };
   function ribbonCell(o, c, isEv, ixf, lyset, noAlw) {
     // holiday is indicated on the week-number header only — no bar on every body cell
     const ev = "";
     const lock = NP.state.cf.approved && NP.state.cf.approved[o.uid + ":" + c.week] ? " is-lock" : "";
     if (!c.promoted) return '<td class="npv2-fg-wk npv2-fg-none' + (c.locked ? " is-locked" : "") + ev + '" title="Wk ' + c.week + ' · no promo"></td>';
     const mechL = c.mech ? NP.MECH_LABEL[c.mech] : "", w = c.week - 1;
+    const tac = TAC_LABEL[c.store.className];
     const ixc = ixf === "cann" ? " is-cann" : ixf === "halo" ? " is-halo" : "";
     const noal = noAlw ? " is-noalw" : "";
     // depth vs LY: ▲ deeper / ▼ shallower / = equal
@@ -221,9 +227,16 @@
     const repeat = !!(lyset && lyset.has(w));
     const stHtml = repeat ? '<span class="npv2-wk-st st-rep">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-st st-new">new</span>';
     const ixt = ixf === "cann" ? " · ⚠ cluster rival also on deal (cannibalisation)" : ixf === "halo" ? " · ✦ co-promoted with a complement (halo)" : "";
-    const tip = "Wk " + c.week + " · " + c.store.name + (c.offer ? " · " + c.offer.label : "") + (mechL ? " (" + mechL + ")" : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimised placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
     // promo prices: store at this week's depth; digital a touch deeper; plus the LY price
     const hasDig = c.digital.length > 0, digDepth = Math.min(0.5, c.depth + 0.06);
+    // Family tint (Option B): item discount running store-only = SIMPLE (blue);
+    // any complex tactic OR any digital cell = COMPLEX (amber). Reads the same
+    // per-cell digital signal (c.digital.length) the price block already uses.
+    const fam = (c.store.className === "item" && !hasDig) ? "simple" : "complex";
+    const mechLabel = tac ? '<div class="npv2-wk-mech">' + tac + "</div>" : "";
+    // tooltip: the four facts once each — week · promotion type · tactic ·
+    // discount type · offer label — then the existing depth/LY/digital/lock detail.
+    const tip = "Wk " + c.week + " · " + (fam === "simple" ? "Simple" : "Complex") + " · " + c.store.name + (mechL ? " · " + mechL : "") + (c.offer ? " · " + c.offer.label : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimised placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
     const sp = NP.fmt.price(NP.promoPriceOf(o, c.depth)), dp = NP.fmt.price(NP.promoPriceOf(o, digDepth));
     const lySp = NP.fmt.price(NP.promoPriceOf(o, lyd)), lyDp = NP.fmt.price(NP.promoPriceOf(o, Math.min(0.5, lyd + 0.06)));
     // optimised-placement indicator: new vs a repeat of last year
@@ -232,8 +245,9 @@
       : '<i class="npv2-wk-opt is-opt" title="optimised — new placement vs last year">✦</i>';
     const lockI = lock ? '<i class="npv2-wk-lk" title="locked into plan"></i>' : "";
     const warnI = noAlw ? '<i class="npv2-wk-warn" title="on promo, no vendor allowance">⚠</i>' : "";
-    return '<td class="npv2-fg-wk tactic-' + c.store.className + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="' + esc(tip) + '">' +
+    return '<td class="npv2-fg-wk tactic-' + c.store.className + " npv2-fam-" + fam + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="' + esc(tip) + '">' +
       '<div class="npv2-wk-c npv2-wk-pc">' +
+        mechLabel +
         (c.val ? '<div class="npv2-wk-tok">' + esc(c.val) + "</div>" : "") +
         '<div class="npv2-wk-pr"><span class="npv2-wk-ch">S</span><b>' + sp + "</b></div>" +
         (repeat ? '<div class="npv2-wk-lp">LY ' + lySp + "</div>" : "") +
@@ -317,9 +331,17 @@
     if (!items.length) return "";
     const per = weeks.map(() => ({ u: 0, s: 0, a: 0 }));
     items.forEach((o) => { const ser = NP.weeklySeries(o, map); weeks.forEach((w, i) => { per[i].u += ser.units[w]; per[i].s += ser.sales[w]; per[i].a += ser.agp[w]; }); });
-    let u = 0, r = 0, listS = 0, fundS = 0;
-    items.forEach((o) => { const res = NP.resultFor(o, map), e = NP.effective(o, map); u += res.units; r += res.revenueM; listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units; });
+    // filtered grand totals (current + LY) — the same res/ly the item rows sum, so
+    // the pinned Units/Sales/AGP footer cells reconcile to the visible rows.
+    let u = 0, r = 0, a = 0, lu = 0, lr = 0, la = 0, listS = 0, fundS = 0;
+    items.forEach((o) => {
+      const res = NP.resultFor(o, map), e = NP.effective(o, map), ly = NP.lyResult(o);
+      u += res.units; r += res.revenueM; a += res.agpM;
+      lu += ly.units; lr += ly.revenueM; la += ly.agpM;
+      listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units;
+    });
     const aiv = u ? (r * 1000) / u : 0, listU = u ? listS / u : 0, fundU = u ? fundS / u : 0, rate = r ? (fundS / 1000) / r : 0;
+    const totRes = { units: u, revenueM: r, agpM: a }, totLy = { units: lu, revenueM: lr, agpM: la };
     let cu = 0, cs = 0, ca = 0;
     const cells = weeks.map((w, i) => {
       cu += per[i].u; cs += per[i].s; ca += per[i].a;
@@ -330,9 +352,15 @@
     // keep this cell's content NARROW — the pinned column is width: max-content, so a
     // long single line here would widen the whole frozen block (the width-0 wrapper
     // stops the cell contributing to the auto column width at all).
-    const lab = '<th class="npv2-fg-id npv2-fg-totlab" title="Plan-level: AIV $' + aiv.toFixed(2) + " · List $" + listU.toFixed(2) + "/u · Funding $" + fundU.toFixed(2) + "/u · Spend rate " + (rate * 100).toFixed(1) + '%"><div class="npv2-totlab-in">' +
-      '<div class="npv2-totlab-t">Weekly totals</div>' +
-      '<div class="npv2-totlab-sec">Sales · Units · AGP per week · hover for the rolling total</div></div></th>';
+    // pinned footer: label + the Units/Sales/AGP grand totals under OUTPUTS VS LY,
+    // built with the same grpBody("out")/outCellHTML the item rows use so they line
+    // up. No cells for the List/Promo-cost/Allowance/Events groups — the <th>
+    // simply stretches across the (body-set) pinned width, leaving that area blank
+    // rather than painting empty tinted columns. Works the same Inputs on or off.
+    const lab = '<th class="npv2-fg-id npv2-fg-totlab" title="Plan-level: AIV $' + aiv.toFixed(2) + " · List $" + listU.toFixed(2) + "/u · Funding $" + fundU.toFixed(2) + "/u · Spend rate " + (rate * 100).toFixed(1) + '%"><div class="npv2-fg-idin">' +
+      '<div class="npv2-fg-name npv2-fg-totname">Totals <span class="npv2-fg-totinfo" title="Hover any week for the rolling total to date." role="img" aria-label="Hover any week for the rolling total to date."><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="7.2" x2="8" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="4.8" r="1" fill="currentColor"/></svg></span></div>' +
+      grpBody("out", OUTCOLS.map((c) => outCellHTML(c, totRes, totLy)).join("")) +
+      "</div></th>";
     return "<tfoot><tr>" + lab + cells + "</tr></tfoot>";
   }
   function lyTotals() { let r = 0, u = 0, a = 0, h = 0; NP.cat().items.forEach((o) => { const x = NP.lyResult(o); r += x.revenueM; u += x.units; a += x.agpM; h += x.hhK; }); return { r: r, u: u, a: a, h: h }; }
@@ -370,9 +398,10 @@
   // heatmap legend — same gentle colours as the ribbon
   function legendHTML() {
     return '<div class="npv2-legend">' +
-      '<span class="npv2-lg"><i class="npv2-sw tactic-item"></i>Item Discount</span>' +
-      '<span class="npv2-lg"><i class="npv2-sw tactic-bxgx"></i>Buy X Get X</span>' +
-      '<span class="npv2-lg"><i class="npv2-sw tactic-mb"></i>Must Buy</span>' +
+      '<span class="npv2-lg"><i class="npv2-sw npv2-fam-simple"></i>Simple</span>' +
+      '<span class="npv2-lg"><i class="npv2-sw npv2-fam-complex"></i>Complex</span>' +
+      '<span class="npv2-lg-div"></span>' +
+      '<span class="npv2-lg npv2-lg-mechkey">ID = Item Discount · BXGX = Buy X Get X · MB = Must Buy</span>' +
       '<span class="npv2-lg npv2-lg-mech">offer <b>%</b> · <b>$</b> · <b>@$</b> · <b>FREE</b></span>' +
       '<span class="npv2-lg"><i class="npv2-lg-dg">D</i>digital</span>' +
       '<span class="npv2-lg"><i class="npv2-sw npv2-sw-lock"></i>locked</span>' +

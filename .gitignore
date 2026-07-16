@@ -1,8 +1,1 @@
-server.out.log
-server.err.log
-.nimbalyst/
-*.zip
-_pdf_extract.txt
-_pdfx.js
-/.nimbalyst
-/server.log
+.DS_Store
