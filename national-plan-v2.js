@@ -24,6 +24,7 @@
   // sub-class — a finer split under class, derived from the item's demand form
   const SUBCLASS_LABEL = { bar: "Core / everyday", bag: "Multipack", tub: "Club & seasonal" };
   const mfilter = { vendor: "all", cls: "all" };           // month-detail filters
+  let stratExpanded = false;                               // view-level "Other scenarios" disclosure (NOT the build-time multiScenario gate)
   const SHELL = "npV2Shell", MFACE = "npV2MonthFace", FLIPEL = "npV2Flip", FRONT = "npV2Front", WRAP = "npV2FgWrap";
 
   function shellExists() { return !!document.getElementById(SHELL); }
@@ -223,7 +224,7 @@
     // depth vs LY: ▲ deeper / ▼ shallower / = equal
     const lyd = o.lyDepth || 0, over = c.depth - lyd, eq = Math.abs(over) < 0.012;
     const arr = '<i class="npv2-wk-ar ' + (eq ? "is-eq" : over > 0 ? "is-deeper" : "is-shallower") + '">' + (eq ? "=" : over > 0 ? "▲" : "▼") + "</i>";
-    // LY status: repeats last year's week (show LY depth) vs a new/optimised placement
+    // LY status: repeats last year's week (show LY depth) vs a new/optimized placement
     const repeat = !!(lyset && lyset.has(w));
     const stHtml = repeat ? '<span class="npv2-wk-st st-rep">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-st st-new">new</span>';
     const ixt = ixf === "cann" ? " · ⚠ cluster rival also on deal (cannibalisation)" : ixf === "halo" ? " · ✦ co-promoted with a complement (halo)" : "";
@@ -236,13 +237,13 @@
     const mechLabel = tac ? '<div class="npv2-wk-mech">' + tac + "</div>" : "";
     // tooltip: the four facts once each — week · promotion type · tactic ·
     // discount type · offer label — then the existing depth/LY/digital/lock detail.
-    const tip = "Wk " + c.week + " · " + (fam === "simple" ? "Simple" : "Complex") + " · " + c.store.name + (mechL ? " · " + mechL : "") + (c.offer ? " · " + c.offer.label : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimised placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
+    const tip = "Wk " + c.week + " · " + (fam === "simple" ? "Simple" : "Complex") + " · " + c.store.name + (mechL ? " · " + mechL : "") + (c.offer ? " · " + c.offer.label : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimized placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
     const sp = NP.fmt.price(NP.promoPriceOf(o, c.depth)), dp = NP.fmt.price(NP.promoPriceOf(o, digDepth));
     const lySp = NP.fmt.price(NP.promoPriceOf(o, lyd)), lyDp = NP.fmt.price(NP.promoPriceOf(o, Math.min(0.5, lyd + 0.06)));
-    // optimised-placement indicator: new vs a repeat of last year
+    // optimized-placement indicator: new vs a repeat of last year
     const optIcon = repeat
       ? '<i class="npv2-wk-opt is-rep" title="repeats last year">↺</i>'
-      : '<i class="npv2-wk-opt is-opt" title="optimised — new placement vs last year">✦</i>';
+      : '<i class="npv2-wk-opt is-opt" title="optimized — new placement vs last year">✦</i>';
     const lockI = lock ? '<i class="npv2-wk-lk" title="locked into plan"></i>' : "";
     const warnI = noAlw ? '<i class="npv2-wk-warn" title="on promo, no vendor allowance">⚠</i>' : "";
     return '<td class="npv2-fg-wk tactic-' + c.store.className + " npv2-fam-" + fam + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="' + esc(tip) + '">' +
@@ -385,7 +386,8 @@
         met2("Spend rate", (rate * 100).toFixed(1) + "%", (lyRate * 100).toFixed(1) + "%", ppd >= 0 ? "np-pos" : "np-neg", (ppd >= 0 ? "+" : "") + ppd.toFixed(1) + "pp") +
         "</div>";
     };
-    return '<div class="npv2-strat-row" id="npV2Strats">' + cfV.cfStrategies().map((s) => {
+    // one card's markup — shared by the single-card (collapsed) and all-cards paths
+    const cardHTML = (s) => {
       const t = cfV.cfTotals(s.id);
       return '<button type="button" class="npv2-strat' + (cur === s.id ? " is-active" : "") + '" data-strat="' + s.id + '">' +
         '<span class="npv2-strat-name">' + esc(s.name) + (s.tag ? ' <em>' + esc(s.tag) + "</em>" : "") + "</span>" +
@@ -393,7 +395,25 @@
         '<div class="npv2-strat-grid">' + met("Sales", t.revenueM, ly.r, true) + met("Units", t.units, ly.u, false) + met("AGP", t.agpM, ly.a, true) + "</div>" +
         '<div class="npv2-strat-sep"></div>' +
         secondary(t) + "</button>";
-    }).join("") + '</div><div class="npv2-rule"></div>';
+    };
+    // multiScenario is a BUILD-TIME gate: true = the original five-card row, no
+    // disclosure. false (default) = only the active card + a quiet disclosure that
+    // expands the rest inline via the view-level stratExpanded flag. cfStrategies()
+    // still computes all five in every mode.
+    const strategies = cfV.cfStrategies();
+    // Always render ALL five cards. multiScenario === true → full row, no
+    // disclosure. Otherwise the row carries `is-collapsed` (CSS hides the four
+    // non-active cards; the active one keeps its natural one-card width) plus a
+    // quiet disclosure. Expand/collapse just flips that class in place — no
+    // renderFront — so nothing on the page jumps.
+    const allCards = strategies.map(cardHTML).join("");
+    if (NP.state.cf.multiScenario === true) {
+      return '<div class="npv2-strat-row" id="npV2Strats">' + allCards + '</div><div class="npv2-rule"></div>';
+    }
+    const collapsed = !stratExpanded, others = strategies.length - 1;
+    const disclosure = '<button type="button" class="npv2-strat-more" id="npV2StratMore" aria-expanded="' + (!collapsed) + '">' +
+      (collapsed ? "Other scenarios (" + others + ")" : "Hide other scenarios") + "</button>";
+    return '<div class="npv2-strat-row' + (collapsed ? " is-collapsed" : "") + '" id="npV2Strats">' + allCards + disclosure + '</div><div class="npv2-rule"></div>';
   }
   // heatmap legend — same gentle colours as the ribbon
   function legendHTML() {
@@ -408,7 +428,7 @@
       '<span class="npv2-lg"><i class="npv2-wk-warn">⚠</i>on promo · no allowance</span>' +
       '<span class="npv2-lg"><i class="npv2-sw npv2-sw-ev"></i>holiday wk</span>' +
       '<span class="npv2-lg"><i class="npv2-sw npv2-fg-none"></i>no promo</span>' +
-      '<span class="npv2-lg"><i class="npv2-wk-opt is-opt">✦</i>optimised placement <i class="npv2-wk-opt is-rep">↺</i>repeats LY</span>' +
+      '<span class="npv2-lg"><i class="npv2-wk-opt is-opt">✦</i>optimized placement <i class="npv2-wk-opt is-rep">↺</i>repeats LY</span>' +
       '<span class="npv2-lg-div"></span>' +
       '<span class="npv2-lg">depth vs LY <i class="npv2-wk-ar is-deeper">▲</i> deeper <i class="npv2-wk-ar is-shallower">▼</i> shallower <i class="npv2-wk-ar is-eq">=</i> same · <span class="npv2-wk-ly">LY %</span> = repeats LY</span>' +
       "</div>";
@@ -418,7 +438,7 @@
     const obj = NP.objMeta ? NP.objMeta() : { metric: "revenueM", short: "Sales" };
     const fieldOf = { revenueM: "r", units: "u", agpM: "a", hhK: "h" };
     const cols = [["Sales", "revenueM", (t) => NP.fmt.m(t.r)], ["Units", "units", (t) => NP.fmt.u(t.u)], ["AGP", "agpM", (t) => NP.fmt.m(t.a)], ["HHs", "hhK", (t) => NP.fmt.u(t.h)]];
-    const scs = [{ id: "base", name: "Optimised — LY inputs", sub: "optimised, no edits", ov: {} }].concat(NP.state.scenarios.map((s) => ({ id: s.id, name: s.name.replace("Scenario ", "S") + " — Edited", sub: "your edits", ov: s.ov })));
+    const scs = [{ id: "base", name: "Optimized — LY inputs", sub: "optimized, no edits", ov: {} }].concat(NP.state.scenarios.map((s) => ({ id: s.id, name: s.name.replace("Scenario ", "S") + " — Edited", sub: "your edits", ov: s.ov })));
     const tots = scs.map((s) => totalsOf(s.ov)), best = {};
     cols.forEach(([, k]) => { best[k] = Math.max.apply(null, tots.map((t) => t[fieldOf[k]])); });
     const head = '<div class="plan-compare-corner"></div>' + cols.map(([l, k]) => '<div class="plan-compare-col-head' + (obj.metric === k ? " is-obj" : "") + '">' + l + "</div>").join("");
@@ -448,7 +468,7 @@
   function scnShort(s) { return s.name.replace("Scenario ", "S"); }
   function scenarioChips() {
     const st = NP.state;
-    let html = '<button type="button" class="npv2-chip' + (st.activeScenario === "base" ? " is-active" : "") + '" data-scn="base" title="Optimised — last-year inputs">Optimised</button>';
+    let html = '<button type="button" class="npv2-chip' + (st.activeScenario === "base" ? " is-active" : "") + '" data-scn="base" title="Optimized — last-year inputs">Optimized</button>';
     st.scenarios.forEach((s) => { html += '<button type="button" class="npv2-chip' + (st.activeScenario === s.id ? " is-active" : "") + '" data-scn="' + s.id + '" title="' + esc(scnShort(s)) + ' — edited">' + esc(scnShort(s)) + '<span class="npv2-chip-x" data-del="' + s.id + '" title="Delete">×</span></button>'; });
     return html;
   }
@@ -560,7 +580,7 @@
           "</div>" +
           '<div class="npv2-fg-gr">' +
             '<button type="button" class="npv2-ix-cap' + (inputsOn() ? " is-on" : "") + '" id="npV2InputsT" title="Show or hide the pinned deal-input columns (list, promo cost, allowances, events) to focus on the calendar"><span class="npv2-ix-dot"></span>Inputs ' + (inputsOn() ? "on" : "off") + "</button>" +
-            '<button type="button" class="npv2-ix-cap' + (NP.state.v2ix ? " is-on" : "") + '" id="npV2Ix" title="Highlight where the optimiser separates cluster rivals (cannibalisation) and co-promotes complements (halo)"><span class="npv2-ix-dot"></span>Interactions ' + (NP.state.v2ix ? "on" : "off") + "</button>" +
+            '<button type="button" class="npv2-ix-cap' + (NP.state.v2ix ? " is-on" : "") + '" id="npV2Ix" title="Highlight where the optimizer separates cluster rivals (cannibalisation) and co-promotes complements (halo)"><span class="npv2-ix-dot"></span>Interactions ' + (NP.state.v2ix ? "on" : "off") + "</button>" +
             '<span class="npv2-fg-ixkey"' + (NP.state.v2ix ? "" : " hidden") + '><i class="npv2-ixk npv2-ixk-h"></i>halo <i class="npv2-ixk npv2-ixk-c"></i>cannib.</span>' +
           "</div>" +
         "</div>" +
@@ -580,6 +600,15 @@
         '<div class="npv2-planpanel" id="npV2PlanPanel" aria-label="V1 52-week plan"></div>' +
       "</div>";
     front.querySelectorAll("[data-strat]").forEach((b) => (b.onclick = () => { NP.state.cf.strategy = b.dataset.strat; renderFront(); }));
+    const moreBtn = front.querySelector("#npV2StratMore"), stratRow = front.querySelector("#npV2Strats");
+    if (moreBtn && stratRow) moreBtn.onclick = () => {
+      // toggle in place — no renderFront, so the page/grid don't shift
+      stratExpanded = !stratExpanded;
+      stratRow.classList.toggle("is-collapsed", !stratExpanded);
+      const others = stratRow.querySelectorAll(".npv2-strat").length - 1;
+      moreBtn.textContent = stratExpanded ? "Hide other scenarios" : "Other scenarios (" + others + ")";
+      moreBtn.setAttribute("aria-expanded", String(stratExpanded));
+    };
     const kts = front.querySelector("#npV2FgCat"); if (kts) kts.onchange = () => { ff.cat = kts.value; renderFront(); };
     const vs = front.querySelector("#npV2FgVendor"); vs.onchange = () => { ff.vendor = vs.value; renderFront(); };
     const rs = front.querySelector("#npV2FgRog"); rs.onchange = () => { ff.rog = rs.value; renderFront(); };
