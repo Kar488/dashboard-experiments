@@ -589,6 +589,35 @@ window.ChatData = (() => {
       gaps: []
     },
 
+    complex_diagnostic: {
+      name: "Complex multi-part diagnostic",
+      style: "diagnostic",
+      intent: "Multi-question investigative asks (premise + many sub-questions). The layer extracts stated facts as premise constraints, reconciles the headline metric with a quantified bridge, answers the answerable subset, and maps every remaining sub-question to its archetype or blocking gap — never silently substituting a generic pattern.",
+      lineage: [
+        { table: "sales_cost_allowances", grain: "UPC x store x day", cols: ["NET_AMT", "ITEM_QTY", "AGP_AMT", "COST_OF_GOODS_AMT", "DEADNET_COST", "TOTAL_ALLOWANCES", "TOTAL_MARKDOWN_AMT"], why: "P&L reconciliation + bridge" },
+        { table: "master_primary_promo_data", grain: "UPC x store x promo week", cols: ["PRIMARY_PROMO_TACTIC_UPC", "PROMOTION_WEEK_NBR"], why: "Promo/incrementality sub-questions" },
+        { table: "item_hierarchy", grain: "UPC x division", cols: ["OWN_BRANDS_IND", "VENDOR_NM", "CATEGORY"], why: "Private-label / vendor cuts" }
+      ],
+      derived: [
+        { name: "Premise facts", formula: "figures stated in the question, extracted into the contract; response must use them or flag the mismatch — never silently contradict", status: "computed" },
+        { name: "AGP $ bridge", formula: "volume = ΔUnits × LY AGP/unit; rate = TY units × ΔAGP/unit; must reconcile to total AGP change", status: "computed" },
+        { name: "Incrementality / cannibalization", formula: "needs promo baseline model", status: "computed" }
+      ],
+      recipe: [
+        "Extract premise facts; seed the metrics view from them (or flag data-vs-premise conflict explicitly).",
+        "Bridge the headline metric change into quantified volume and rate components.",
+        "Decompose the question into sub-questions; classify each answerable-now / needs-source.",
+        "Answer the answerable subset with evidence-bounded language.",
+        "State explicitly what cannot yet be concluded and the next diagnostic cut."
+      ],
+      gaps: [
+        { sev: "high", text: "SLU execution compliance, build quantities, and store-level display verification live in the merch execution system — not onboarded; execution sub-questions return mapped-but-blocked." },
+        { sev: "high", text: "APEX/OMS/POS configuration mismatch checks need the pricing-config feeds side-by-side; only OMS/CMS promo config is in scope today." },
+        { sev: "med", text: "Incrementality and cannibalization need the promo baseline model (same dependency as promo effectiveness)." },
+        { sev: "med", text: "Residual inventory and shrink require the inventory/shrink feed — not onboarded." }
+      ]
+    },
+
     clarify: {
       name: "Clarification required",
       style: "clarify",
@@ -732,7 +761,7 @@ window.ChatData = (() => {
     { id: 124, a: "market_share", e: { cat: "Apples", div: "Jewel", period: "Q4 2025", mode: "level" } },
     { id: 125, a: "canned_report", e: { report: "Price Change", asm: "Annie Michalik", div: "Jewel", week: "Fiscal Week 02, 2026", domain: "grocery" } },
     { id: 126, a: "upc_rank", e: { cat: "Apples", div: "Jewel", period: "latest 4 weeks", metric: "dollar sales", dir: "top", domain: "produce", showN: 10 } },
-    { id: 127, a: "market_share", e: { dept: "Produce", div: "Jewel", period: "FY 2025", mode: "rank-growth" } },
+    { id: 127, a: "market_share", e: { dept: "Produce", div: "Jewel", period: "FY 2025", mode: "rank-level" } },
     { id: 128, a: "allowance_breakdown", e: { div: "Jewel", asm: "Timothy Antor", period: "Q2 2025", by: "allowance type", mode: "declining-weeks", domain: "dairy" } },
     { id: 129, a: "allowance_breakdown", e: { vendorList: 30, smicList: 30, metric: "NOPA by allowance type", threshold: "$10K", period: "FY 2026", by: "allowance type", div: "Jewel", domain: "grocery" } },
     { id: 130, a: "slotting", e: { smics: ["Refrigerated Drinks Singles", "Refrigerated Yogurt", "Refrigerated Juice Blends"], entity: "vendor", asm: "Timothy Antor", period: "next quarter, FY 2025 vs PY", div: "Jewel", domain: "dairy" } },
