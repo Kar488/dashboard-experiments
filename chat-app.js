@@ -807,17 +807,57 @@
   };
 
   R.slotting = (id, e) => {
-    const rng = rngFor(id);
-    const rows = (e.smics ? e.smics : pickN(rng, smicsOf(e), 4)).map((s, i) => {
-      const ly = rr(rng, 3e4, 1.2e5);
-      const ty = ly * rr(rng, 0.5, 1.15);
-      return [s, pickN(rngFor(id, i + 3), vend(e), 1)[0], `FW ${Math.floor(rr(rng, 1, 8))}–${Math.floor(rr(rng, 9, 13))}`, fmt.k(ly), fmt.k(ty), ty < ly * 0.95 ? "BEHIND LY" : "On pace"];
+    const DESKS = e.smics
+      ? [{ desk: `ASM desk — ${e.asm || "Timothy Antor"}`, smics: e.smics, dom: domainOf(e) }]
+      : [
+        { desk: "Center Store", smics: ["SALTY SNACK BAG/CANISTER", "COOKIES", "CARBONATED SOFT DRINKS", "READY TO EAT CEREAL"], dom: "grocery" },
+        { desk: "Fresh / Dairy", smics: ["REFRIGERATED YOGURT", "CHEESE SHREDS", "CREAMERS & CREAM"], dom: "dairy" },
+        { desk: "GM/HBC", smics: ["LAUNDRY DETERGENT", "BATH TISSUE"], dom: "grocery" }
+      ];
+    const SRC = ["New-item placement + holiday display expansion", "Innovation launch shelf expansion", "Seasonal reset participation", "Secondary display program", "Assortment reset funding", "Premium placement expansion", "Checkout / cooler placement"];
+    // Believable vendor slates per SMIC (fallback: domain pool)
+    const SMIC_VENDORS = {
+      "SALTY SNACK BAG/CANISTER": ["PEPSICO INC", "UTZ BRANDS INC", "THE CAMPBELLS CO"],
+      "COOKIES": ["MONDELEZ INTL INC", "WK KELLOGG CO", "GRUPO BIMBO"],
+      "CARBONATED SOFT DRINKS": ["COCA COLA CO", "PEPSICO INC", "KEURIG DR PEPPER"],
+      "READY TO EAT CEREAL": ["GENERAL MILLS INC", "WK KELLOGG CO", "POST HOLDINGS INC"],
+      "REFRIGERATED YOGURT": ["GRP DANONE S A", "LACTALIS USA", "CHOBANI INC"],
+      "CHEESE SHREDS": ["SARGENTO FOOD CO", "CABOT CREAMERY INC", "OWN BRANDS"],
+      "CREAMERS & CREAM": ["NESTLE S A SWITZERLAND", "GRP DANONE S A", "OWN BRANDS"],
+      "LAUNDRY DETERGENT": ["PROCTER & GAMBLE", "UNILEVER", "CHURCH & DWIGHT"],
+      "BATH TISSUE": ["PROCTER & GAMBLE", "GEORGIA-PACIFIC", "KIMBERLY-CLARK"],
+      "REFRIGERATED DRINKS SINGLES": ["COCA COLA CO", "TROPICANA BRANDS GRP", "GRP DANONE S A"],
+      "REFRIGERATED JUICE BLENDS": ["TROPICANA BRANDS GRP", "COCA COLA CO", "OWN BRANDS"]
+    };
+    const mainRows = [], contribRows = [];
+    let totLY = 0, cycles = 0, behindRows = [];
+    DESKS.forEach((d, di) => {
+      d.smics.forEach((s, si) => {
+        const r = rngFor(id, di * 10 + si + 1);
+        const ly = rr(r, 1.5e5, 9e5);
+        const isBehind = (di + si) % 3 === 1;
+        const ty = ly * (isBehind ? rr(r, 0.45, 0.8) : rr(r, 0.97, 1.2));
+        const w1 = Math.floor(rr(r, 27, 31)), w2 = w1 + Math.floor(rr(r, 3, 8));
+        const vlist = SMIC_VENDORS[s.toUpperCase()] || pickN(r, POOLS.vendors[d.dom], 3);
+        totLY += ly; cycles++;
+        if (isBehind) behindRows.push({ smic: s, vendor: vlist[0], gap: ty - ly });
+        mainRows.push([d.desk, s, `FW ${w1}–${w2}`, vlist.map((v) => v.split(" ").slice(0, 2).join(" ")).join(", "), fmt.k(ly), fmt.k(ty), isBehind ? "BEHIND LY" : "On pace"]);
+        // by-vendor contribution within the SMIC — where LY slotting came from
+        const s1 = rr(r, 0.4, 0.6), s2 = rr(r, 0.18, (1 - s1) - 0.12);
+        [s1, s2, 1 - s1 - s2].forEach((share, vi) => {
+          contribRows.push([vi === 0 ? s : "", vlist[vi], fmt.pct(share, 0), fmt.k(ly * share), pickN(rngFor(id, di * 100 + si * 10 + vi), SRC, 1)[0]]);
+        });
+      });
     });
+    const worst = behindRows.sort((a, b) => a.gap - b.gap)[0];
     return [
-      H(`Next quarter's slotting picture vs LY for ${scope(e)}: ${rows.filter((r) => r[5] === "BEHIND LY").length} of ${rows.length} SMIC/vendor cycles are running behind last year's committed dollars.`),
-      TB("Slotting / placement cycles — LY plan vs TY committed", ["SMIC", "Vendor", "LY Cycle Window", "LY $", "TY Committed $", "Status"], rows),
-      RECO("Share the BEHIND-LY rows with the SM ahead of vendor line reviews — the ask is commitment to at-or-ahead of LY before the cycle window opens."),
-      FU(["Which behind-pace vendors have new-item activity that should carry slotting this cycle?"])
+      H(`Last year ${cycles} slotting cycles ran for next quarter across ${DESKS.length > 1 ? DESKS.length + " desks" : "the desk"}, worth ${fmt.k(totLY)} in planned slotting income. ${behindRows.length} of ${cycles} cycles are currently committed BEHIND last year's dollars — to stay at-or-ahead, the behind cycles need vendor commitment before their FW windows open.`),
+      TB("Slotting / placement cycles by desk and SMIC — LY plan vs TY committed",
+        ["Desk", "SMIC", "LY Cycle Window", "Primary Vendors", "LY $", "TY Committed $", "Status"], mainRows),
+      TB("Vendor contribution within each SMIC — where LY slotting came from",
+        ["SMIC", "Vendor", "Share of LY Slotting", "LY $", "LY Source"], contribRows),
+      RECO(`Take the BEHIND-LY rows to the SM ahead of vendor line reviews — lead with ${worst ? worst.vendor.split(" ").slice(0, 2).join(" ") + " in " + worst.smic + " (" + fmt.k(worst.gap) + " behind)" : "the largest gap"}. The ask is commitment to at-or-ahead of LY before each cycle window opens; the contribution table shows exactly which vendor owns each gap.`),
+      FU(["Which behind-pace vendors have new-item activity that should carry slotting this cycle?", "Do any on-pace cycles hide a vendor-mix shift (one vendor up, another lapsed)?"])
     ];
   };
 
