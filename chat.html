@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Merchant Q&amp;A — Best Response Layer</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="chat.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <h1>Merchant Q&amp;A</h1>
+        <span class="badge">Best Response Layer · Prototype</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="ghost-button" id="browseBtn">Browse all 133 questions</button>
+        <label class="lineage-switch" title="Show tables, columns, derived metrics, gaps and the downstream contract behind each answer">
+          <input type="checkbox" id="lineageToggle" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+          <span class="switch-label">Data lineage</span>
+        </label>
+        <a class="ghost-button" href="index.html">← Dashboard</a>
+      </div>
+    </header>
+
+    <main class="chat-main">
+      <div class="thread-wrap" id="threadWrap">
+        <div class="thread" id="thread"></div>
+      </div>
+
+      <div class="composer">
+        <div class="chips" id="chips"></div>
+        <div class="input-row">
+          <textarea id="chatInput" rows="1" placeholder="Ask a merchandising question — e.g. “What is causing the AGP decline for Jewel Sargento in Quarter 3 2025?”"></textarea>
+          <button id="sendBtn" class="send-btn">Ask</button>
+        </div>
+        <div class="composer-foot">Mock responses · intent cascade: registry match → nearest neighbor → fast-LLM contract · 30s latency budget</div>
+      </div>
+    </main>
+
+    <aside class="q-drawer" id="qDrawer">
+      <div class="drawer-head">
+        <strong>All 133 merchant questions</strong>
+        <button id="drawerClose" class="ghost-button">Close</button>
+      </div>
+      <input id="qFilter" placeholder="Filter questions… (try: allowance, promo, BOG, share)" />
+      <div class="q-list" id="qList"></div>
+    </aside>
+
+    <script src="chat-data.js"></script>
+    <script src="chat-app.js"></script>
+  </body>
+</html>
