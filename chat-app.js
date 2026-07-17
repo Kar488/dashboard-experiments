@@ -297,7 +297,7 @@
     if (e.flavor === "cost") {
       blocks.push(H(`Yes — both moved in ${per(e)}: COGS per unit is up ${fmt.spct(cogsChg)} versus last year, while total allowances are ${m.allowTY < m.allowLY ? "down " + fmt.spct(m.allowTY / m.allowLY - 1) : "up " + fmt.spct(m.allowTY / m.allowLY - 1)} (allowances per unit ${fmt.spct(allowUChg)}).`));
     } else if (m.allowanceSide) {
-      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline splits ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate. The rate side traces to vendor funding: COGS is roughly flat while Deadnet per unit rose ${fmt.spct(m.dnuTY / m.dnuLY - 1)}.`));
+      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline splits ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate. The rate side is consistent with funding pressure: COGS per unit moved ${fmt.spct(cogsChg)} while Deadnet per unit rose ${fmt.spct(m.dnuTY / m.dnuLY - 1)} — vendor and program-level confirmation is the next check before treating this as proven.`));
     } else {
       blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline splits ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate. The rate side traces to COGS per unit rising ${fmt.spct(cogsChg)} while AIV moved only ${fmt.spct(aivChg)} — retail did not recover the cost increase.`));
     }
@@ -1614,9 +1614,90 @@
     ];
   };
 
+  R.compound_review = (id, e) => {
+    const rng = rngFor(id + (e.cat || "").length);
+    const s = e.sections || {};
+    const cat = e.cat || "the category";
+    const seafood = /shrimp|seafood|crab|salmon/i.test(cat);
+    const blocks = [];
+    blocks.push(NOTE(`Compound ask decomposed into ${["division summary", s.share && "market share", s.trend && "trend comparison", s.items && "item ranking", s.attrs && "attribute synthesis"].filter(Boolean).length} sections — every clause below, none dropped. Period resolved: ${e.periodRaw ? e.periodRaw + " = " : ""}${e.period}${/P\d/.test(e.period) ? " (4 fiscal weeks)" : ""}.`));
+
+    // division summary — vs PY AND vs trailing trend + share + driver
+    const divs = ["JEWEL", "SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN"].map((d, i) => {
+      const r = rngFor(id, 10 + i);
+      const py = rr(r, -0.09, 0.08), trend = py + rr(r, -0.04, 0.04);
+      const units = py - rr(r, 0.005, 0.03), agp = py - rr(r, 0.01, 0.08), aiv = rr(r, 0.005, 0.035);
+      const share = rr(r, -0.009, 0.006);
+      const driver = py > 0.02 ? "Large value packs" : agp < py - 0.05 ? "Volume + margin pressure" : share < -0.005 ? "Share/distribution loss" : "Mix drift";
+      return { d, py, trend, units, agp, aiv, share, driver };
+    }).sort((a, b) => b.py - a.py);
+    const cols = ["Division", "Sales vs PY"];
+    if (s.trend) cols.push("Sales vs 13-wk Trend");
+    cols.push("Units vs PY", "AGP vs PY", "AIV vs PY");
+    if (s.share) cols.push("Share Δ");
+    cols.push("Primary Driver");
+    blocks.push(TB(`${cat} by division — ${e.period}, ranked by sales vs PY`, cols,
+      divs.map((x) => {
+        const row = [x.d, fmt.spct(x.py)];
+        if (s.trend) row.push(fmt.spct(x.trend));
+        row.push(fmt.spct(x.units), fmt.spct(x.agp), fmt.spct(x.aiv));
+        if (s.share) row.push(fmt.bps(x.share));
+        row.push(x.driver);
+        return row;
+      })));
+    const up = divs.filter((x) => x.py > 0), down = divs.filter((x) => x.py <= 0);
+    blocks.push(H(`${cat} in ${e.period}: ${up.length} of ${divs.length} divisions grew vs PY — ${divs[0].d} leads at ${fmt.spct(divs[0].py)} on ${divs[0].driver.toLowerCase()}, while ${divs[divs.length - 1].d} trails at ${fmt.spct(divs[divs.length - 1].py)}${s.trend ? "; trend columns show whether each division is accelerating or decaying vs its own 13-week run rate" : ""}.`));
+
+    if (s.items) {
+      const variants = seafood
+        ? [["2 LB RAW PELD/DEVEINED 31/40", "Larger value pack"], ["3 LB RAW SHELL-ON BAG", "Bulk/value"], ["12 OZ COOKED TAIL-ON", "Convenience"], ["1 LB RAW EZ-PEEL 41/50", "Mid-count value"], ["10 OZ PREMIUM JUMBO COOKED", "Premium small pack"]]
+        : [["LARGE VALUE PACK", "Bulk/value"], ["FAMILY SIZE", "Larger pack"], ["SINGLE SERVE", "Convenience"], ["PREMIUM SMALL PACK", "Premium tier"], ["OWN BRAND VALUE PACK", "Own-brand value"]];
+      const itemRows = [];
+      divs.slice(0, 3).forEach((dv, di) => {
+        pickN(rngFor(id, 30 + di), variants, 2).forEach(([v, why], vi) => {
+          const r = rngFor(id, 40 + di * 3 + vi);
+          const sales = rr(r, 1.2e5, 5.5e5), g = rr(r, 0.06, 0.26);
+          itemRows.push({ d: dv.d, v: (seafood ? "" : cat + " ") + v, sales, g, contrib: sales * g / (1 + g), why });
+        });
+      });
+      itemRows.sort((a, b) => b.contrib - a.contrib);
+      blocks.push(TB(`Winning materially-sized items by division (≥ $100K period sales; sorted by contribution to growth)`,
+        ["Division", "Item", "Sales $", "Growth vs PY", "Contribution", "Why it is winning"],
+        itemRows.map((x) => [x.d, x.v, fmt.k(x.sales), fmt.spct(x.g, 0), "+" + fmt.k(x.contrib), x.why])));
+    }
+
+    if (s.attrs) {
+      const gRaw = rr(rng, 0.06, 0.12), dCooked = -rr(rng, 0.04, 0.08), lgShare = rr(rng, 0.55, 0.68);
+      blocks.push(TB("Attribute synthesis — growth vs decline concentrations",
+        ["Attribute", "Growth/Decline", "Evidence"],
+        seafood ? [
+          ["Large packs (2–3 LB)", "GROWING", `${fmt.pct(lgShare, 0)} of net category growth`],
+          ["Raw vs cooked", "Raw " + fmt.spct(gRaw, 1) + " / Cooked " + fmt.spct(dCooked, 1), "Raw gaining across all growing divisions"],
+          ["Peeled & deveined", "GROWING", "Share gain in every division vs PY"],
+          ["Mid counts (31/40, 41/50)", "GROWING", "Outpacing jumbo and small counts"],
+          ["Premium small cooked packs", "DECLINING", "Down despite higher AIV — price-per-use resistance"],
+          ["Own brand vs national", "OB outperforming", "OB value packs ahead of national equivalents"]
+        ] : [
+          ["Large / family packs", "GROWING", `${fmt.pct(lgShare, 0)} of net category growth`],
+          ["Single serve", "MIXED", "Convenience holding, premium singles declining"],
+          ["Premium small packs", "DECLINING", "Down despite higher AIV"],
+          ["Own brand vs national", "OB outperforming", "OB value packs ahead of national equivalents"]
+        ]));
+      blocks.push(BU([`The package-size story is the headline: larger value packs carry ${fmt.pct(lgShare, 0)} of category growth while premium small packs decline — assortment and promo plans should lean into the value-pack tier where the growth divisions already are.`]));
+    }
+
+    blocks.push(NOTE("Causal attributions above are directional: funding or cost claims per division need vendor/program-level confirmation before action (drill any division for the driver decomposition)."));
+    blocks.push(FU([
+      `Drill ${divs[divs.length - 1].d}'s decline into the full driver decomposition (cost vs funding vs volume)?`,
+      s.attrs ? "Harden the attribute cut with a curated attribute table (prep, count size, tier) instead of description parsing?" : "Add the attribute synthesis cut (pack size / variety)?"
+    ]));
+    return blocks;
+  };
+
   R.novel_analysis = (id, e) => [
     H(`I don't have an analytical contract that covers ${e.concepts && e.concepts.length ? e.concepts.join(", ") : "this analysis"} — rather than force the nearest pattern, here is the contract I would construct.`),
     P("The core concepts in your question are not represented in any archetype's metrics or data plan. A forced nearest-pattern answer would look polished and be wrong — so the layer stops here and proposes instead."),
+    NOTE(`Captured request (verbatim, so nothing is silently dropped): “${(e.rawAsk || "").slice(0, 220)}${(e.rawAsk || "").length > 220 ? "…" : ""}”`),
     BU([
       "Stage 1 — define the metric: formula, denominator, and grain need explicit definition (stated in the proposal so it can be corrected before any query runs).",
       "Stage 2 — source check: identify which required tables are onboarded and which are missing from scope.",
@@ -1765,7 +1846,34 @@
     if (/reconcile|quantified driver|three.*(issue|cause)/.test(t)) return { route: "driver_decomp (AGP bridge)", status: "Answerable now" };
     return { route: "driver_decomp", status: "Answerable now" };
   }
+  function parsePeriod6(input) {
+    const m = input.match(/fiscal period (\d{4})(\d{2})|period (\d{4})(\d{2})/i);
+    if (!m) return null;
+    return `FY${m[1] || m[3]} P${parseInt(m[2] || m[4], 10)}`;
+  }
+  function detectCompound(input) {
+    // compound = several ask-clauses even without question marks
+    const askVerbs = (input.match(/\b(review|compare|identify|rank|analy[sz]e|reconcile|give me|show me|determine|break ?down)\b/gi) || []).length;
+    if (askVerbs < 3 || input.length < 150) return null;
+    const e = { div: "Jewel", domain: "grocery" };
+    const catM = input.match(/category ([A-Z][A-Z ]{2,25}?)(?= in| for|,|\.)/i);
+    if (catM) e.cat = catM[1].trim().toUpperCase();
+    const p6 = input.match(/fiscal period \d{6}|period \d{6}/i);
+    if (p6) e.periodRaw = p6[0];
+    e.period = parsePeriod6(input) || (input.match(/q[1-4]\s*20\d\d/i) || [])[0] || "the period";
+    e.sections = {
+      byDivision: /by division|each division|division level/i.test(input),
+      share: /market share/i.test(input),
+      trend: /trend/i.test(input),
+      items: /rank.*item|winning.*item|top item/i.test(input),
+      attrs: /attribute|package size|pack size|variety|count size/i.test(input)
+    };
+    if (!Object.values(e.sections).some(Boolean)) return null;
+    return { tier: 3, score: 0, q: null, arch: "compound_review", e, latency: 1950, near: [], guarded: true };
+  }
   function detectComplex(input) {
+    const compound = detectCompound(input);
+    if (compound && (input.match(/\?/g) || []).length < 3) return compound;
     const qMarks = (input.match(/\?/g) || []).length;
     if (input.length < 280 || qMarks < 3) return null;
     const premise = extractPremise(input);
@@ -1794,8 +1902,9 @@
     // Tier 3 — concept-coverage guard FIRST: if the question's core concepts
     // exist in no archetype, never force-fit the nearest pattern.
     const UNCOVERED = [
-      [/household|exclusiv|overlap.*promo|promo.*overlap|hh\b/i, "household_exclusivity"],
-      [/basket (affinity|analysis)|penetration|switching|loyalty segment|trip (mission|frequency)|share of wallet/i, "novel_analysis"]
+      [/basket (affinity|analysis)|penetration|switching|loyalty segment|trip (mission|frequency)|share of wallet/i, "novel_analysis"],
+      [/exclusiv|(household|hh\b).*(overlap|exclusiv)|overlap.*promo|promo.*overlap/i, "household_exclusivity"],
+      [/household|hh\b/i, "novel_analysis"]
     ];
     for (const [re, a] of UNCOVERED) {
       if (re.test(input)) {
@@ -1811,6 +1920,7 @@
         const wm = input.match(/promo week (\d{1,2})\s*(?:fy)?\s*(\d{4})?\s*(?:to|through|–|-)\s*promo week (\d{1,2})\s*(?:fy)?\s*(\d{4})?/i);
         if (wm) e.window = `PW ${wm[1]} FY${wm[2] || "2025"} – PW ${wm[3]} FY${wm[4] || "2026"}`;
         e.concepts = a === "novel_analysis" ? (input.match(/basket affinity|penetration|switching|share of wallet|loyalty segment/gi) || ["this analysis"]) : undefined;
+        e.rawAsk = input;
         return { tier: 3, score: bestScore, q: null, arch: a, e, latency: 1900, near, guarded: true };
       }
     }
@@ -1867,9 +1977,42 @@
     if (m[1] === "-" || /^-|^−/.test(s)) v = -v;
     return isNaN(v) ? null : v;
   };
-  function runJudge(blocks, match, e) {
+  // J6 — ask coverage: extract the question's requirements mechanically and
+  // verify each has a structural match in the response. This is the check
+  // that catches "polished answer to the wrong question".
+  function extractAsks(qText) {
+    const q = qText.toLowerCase();
+    const asks = [];
+    // period tokens must be echoed (digits loosely matched in response)
+    const perM = qText.match(/fiscal period \d{6}|promo week \d{1,2}(?:\s*(?:fy)?\s*\d{4})?|fiscal week \d{1,2}|q[1-4]\s*(?:fy)?\s*'?\d{2,4}|p\d{1,2}\s+\d{4}|fy\s?\d{2,4}/gi);
+    if (perM) asks.push({ ask: "period: " + perM[0], test: (t) => (perM[0].match(/\d+/g) || []).every((d) => t.includes(String(parseInt(d, 10))) || t.includes(d)) });
+    if (/market share|mulo/.test(q)) asks.push({ ask: "market share", test: (t) => /share/i.test(t) });
+    if (/by division|each division|division level|across divisions/.test(q)) asks.push({ ask: "by division", test: (t) => ["SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN"].filter((d) => t.includes(d)).length >= 2 || /by division|division roll.?up|per division|division level/i.test(t) });
+    if (/by (fiscal )?week|weekly|by-week|side-by-side/.test(q)) asks.push({ ask: "weekly view", test: (t) => /W\d|week/i.test(t) });
+    if (/household|exclusiv/.test(q)) asks.push({ ask: "household/exclusivity", test: (t) => /household|exclusiv/i.test(t) });
+    if (/attribute|package size|pack size|variety/.test(q)) asks.push({ ask: "attribute synthesis", test: (t) => /attribute|pack/i.test(t) });
+    if (/(rank|top \d+|winning).*(item|upc|ncrc|cig|vendor|smic)|(item|upc|ncrc|cig|vendor|smic)s?.*rank/.test(q)) asks.push({ ask: "ranked entities", test: (t, tables) => tables.some((tb) => tb.rows.length >= 2) });
+    if (/trend/.test(q)) asks.push({ ask: "trend comparison", test: (t) => /trend/i.test(t) });
+    if (/total row/.test(q)) asks.push({ ask: "total row", test: (t, tables) => tables.some((tb) => tb.rows.some((r) => /^TOTAL/i.test(String(r[0])))) });
+    // metric nouns named in the question must appear in the response
+    [["take rate", /take rate/i], ["aiv", /aiv/i], ["agp", /agp/i], ["allowance", /allowance/i], ["markdown", /markdown|spend/i], ["cpi", /cpi/i], ["deadnet", /deadnet/i], ["bill-out gross", /bill.?out|bog/i], ["units", /unit/i]].forEach(([nm, re]) => {
+      if (re.test(q)) asks.push({ ask: "metric: " + nm, test: (t) => re.test(t) });
+    });
+    ["vendor", "ncrc", "smic", "cig", "upc", "store"].forEach((g) => {
+      if (new RegExp("\\b" + g + "s?\\b", "i").test(q)) asks.push({ ask: "grain: " + g.toUpperCase(), test: (t, tables, ents) => new RegExp("\\b" + g, "i").test(t) || (g === "vendor" && ents && ents.vendor && t.includes(ents.vendor.split(" ")[0])) });
+    });
+    return asks;
+  }
+
+  function runJudge(blocks, match, e, qText) {
     const checks = [];
     const tables = blocks.filter((b) => b.t === "table");
+    if (qText) {
+      const respText = blocks.map((b) => (b.text || "") + " " + (b.title || "") + " " + (b.cols ? b.cols.join(" ") : "") + " " + (b.rows ? b.rows.map((r) => r.join(" ")).join(" ") : "") + " " + (b.items ? b.items.join(" ") : "")).join(" ");
+      const asks = extractAsks(qText);
+      const missing = asks.filter((a) => { try { return !a.test(respText, tables, e); } catch { return false; } });
+      checks.push({ id: "J6 ask-coverage", pass: missing.length === 0, note: missing.length ? "UNANSWERED: " + missing.map((m) => m.ask).join("; ") : `${asks.length} extracted asks all covered` });
+    }
     // J1: any table declaring a sort must be monotonic in its change column
     let j1 = { id: "J1 sort-order", pass: true, note: "no sorted tables" };
     tables.filter((t) => /sort|rank|worst|largest.*first/i.test(t.title || "")).forEach((t) => {
@@ -1911,7 +2054,7 @@
     checks.push({ id: "J3 coverage-disclosure", pass: !claimed || claimed <= maxRows || hasDisclosure, note: claimed ? `${maxRows} rows vs ${claimed} requested` : "n/a" });
     // J4: decline-framed sorted tables should be (mostly) negative in change col
     let j4 = { id: "J4 sign-convention", pass: true, note: "ok" };
-    tables.filter((t) => /decline/i.test(t.title || "") && !/quad/i.test(t.title || "")).forEach((t) => {
+    tables.filter((t) => /decline/i.test(t.title || "") && !/quad|growth|vs decline/i.test(t.title || "")).forEach((t) => {
       const ci = t.cols.findIndex((c) => /change|Δ|decline/i.test(c));
       if (ci < 0) return;
       const vals = t.rows.map((r) => pNum(r[ci])).filter((v) => v !== null);
@@ -2118,7 +2261,7 @@
       await sleep(b.t === "table" || b.t === "kv" ? 240 : 140);
       node.classList.add("shown");
     }
-    const judge = runJudge(blocks, match, match.e || {});
+    const judge = runJudge(blocks, match, match.e || {}, text);
     const jPass = judge.filter((c) => c.pass).length;
     bubble.appendChild(el("div", "mock-tag", `mock data · answered in ${(elapsed / 1000).toFixed(1)}s simulated (budget 30s) · judge ${jPass}/${judge.length} checks ${jPass === judge.length ? "✓" : "⚠"}`));
     bubble.appendChild(debugPanel(match, contract, judge));

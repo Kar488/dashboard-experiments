@@ -618,6 +618,35 @@ window.ChatData = (() => {
       ]
     },
 
+    compound_review: {
+      name: "Compound category review (multi-section)",
+      style: "report",
+      intent: "Compound asks (review by division + vs PY and trend + share + item ranking + attribute synthesis) decompose into one section per clause — the response renders every requested cut, never collapses to a single financial card.",
+      lineage: [
+        { table: "sales_cost_allowances", grain: "UPC x store x day", cols: ["NET_AMT", "ITEM_QTY", "AGP_AMT"], why: "Division and item performance, PY and trailing-trend windows" },
+        { table: "item_hierarchy", grain: "UPC x division", cols: ["ITEM_DSC", "SIZE_QTY", "SIZE_UOM_CD", "OWN_BRANDS_IND", "BRAND_NM", "DIVISION_NM"], why: "Item ranking + attribute parsing (pack size, brand tier)" },
+        { table: "market_share", grain: "category x week", cols: ["Circana_DOLLAR_SALES", "Circana_ROM_DOLLARS_MULO_PLUS"], why: "Share change per division" },
+        { table: "fiscal_calendar", grain: "day", cols: ["FISCAL_PERIOD_NBR", "FISCAL_YEAR_NBR"], why: "Fiscal-period windows (e.g., 202604 = FY2026 P04)" }
+      ],
+      derived: [
+        { name: "Sales vs trend", formula: "period sales vs trailing 13-week weekly-average baseline", status: "computed" },
+        { name: "Contribution to division growth", formula: "item sales change ÷ division sales change", status: "computed" },
+        { name: "Attribute rollup", formula: "growth/decline aggregated by parsed attributes (pack size from SIZE_QTY/UOM; variety and prep parsed from ITEM_DSC)", status: "computed" },
+        { name: "Materiality screen", formula: "items ≥ $100K period sales (configurable)", status: "computed" }
+      ],
+      recipe: [
+        "Decompose the ask into sections; every clause maps to a section or a named gap — none silently dropped.",
+        "Division summary: vs PY, vs trailing trend, share change, primary driver per division, ranked.",
+        "Winning items per division above the materiality screen, with contribution to division growth.",
+        "Attribute synthesis: aggregate growth/decline by pack size, prep, brand tier; call the winning attribute.",
+        "Causal language stays evidence-bounded — funding claims need vendor/program confirmation."
+      ],
+      gaps: [
+        { sev: "med", text: "Variety/prep attributes (raw vs cooked, peeled/deveined, tail-on) are parsed from ITEM_DSC text — reliable for structured descriptions, fuzzy otherwise; a curated attribute table would harden this." },
+        { sev: "low", text: "Share is Circana-panel based and lags POS by one week." }
+      ]
+    },
+
     novel_analysis: {
       name: "Novel analysis — no existing contract",
       style: "clarify",
