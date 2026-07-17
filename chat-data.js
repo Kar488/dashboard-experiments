@@ -589,6 +589,50 @@ window.ChatData = (() => {
       gaps: []
     },
 
+    household_exclusivity: {
+      name: "Household overlap / exclusivity (promo-removal risk)",
+      style: "diagnostic",
+      intent: "For grouped categories, quantify how exclusive buying households are to each NCRC within its group, and derive the risk of removing an overlapping promotion — NCRC level, group roll-up, division roll-up.",
+      lineage: [
+        { table: "loyalty_household_transactions", grain: "household x UPC x transaction", cols: ["HOUSEHOLD_ID", "UPC_NBR", "TXN_DT"], why: "Household-grain purchases — REQUIRED and NOT ONBOARDED (see gaps)" },
+        { table: "item_hierarchy", grain: "UPC x division", cols: ["CATEGORY_ID", "NATIONAL_COMMON_RETAIL_CD"], why: "Category (SMIC) → NCRC → UPC mapping; 2-digit group = leading digits of CATEGORY_ID" },
+        { table: "promo_calendar", grain: "calendar day x division", cols: ["PROMOTION_WEEK_NBR", "PROMOTION_YEAR"], why: "Promo-week window filter (cross-year ranges supported)" },
+        { table: "sales_cost_allowances", grain: "UPC x store x day", cols: ["NET_AMT", "ITEM_QTY"], why: "Store-grain fallback context only — cannot substitute for household grain" }
+      ],
+      derived: [
+        { name: "Buying households (NCRC)", formula: "COUNT(DISTINCT household) purchasing any UPC of the NCRC in the window", status: "gap" },
+        { name: "Exclusive households", formula: "households buying this NCRC and NO other NCRC within the same 2-digit category group in the window", status: "gap" },
+        { name: "Exclusivity %", formula: "exclusive HH ÷ buying HH", status: "computed" },
+        { name: "Promo-removal risk", formula: "threshold rule (configurable): >30% High · 15–30% Medium · <15% Low", status: "computed" }
+      ],
+      recipe: [
+        "Parse category groups from the leading 2 digits of the 4-digit category ids; expand each category to NCRCs via item_hierarchy.",
+        "Resolve the promo-week window (supports cross-fiscal-year ranges like PW49 FY25 → PW8 FY26).",
+        "Per NCRC: distinct buying households; exclusive households (no other NCRC in the group); exclusivity %.",
+        "Roll up to group level (households buying 1 vs 2+ NCRCs) and to division.",
+        "Apply the risk thresholds and state them explicitly in the response."
+      ],
+      gaps: [
+        { sev: "high", text: "Household/loyalty transaction data is NOT in the current 19-table scope — no table carries a household id. This analysis requires the loyalty feed; every household figure in the mock is illustrative until it lands." },
+        { sev: "low", text: "Risk thresholds (30%/15%) are proposed defaults — governance should confirm before merchants act on the labels." }
+      ]
+    },
+
+    novel_analysis: {
+      name: "Novel analysis — no existing contract",
+      style: "clarify",
+      intent: "The question's core concepts are not covered by any archetype. Rather than force-fitting the nearest pattern, the layer states this and proposes the contract it would construct, for confirmation.",
+      lineage: [],
+      derived: [],
+      recipe: [
+        "Concept-coverage check: core nouns/metrics of the question are matched against every archetype's derived metrics and lineage.",
+        "Below the coverage bar, DO NOT route to nearest-pattern — emit a constructed-contract proposal instead.",
+        "The proposal names the analysis stages, required sources (onboarded or not), and the formulas to be defined.",
+        "User confirmation (or a governance sign-off) promotes the constructed contract into the archetype library."
+      ],
+      gaps: [{ sev: "high", text: "By definition: the intent has no data plan yet. The proposal identifies which required sources are missing from scope." }]
+    },
+
     complex_diagnostic: {
       name: "Complex multi-part diagnostic",
       style: "diagnostic",
@@ -638,7 +682,7 @@ window.ChatData = (() => {
     { id: 1, a: "driver_decomp", e: { metric: "AGP rate", cat: "Sour Cream", div: "Jewel", period: "Q1 2025" } },
     { id: 2, a: "driver_decomp", e: { metric: "COGS & allowances", cat: "Sour Cream", div: "Jewel", period: "Q3 2025", flavor: "cost" } },
     { id: 3, a: "yoy_rank", e: { entity: "vendor", metric: "margin rate", dir: "decline", n: 5, cat: "Sour Cream", div: "Jewel", period: "Q3 2025", domain: "dairy" } },
-    { id: 4, a: "yoy_rank", e: { entity: "CIG", metric: "Billback allowances", vendor: "FAGE USA DAIRY IND INC", div: "Jewel", period: "Q2 2025", dir: "decline", domain: "dairy", n: 6 } },
+    { id: 4, a: "yoy_rank", e: { entity: "CIG", metric: "Billback allowances", vendor: "FAGE USA DAIRY IND INC", vendors: ["FAGE USA DAIRY IND INC"], div: "Jewel", period: "Q2 2025", dir: "decline", domain: "dairy", n: 6 } },
     { id: 5, a: "yoy_rank", e: { entity: "vendor", metric: "total allowance investment", n: 5, div: "Southern", period: "Q3 2025", dir: "decline", domain: "grocery" } },
     { id: 6, a: "allowance_breakdown", e: { vendor: "KEURIG DR PEPPER", div: "Jewel Osco", period: "P08 2025", by: "category", domain: "beverage" } },
     { id: 7, a: "market_share", e: { cat: "Frozen Meals Single Serve", div: "Jewel Osco", period: "Q1 2025", mode: "level" } },
@@ -745,10 +789,10 @@ window.ChatData = (() => {
     { id: 108, a: "yoy_rank", e: { entity: "NCRC", div: "Jewel", period: "Q3+Q4 FY 2025", metric: "Sales $", dir: "decline", listGiven: 30, domain: "dairy", n: 8 } },
     { id: 109, a: "yoy_rank", e: { smics: ["Cheese Shreds", "Cheese Chunks", "Cheese International", "Cheese Slices"], entity: "vendor", metric: "Ad Placement Coop", asm: "Timothy Antor", div: "Jewel", period: "Q3 2025", dir: "decline", domain: "dairy", n: 6 } },
     { id: 110, a: "yoy_rank", e: { entity: "NCRC", metric: "AGP $", period: "Q3+Q4 FY 2025", div: "Jewel", dir: "decline", listGiven: 30, domain: "dairy", n: 8 } },
-    { id: 111, a: "aiv_erosion", e: { vendorList: 15, entity: "NCRC", metric: "AIV", asm: "Timothy Antor", period: "FY 2026", div: "Jewel", domain: "dairy" } },
-    { id: 112, a: "aiv_erosion", e: { ncrcList: 27, metric: "AIV & AGP $ by week", asm: "Timothy Antor", period: "FY 2026", div: "Jewel", domain: "dairy", byWeek: true } },
-    { id: 113, a: "yoy_rank", e: { vendorList: 7, entity: "NCRC", metric: "Ad Placement Coop", div: "Jewel", asm: "Timothy Antor", period: "Q3 2025", dir: "decline", domain: "dairy", n: 7 } },
-    { id: 114, a: "yoy_rank", e: { ncrcList: 22, metric: "Ad Placement Coop", byWeek: true, period: "Q3 2025", div: "Jewel", asm: "Timothy Antor", dir: "decline", domain: "dairy", n: 6 } },
+    { id: 111, a: "aiv_erosion", e: { vendorList: 15, vendors: ["DAIYA FOODS INC", "LYRICAL FOODS INC", "CLIO SNACKS", "PAINTERLAND SISTERS LLC", "THE HAPPY EGG CO", "EGGLANDS BEST LLC", "ALCAM CREAMERY CO", "LIFEWAY FOODS INC"], entity: "NCRC", metric: "AIV", asm: "Timothy Antor", period: "FY 2026", div: "Jewel", domain: "dairy" } },
+    { id: 112, a: "aiv_erosion", e: { ncrcList: 27, cats: ["EGGS", "REFRIGERATED YOGURT", "CREAM CHEESE"], metric: "AIV & AGP $ by week", asm: "Timothy Antor", period: "FY 2026", div: "Jewel", domain: "dairy", byWeek: true } },
+    { id: 113, a: "yoy_rank", e: { vendorList: 7, vendors: ["SARGENTO FOOD CO", "CACIQUE FOODS LLC", "CABOT CREAMERY INC", "LACTALIS USA", "DAIYA FOODS INC", "LIFEWAY FOODS INC"], entity: "NCRC", metric: "Ad Placement Coop", div: "Jewel", asm: "Timothy Antor", period: "Q3 2025", dir: "decline", domain: "dairy", n: 7 } },
+    { id: 114, a: "yoy_rank", e: { ncrcList: 22, entity: "NCRC", vendors: ["SARGENTO FOOD CO", "CABOT CREAMERY INC", "DAIYA FOODS INC", "KRAFT HEINZ CO"], smic: "Cheese Shreds", metric: "Ad Placement Coop", byWeek: true, period: "Q3 2025", div: "Jewel", asm: "Timothy Antor", dir: "decline", domain: "dairy", n: 6 } },
     { id: 115, a: "bog_drill", e: { dept: "Dairy", asm: "Timothy Antor", smicList: 27, entity: "vendor", metric: "Bill-Out Gross", period: "FY 2026", div: "Jewel", domain: "dairy" } },
     { id: 116, a: "bog_drill", e: { dept: "Dairy", asm: "Timothy Antor", vendorList: 30, entity: "NCRC", metric: "Bill-Out Gross", period: "FY 2026", div: "Jewel", domain: "dairy" } },
     { id: 117, a: "price_cost_change", e: { ncrcList: 29, mode: "reg-retail-list-cost", period: "FY 2026 vs PY", div: "Jewel", domain: "dairy" } },
