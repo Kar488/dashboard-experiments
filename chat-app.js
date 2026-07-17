@@ -1694,18 +1694,40 @@
     return blocks;
   };
 
-  R.novel_analysis = (id, e) => [
-    H(`I don't have an analytical contract that covers ${e.concepts && e.concepts.length ? e.concepts.join(", ") : "this analysis"} — rather than force the nearest pattern, here is the contract I would construct.`),
-    P("The core concepts in your question are not represented in any archetype's metrics or data plan. A forced nearest-pattern answer would look polished and be wrong — so the layer stops here and proposes instead."),
-    NOTE(`Captured request (verbatim, so nothing is silently dropped): “${(e.rawAsk || "").slice(0, 220)}${(e.rawAsk || "").length > 220 ? "…" : ""}”`),
-    BU([
-      "Stage 1 — define the metric: formula, denominator, and grain need explicit definition (stated in the proposal so it can be corrected before any query runs).",
-      "Stage 2 — source check: identify which required tables are onboarded and which are missing from scope.",
-      "Stage 3 — on your confirmation, the constructed contract runs and is promoted into the archetype library so the next similar question is a fast hit."
-    ]),
-    NOTE("Contract status: NOVEL_ANALYSIS_PROPOSAL — downstream entity-extraction/NL2SQL is NOT invoked on a guessed pattern."),
-    FU(["Reply with any corrections to the proposed definition and I'll run the constructed analysis."])
-  ];
+  R.novel_analysis = (id, e) => {
+    // Even without schema support, the target response SHAPE renders with
+    // illustrative values — lineage marks every figure as not yet traceable
+    // to any known table or derived feature.
+    const rng = rngFor(id + (e.rawAsk || "").length);
+    const concept = (e.concepts && e.concepts[0]) || "this analysis";
+    const isPen = /penetration/i.test(concept), isBasket = /basket/i.test(concept);
+    const blocks = [];
+    blocks.push(NOTE(`No stored contract covers ${concept} — this is the CONSTRUCTED target response. Every figure below is illustrative: the lineage panel marks this analysis as not traceable to any known table or derived feature yet.`));
+    blocks.push(NOTE(`Captured request (verbatim, so nothing is silently dropped): “${(e.rawAsk || "").slice(0, 200)}${(e.rawAsk || "").length > 200 ? "…" : ""}”`));
+    if (isPen) {
+      const pen = rr(rng, 0.1, 0.3), penLY = pen - rr(rng, -0.02, 0.03);
+      blocks.push(H(`Illustrative shape: household penetration for the asked scope would read ${fmt.pct(pen)} of active households, ${pen >= penLY ? "up" : "down"} ${fmt.pts(pen - penLY).replace("+", "")} versus last year.`));
+      blocks.push(TB("Target output shape — penetration trend (illustrative values)",
+        ["Period", "Buying HH", "Active HH", "Penetration", "vs LY"],
+        Array.from({ length: 4 }, (_, i) => { const r = rngFor(id, i); const a = rr(r, 8e5, 1.1e6); const b = a * rr(r, 0.1, 0.3); return [`P${i + 7}`, fmt.units(b), fmt.units(a), fmt.pct(b / a), fmt.pts(rr(r, -0.01, 0.015))]; })));
+    } else if (isBasket) {
+      blocks.push(H(`Illustrative shape: when a household buys the first item, it would buy the second in the same trip some share of the time — attach rate, lift vs independence, and the co-purchase direction.`));
+      blocks.push(TB("Target output shape — basket affinity (illustrative values)",
+        ["Pair", "Attach Rate", "Lift vs Independence", "Direction"],
+        [["Chips → Salsa", fmt.pct(rr(rng, 0.1, 0.25)), rr(rng, 1.5, 3.2).toFixed(1) + "×", "Chips leads"], ["Salsa → Chips", fmt.pct(rr(rng, 0.3, 0.5)), rr(rng, 1.5, 3.2).toFixed(1) + "×", "Symmetric check"]]));
+      blocks.push(NOTE("Note: the co-purchase graph in the demand platform computes exactly these statistics per key-pair — the gap is conversational access to it, not the science."));
+    } else {
+      blocks.push(H(`Illustrative shape: the constructed metric would be defined, computed at the stated grain, and compared vs prior year — rendered in the house response structure (headline, evidence table, follow-ups).`));
+      blocks.push(TB("Target output shape (illustrative values)", ["Entity", "Metric TY", "Metric LY", "Change"],
+        Array.from({ length: 3 }, (_, i) => { const r = rngFor(id, 5 + i); const ly = rr(r, 1e5, 6e5); const chg = rr(r, -0.15, 0.15); return [["Scope A", "Scope B", "Scope C"][i], fmt.k(ly * (1 + chg)), fmt.k(ly), fmt.spct(chg)]; })));
+    }
+    blocks.push(GAPBOX([
+      "Not traceable yet: none of the figures above map to a known table or derived feature in the current scope. The definition (formula, denominator, grain) is proposed in the contract for correction before anything runs for real.",
+      "On confirmation, the constructed contract joins the archetype library and the data requirement joins the gap backlog — the next similar question is a known intent."
+    ]));
+    blocks.push(FU(["Correct the proposed definition (formula / denominator / grain) so the contract can be finalized?"]));
+    return blocks;
+  };
 
   R.complex_diagnostic = (id, e) => {
     const rng = rngFor(id);
@@ -1931,6 +1953,24 @@
   }
 
   // ------------------------------------------------------------- contract
+  // Knowledge-index resolution: make explicit which registry rows resolved
+  // the period and metrics (mirrors time_registry_dev / metric_registry_dev).
+  function kxResolve(text, e) {
+    const out = { time_registry: null, metric_registry: [], policy_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only"], note: "Synonym folding in tier-1/2 matching is derived from the metric registry's synonym map; join rules stay with the governed semantic layer (Unity Catalog) — not duplicated here." };
+    const per2 = (e && (e.period || e.week)) || "";
+    let m;
+    if ((m = per2.match(/Q([1-4])\s*(?:FY)?\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_QTR = ${m[1]} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
+    else if ((m = per2.match(/P(\d{1,2})\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_PERIOD_NBR = ${parseInt(m[1], 10)} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
+    else if ((m = per2.match(/FY\s?(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_YEAR_NBR = ${m[1]}`;
+    else if ((m = per2.match(/(Promo|Fiscal) Week (\d{1,2})/i))) out.time_registry = `phrase “${per2}” → ${m[1].toLowerCase() === "promo" ? "pc.PROMOTION_WEEK_NBR" : "fc.FISCAL_WEEK_NBR"} = ${parseInt(m[2], 10)} (promo weeks resolve per division)`;
+    else if (per2) out.time_registry = `phrase “${per2}” → resolved via fiscal_calendar predicates`;
+    const q = (text || "").toLowerCase();
+    [["profit|agp", "AGP → sca.AGP_AMT (metric dictionary INT_MET family)"], ["margin rate|agp %|rate", "AGP % → AGP_AMT / NET_AMT"], ["aiv", "AIV → NET_AMT / ITEM_QTY (INT_MET_0018)"], ["spend rate", "Spend Rate → TOTAL_ALLOWANCES / VENDOR_LIST_COST (INT_MET_0072)"], ["allowance", "allowance buckets → TOTAL_* allowance columns"], ["markdown", "markdown → TOTAL_MARKDOWN_AMT (stored negative)"], ["units|lift", "units → ITEM_QTY"], ["sales|revenue", "sales → NET_AMT"], ["deadnet", "deadnet → DEADNET_COST"]].forEach(([re, res]) => {
+      if (new RegExp(re, "i").test(q) && out.metric_registry.length < 5) out.metric_registry.push(res);
+    });
+    return out;
+  }
+
   function buildContract(match, inputText) {
     const A = ARCHETYPES[match.arch];
     return {
@@ -1944,7 +1984,8 @@
         few_shot_injected: match.tier === 3 ? (match.near || []).map((n) => ({ question_id: n.q.id, archetype: n.q.a, similarity: Number(n.s.toFixed(3)) })) : undefined,
         latency_ms: match.latency
       },
-      entities: match.e,
+      entity_hints: { ...match.e, _note: "HINTS ONLY — the existing enrichment agent (hybrid vector search to governed keys) remains the entity authority; its resolution overwrites these." },
+      kx_resolution: kxResolve(inputText, match.e),
       response_template: {
         sections: A.style === "exemplar" ? ["headline", "evidence_stat", "detail_table", "recommendation", "why_it_won", "follow_ups"]
           : A.style === "diagnostic" ? ["metrics_table", "headline", "driver_bullets", "follow_ups"]
@@ -1959,7 +2000,7 @@
       },
       gaps: A.gaps.map((g) => ({ severity: g.sev, gap: g.text })),
       constraints: { latency_budget_ms: 30000, this_layer_budget_ms: 2000, comparison_default: "same_period_prior_year", style_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only", "no closing summary (Rule 25)"] },
-      downstream: { next: "entity_resolution → NL2SQL", note: "Template + data_plan pin the SQL surface; NL2SQL fills predicates only.", input_question: inputText }
+      downstream: { next: "existing enrichment agent → existing Genie text-to-SQL", note: "ADDITIVE to the current intent-router pipeline: enrichment stays the entity authority; data_plan narrows the Genie space and columns (Genie still generates the governed SQL); response_template shapes the narration; the judge adds structure checks to the existing LLM-judge + numeric-diff evaluation.", input_question: inputText }
     };
   }
 
@@ -2156,7 +2197,7 @@
       mt.appendChild(rowEls("th", ["Metric", "Formula / logic", "Status"]));
       A.derived.forEach((m) => {
         const tr = rowEls("td", [m.name, m.formula, ""]);
-        const chip = el("span", "chip " + m.status, m.status === "registry" ? "in registry" : m.status === "computed" ? "computed" : "GAP");
+        const chip = el("span", "chip " + m.status, m.status === "registry" ? "in registry" : m.status === "computed" ? "computed" : "NOT TRACEABLE YET");
         tr.lastChild.appendChild(chip);
         mt.appendChild(tr);
       });
