@@ -786,8 +786,8 @@
     if (/arrival/i.test(e.measure || "")) {
       blocks.push(H(`Arrival-date and PO-level off-invoice tracking is not answerable from the current data scope — here is the half we can serve, and exactly what is missing for the rest.`));
       blocks.push(GAPBOX([
-        "WHS/DSD shipment tables with store arrival dates are not onboarded — master_bill_out_gross carries shipped quantity only.",
-        "PO-level allowance linkage (which units were bought on a PO carrying allowance " + e.allowance + ") requires the procurement feed — the shoulder-deal miss cannot be quantified until it lands."
+        "Arrival dates live on PO (purchase order) receiving records — the WHS/DSD PO/receiving tables are not onboarded; master_bill_out_gross carries shipped quantity only.",
+        "PO-level allowance linkage (which units were purchased on a PO carrying off-invoice allowance " + e.allowance + ") needs the same procurement feed — the shoulder-deal miss cannot be quantified until it lands."
       ]));
       blocks.push(TB(`What we CAN answer now — NCRC ${e.ncrc} shipped vs sold, ad week`, ["Store", "Shipped", "Sold", "Sell-through"],
         pickN(rng, POOLS.cities.jewel, 5).map((c) => {
@@ -832,30 +832,52 @@
     ];
   };
 
-  R.build_sheet = (id, e) => [
-    H(`SLU build sheets are not answerable from the current data scope — component-level cost builds are not onboarded. Here is the nearest answerable view while that source is added.`),
-    GAPBOX([
-      "No component/build-sheet source exists in the schema (gap: manufacturing-cost feed).",
-      "Cross-division comparison of the finished item IS answerable — shown below as the interim proxy."
-    ]),
-    TB(`Interim proxy — SLU ${e.slu} finished-item cost by division, TY vs 2YA`,
-      ["Division", "VLC/Unit TY", "VLC/Unit 2YA", "Deadnet/Unit TY", "Deadnet/Unit 2YA"],
-      ["JEWEL", "SO CALIFORNIA", "SEATTLE", "SOUTHERN", "DENVER"].map((d, i) => {
-        const rng = rngFor(100 + i, 9);
-        const v = rr(rng, 2.4, 3.2);
-        return [d, fmt.moneyC(v), fmt.moneyC(v * rr(rng, 0.82, 0.94)), fmt.moneyC(v * 0.93), fmt.moneyC(v * 0.93 * rr(rng, 0.82, 0.94))];
-      })),
-    FU(["Should we scope the build-sheet feed (components + conversion costs) into the next data onboarding cycle?"])
-  ];
+  R.build_sheet = (id, e) => {
+    const rng = rngFor(id);
+    const comps = pickN(rng, POOLS.items.grocery, 5);
+    return [
+      H(`SLU ${e.slu} (Store-Level Unit — display execution group): the component items and pricing are below, TY vs 2YA and by division. The execution-document half (fixture, placement, signage) is not onboarded yet.`),
+      TB(`SLU ${e.slu} — component items and pricing, Jewel, TY vs 2YA`,
+        ["Component UPC", "Description", "Retail TY", "Retail 2YA", "VLC/Unit TY", "VLC/Unit 2YA", "Deadnet TY"],
+        comps.map((it, i) => {
+          const crng = rngFor(id, i + 3);
+          const v = rr(crng, 1.8, 4.2), reg = v * rr(crng, 1.45, 1.75);
+          return [mockUpc(crng), it, fmt.moneyC(reg), fmt.moneyC(reg * rr(crng, 0.85, 0.95)), fmt.moneyC(v), fmt.moneyC(v * rr(crng, 0.82, 0.93)), fmt.moneyC(v * 0.93)];
+        })),
+      TB("Sister-banner comparison — SLU group cost per division (TY vs 2YA)",
+        ["Division", "Group VLC/Unit TY", "VLC/Unit 2YA", "Deadnet/Unit TY", "Deadnet/Unit 2YA"],
+        ["JEWEL", "SO CALIFORNIA", "SEATTLE", "SOUTHERN", "DENVER"].map((d, i) => {
+          const drng = rngFor(100 + i, 9);
+          const v = rr(drng, 2.4, 3.2);
+          return [d, fmt.moneyC(v), fmt.moneyC(v * rr(drng, 0.82, 0.94)), fmt.moneyC(v * 0.93), fmt.moneyC(v * 0.93 * rr(drng, 0.82, 0.94))];
+        })),
+      GAPBOX(["The build-sheet execution document itself (display construction, fixture, signage, per-store instructions) lives in the merch execution system, which is not onboarded — component items and pricing above are served from item_hierarchy + sales_cost_allowances + item_store_price."]),
+      FU(["Onboard the merch execution feed so the full build sheet renders alongside the cost view?"])
+    ];
+  };
 
   R.quad_review = (id, e) => {
     const rng = rngFor(id);
+    const offers = pickN(rng, ncrcsOf(e), 6).map((nm, i) => {
+      // Quad rule: Q2 = Sales + / Profit −, Q3 = Sales − / Profit −, Q4 = Sales − / Profit +
+      const quad = i < 2 ? 2 : i < 4 ? 3 : 4;
+      const sales = quad === 2 ? rr(rng, 2e4, 9e4) : -rr(rng, 8e3, 5e4);
+      const agp = quad === 4 ? rr(rng, 2e3, 9e3) : -rr(rng, 6e3, 3.2e4) * (1 - i * 0.08);
+      return { nm, quad, sales, agp, tactic: pickN(rngFor(id, i + 2), POOLS.tactics, 1)[0], funded: rr(rng, 0.3, 0.8) };
+    }).sort((a, b) => a.agp - b.agp);
+    const q23 = offers.filter((o) => o.quad !== 4);
     return [
-      H(`Last ad week's promotions ranked by negative AGP $ impact — the ranking is answerable today; the Quad 2–4 labels are not, until a quadrant rule is defined.`),
-      TB("Promotions by AGP $ impact — last ad week", ["Offer", "Tactic", "AGP $ Impact", "Units Lift", "Funded %"],
-        pickN(rng, ncrcsOf(e), 5).map((nm, i) => [nm, pickN(rngFor(id, i + 2), POOLS.tactics, 1)[0], fmt.sk(-rr(rng, 8e3, 4e4) * (1 - i * 0.15)), fmt.spct(rr(rng, 0.05, 0.3), 0), fmt.pct(rr(rng, 0.3, 0.8), 0)])),
-      GAPBOX(["'Quad 2–4' has no definition in any table or registry. Proposal: classify offers on a lift% × funded% quadrant and pre-compute nightly; until governance signs that off, this response ranks by AGP impact without quad labels."]),
-      FU(["Approve lift × funding as the quadrant rule so this report can be labeled?"])
+      H(`${q23.length} of last ad week's promotions landed in Quad 2 or Quad 3 — the correction set — costing ${fmt.k(q23.reduce((s, o) => s + o.agp, 0))} of AGP combined. Ranked worst-first below.`),
+      TB("Quad 2–4 promotions — last ad week (Q2: Sales+/Profit− · Q3: Sales−/Profit− · Q4: Sales−/Profit+)",
+        ["Offer", "Tactic", "Quad", "Incr Sales", "Incr AGP $", "Funded %"],
+        offers.map((o) => [o.nm, o.tactic, "Quad " + o.quad, fmt.sk(o.sales), fmt.sk(o.agp), fmt.pct(o.funded, 0)])),
+      BU([
+        "Quad 2 events bought sales with unfunded depth — renegotiate funding or shallow the depth before repeating.",
+        "Quad 3 events lost on both axes — do not repeat as constructed; the tactic or timing is wrong, not just the funding.",
+        "Quad 4 events are profitable but shrinking volume — acceptable only on margin-repair items, watch share."
+      ]),
+      NOTE("Quadrants are signed on incremental sales and incremental AGP vs baseline — the baseline model dependency is flagged in lineage; recommend pre-computing quad per offer nightly."),
+      FU(["Which Quad 2 offers become Quad 1 at the vendor's LY funding rate?", "Do any Quad 3 tactics run Quad 1 in other divisions (execution vs tactic problem)?"])
     ];
   };
 

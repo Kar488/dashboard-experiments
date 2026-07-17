@@ -71,9 +71,9 @@ window.ChatData = (() => {
     fundingJoin: { sev: "med", text: "Vendor funding at offer grain needs line7_nopa ⋈ allowance_promo_map (Offer_No ↔ NOPA_ID ↔ PROMOTION_ID). Join keys exist but referential completeness is unverified — some offers will not map to a NOPA." },
     holidayAttrib: { sev: "low", text: "Holiday flags exist in fiscal/promo calendars, but there is no causal attribution of lift to holiday vs tactic. Recommendation language should hedge on seasonality." },
     desk: { sev: "high", text: "\"Desk\" is not a schema entity. Closest proxy is ASM (item_hierarchy.ASM). Contract substitutes ASM and flags the substitution to the merchant." },
-    quad: { sev: "high", text: "Quad (1–4) promo classification does not exist in any table or registry. Needs a defined rule (e.g., lift × funding quadrant) plus a derived column before this can be answered." },
-    slu: { sev: "high", text: "SLU build sheets / component-level cost build do not exist in the schema. Requires a manufacturing-cost or item-build source not yet onboarded." },
-    arrival: { sev: "high", text: "Shipment arrival dates and PO-level off-invoice linkage are not in scope. master_bill_out_gross has SHIPPED_QTY only — no WHS/DSD arrival-date or PO table is onboarded." },
+    quad: { sev: "med", text: "Quad labels are derivable (Sales Δ × Profit Δ quadrant: Q1 +/+, Q2 +/−, Q3 −/−, Q4 −/+) but not stored — signing each offer's quadrant needs incremental sales and incremental AGP vs baseline, so the baseline model is the dependency. Recommend pre-computing quad per offer nightly." },
+    slu: { sev: "med", text: "The SLU (Store-Level Unit) build sheet — the store execution document with display construction and pricing — is not onboarded (merch execution system source). The component half IS answerable: item-group member UPCs with retail and cost by division come from item_hierarchy + sales_cost_allowances." },
+    arrival: { sev: "high", text: "Arrival dates live on PO (purchase order) receiving records; the WHS/DSD PO/receiving tables are not onboarded. master_bill_out_gross carries shipped quantity only — no arrival date, and no PO-level linkage to which units carried an off-invoice allowance." },
     scanEst: { sev: "med", text: "Historical scans/Copients actuals exist (line7_nopa, master_promo_redemption), but planned/estimated values from AIM are not onboarded — actual-vs-estimate needs the AIM feed." },
     slotCycle: { sev: "med", text: "Slotting cycles are inferred from line7_nopa Final_Allowance_Type = slotting/new-item plus allowance windows — there is no explicit slotting-cycle calendar table." },
     cigWeekly: { sev: "low", text: "CIG-level weekly results require sales_cost_allowances ⋈ item_hierarchy on UPC + division, then GROUP BY COMMON_ITEM_GROUP_CD. Registry has no CIG-grain pre-aggregate, so expect heavier query cost." },
@@ -534,29 +534,45 @@ window.ChatData = (() => {
     },
 
     build_sheet: {
-      name: "SLU build sheet",
-      style: "gap",
-      intent: "Component-level cost build for an SLU, vs 2YA, across divisions.",
-      lineage: [],
-      derived: [],
-      recipe: ["Not answerable from current scope; contract returns explicit gap + the nearest answerable neighbor (item-level VLC/COGS/deadnet history by division)."],
+      name: "SLU build sheet (store execution doc)",
+      style: "report",
+      intent: "The store execution document for a promotional display / item group: component items and pricing, vs 2YA, across divisions. Component + pricing half is answerable; the construction-instruction document is the gap.",
+      lineage: [
+        { ...T.item, cols: ["COMMON_ITEM_GROUP_CD", "ITEM_DSC", "UPC_NBR"], why: "Display/item-group component expansion" },
+        { ...T.sca, cols: ["VENDOR_LIST_COST", "COST_OF_GOODS_AMT", "DEADNET_COST", "ITEM_QTY"], why: "Component costs, TY and 2YA" },
+        { ...T.price, cols: ["retail price windows"], why: "Component retails per division" }
+      ],
+      derived: [M.vlc, M.deadnet],
+      recipe: [
+        "Expand the SLU's item group to component UPCs per division.",
+        "Attach component retail and cost (VLC / deadnet), TY vs 2YA.",
+        "Repeat per division for the sister-banner comparison.",
+        "The execution-document fields (fixture, placement, signage) come from the merch execution source once onboarded."
+      ],
       gaps: [G.slu]
     },
 
     quad_review: {
       name: "Quad 2–4 promo review",
-      style: "gap",
-      intent: "Rank last ad week's Quad 2–4 promotions by negative AGP impact.",
+      style: "list",
+      intent: "Classify last ad week's promotions into performance quadrants (Sales Δ × Profit Δ) and rank the correction targets — Quad 2 (Sales +, Profit −) and Quad 3 (Sales −, Profit −) — by negative AGP impact.",
       lineage: [
-        { ...T.redeem, cols: ["PROMO_MARGIN", "ACTUAL_MARKDOWN"], why: "Per-offer margin impact (answerable half)" },
-        { ...T.ppromo, cols: ["PROMOTION_WEEK_NBR", "PRIMARY_PROMO_TACTIC_UPC"], why: "Last-ad-week offers" }
+        { ...T.redeem, cols: ["PROMO_MARGIN", "ACTUAL_MARKDOWN", "PROMO_NET_AMT"], why: "Per-offer sales and margin actuals" },
+        { ...T.ppromo, cols: ["PROMOTION_WEEK_NBR", "PRIMARY_PROMO_TACTIC_UPC"], why: "Last-ad-week offers + tactics" },
+        { ...T.sca, cols: ["NET_AMT", "AGP_AMT", "ITEM_QTY"], why: "Baseline weeks for incremental signing" },
+        { ...T.line7, cols: ["Line7_AMT", "Offer_No"], why: "Funding behind each offer" }
       ],
-      derived: [{ name: "Quad classification", formula: "UNDEFINED — needs a lift × funding (or margin × volume) quadrant rule", status: "gap" }],
+      derived: [
+        { name: "Quad classification", formula: "Q1: incr Sales + / incr AGP + · Q2: Sales + / AGP − · Q3: Sales − / AGP − · Q4: Sales − / AGP +", status: "computed" },
+        M.baseline, M.lift
+      ],
       recipe: [
-        "Rank last week's offers by AGP impact (answerable now).",
-        "Quad labels need a governance decision on the quadrant rule; propose lift% × funded% and pre-compute."
+        "Enumerate last ad week's offers with sales and AGP actuals.",
+        "Compute incremental sales and incremental AGP vs baseline for each offer.",
+        "Sign the quadrant: Q2 (Sales +, Profit −) and Q3 (Sales −, Profit −) are the correction set; Q4 (Sales −, Profit +) reviewed for volume risk.",
+        "Rank Quad 2–4 by most negative AGP $ impact — that is the do-not-repeat list."
       ],
-      gaps: [G.quad]
+      gaps: [G.quad, G.baseline]
     },
 
     dept_agg: {
@@ -926,7 +942,10 @@ window.ChatData = (() => {
     Copient: "Digital coupon platform (J4U) — an allowance/redemption type.",
     ACI: "Albertsons Companies Inc — 'Total ACI average' = enterprise benchmark.",
     MULO_PLUS: "Circana multi-outlet+ market universe used for share.",
-    KVI: "Known Value Item (item_hierarchy.ITEM_ROLE)."
+    KVI: "Known Value Item (item_hierarchy.ITEM_ROLE).",
+    Quad: "Promo performance quadrant on Sales Δ × Profit Δ: Q1 +/+, Q2 +/− (correct), Q3 −/− (correct), Q4 −/+ (watch volume).",
+    SLU: "Store-Level Unit — the store execution document for constructing and pricing a promotional display or item group.",
+    PO: "Purchase Order — arrival dates and off-invoice unit linkage live on PO receiving records (not yet onboarded)."
   };
 
   return { ARCHETYPES, QUESTIONS: Q, QUESTION_TEXT, POOLS, GLOSSARY };
