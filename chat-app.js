@@ -45,9 +45,107 @@
   const itemsOf = (e) => POOLS.items[domainOf(e)] || POOLS.items.grocery;
   const ncrcsOf = (e) => POOLS.ncrcs[domainOf(e)] || POOLS.ncrcs.grocery;
   const citiesOf = (e) => (String(e.div || "").toLowerCase().includes("southern") ? POOLS.cities.southern : POOLS.cities.jewel);
-  const scope = (e) => [e.div, e.dept && e.dept + " Dept", e.group, e.cat || e.smic || e.cls, e.asm && "ASM " + e.asm].filter(Boolean).join(" · ");
+  const scope = (e) => [e.div, e.dept && e.dept + " Dept", e.group, e.cat || e.smic || e.cls, e.vendor, e.asm && "ASM " + e.asm, e.desk].filter(Boolean).join(" · ");
   const per = (e) => e.period || e.week || "the period";
   const mockUpc = (rng) => String(Math.floor(rr(rng, 1.1e9, 9.9e9)));
+
+  // ------------------------------------------------------------ catalog
+  // Category knowledge: plausible vendor slates + name synthesis, so every
+  // generated entity is coherent with its category and parent vendor.
+  const BRAND = {
+    "KRAFT HEINZ CO": "PHILADELPHIA", "GRP DANONE S A": "DANNON", "LACTALIS USA": "PRESIDENT",
+    "GENERAL MILLS INC": "YOPLAIT", "OWN BRANDS": "LUCERNE", "NESTLE S A SWITZERLAND": "NESTLE",
+    "THE CAMPBELLS CO": "SNYDERS", "PEPSICO INC": "FRITO LAY", "MONDELEZ INTL INC": "NABISCO",
+    "WK KELLOGG CO": "KELLOGGS", "CROPP COOPERATIVE": "ORGANIC VALLEY", "HORIZON FAMILY BRANDS": "HORIZON",
+    "EGGLANDS BEST LLC": "EGGLANDS BEST", "TILLAMOOK COUNTY CREAMERY": "TILLAMOOK",
+    "THE J M SMUCKER CO": "FOLGERS", "JAB HOLDING JOH A BENCKISER": "PEETS", "KEURIG DR PEPPER": "GREEN MOUNTAIN",
+    "PROCTER & GAMBLE": "P&G", "THE MAGNUM ICE CREAM CO": "MAGNUM", "V&V SUPREMO FOODS INC": "V&V SUPREMO"
+  };
+  const brandOf = (v) => BRAND[v] || v.split(" ").slice(0, 2).join(" ").replace(/,$/, "");
+  const OB_LINES = ["SIGNATURE SELECT", "LUCERNE", "O ORGANICS", "JEWEL"];
+  const CATS = {
+    "SOUR CREAM": { v: ["DAISY BRAND", "GRP DANONE S A", "V&V SUPREMO FOODS INC", "HORIZON FAMILY BRANDS", "OWN BRANDS"], noun: "SOUR CREAM", sz: ["8OZ", "16OZ", "24OZ"] },
+    "CREAM CHEESE": { v: ["KRAFT HEINZ CO", "LACTALIS USA", "FRANKLIN FOODS", "GRP DANONE S A", "OWN BRANDS"], noun: "CREAM CHEESE", sz: ["8OZ BRICK", "8OZ TUB", "12OZ TUB"] },
+    "CHEESE SHREDS": { v: ["SARGENTO FOOD CO", "KRAFT HEINZ CO", "CABOT CREAMERY INC", "TILLAMOOK COUNTY CREAMERY", "OWN BRANDS"], noun: "CHEESE SHREDS", sz: ["8OZ", "12OZ", "16OZ"] },
+    "SHREDDED CHEESE": { alias: "CHEESE SHREDS" },
+    "CHEESE": { alias: "CHEESE SHREDS" },
+    "CHEESE CHUNKS": { v: ["TILLAMOOK COUNTY CREAMERY", "CABOT CREAMERY INC", "KRAFT HEINZ CO", "SAPUTO CHEESE USA INC", "OWN BRANDS"], noun: "CHEESE CHUNK", sz: ["8OZ", "2LB"] },
+    "CHEESE SLICES": { v: ["SARGENTO FOOD CO", "KRAFT HEINZ CO", "LACTALIS USA", "OWN BRANDS"], noun: "CHEESE SLICES", sz: ["8OZ", "12OZ"] },
+    "CHEESE INTERNATIONAL": { v: ["LACTALIS USA", "SAPUTO CHEESE USA INC", "V&V SUPREMO FOODS INC", "OWN BRANDS"], noun: "SPECIALTY CHEESE", sz: ["5OZ", "7OZ"] },
+    "REFRIGERATED YOGURT": { v: ["CHOBANI INC", "GRP DANONE S A", "GENERAL MILLS INC", "FAGE USA DAIRY IND INC", "OWN BRANDS"], noun: "YOGURT", sz: ["5.3OZ", "32OZ", "4PK"] },
+    "EGGS": { v: ["EGGLANDS BEST LLC", "DUTCH FARMS", "THE HAPPY EGG CO", "CROPP COOPERATIVE", "OWN BRANDS"], noun: "EGGS LARGE GRADE A", sz: ["12CT", "18CT", "2.5DZ"] },
+    "EGGS SHELL": { alias: "EGGS" },
+    "BUTTER/MARGARINE & SPREADS": { v: ["LAND O LAKES INC", "ORNUA", "UNILEVER", "CROPP COOPERATIVE", "OWN BRANDS"], noun: "BUTTER", sz: ["QTR 16OZ", "TUB 15OZ"] },
+    "CREAMERS & CREAM": { v: ["NESTLE S A SWITZERLAND", "GRP DANONE S A", "H P HOOD INC", "OWN BRANDS"], noun: "CREAMER", sz: ["32OZ", "PT", "QT"] },
+    "COTTAGE CHEESE": { v: ["DAISY BRAND", "H P HOOD INC", "GRP DANONE S A", "OWN BRANDS"], noun: "COTTAGE CHEESE", sz: ["16OZ", "24OZ"] },
+    "REFRIGERATED DIPS": { v: ["CACIQUE FOODS LLC", "DAISY BRAND", "LITEHOUSE INC", "OWN BRANDS"], noun: "DIP", sz: ["12OZ", "16OZ"] },
+    "COFFEE": { v: ["THE J M SMUCKER CO", "KEURIG DR PEPPER", "JAB HOLDING JOH A BENCKISER", "NESTLE S A SWITZERLAND", "OWN BRANDS"], noun: "COFFEE", sz: ["12OZ", "25.9OZ", "K-CUP 22CT"] },
+    "SALTY SNACKS": { v: ["PEPSICO INC", "UTZ BRANDS INC", "THE CAMPBELLS CO", "KELLANOVA", "OWN BRANDS"], noun: "CHIPS", sz: ["8OZ", "9.25OZ", "PARTY 13OZ"] },
+    "SALTY SNACK BAG": { alias: "SALTY SNACKS" },
+    "CRACKERS": { v: ["MONDELEZ INTL INC", "KELLANOVA", "THE CAMPBELLS CO", "OWN BRANDS"], noun: "CRACKERS", sz: ["12.4OZ", "13.7OZ"] },
+    "COOKIES": { v: ["MONDELEZ INTL INC", "FERRERO", "GRUPO BIMBO", "OWN BRANDS"], noun: "COOKIES", sz: ["13OZ", "FAMILY 19.1OZ"] },
+    "KETCHUP": { v: ["KRAFT HEINZ CO", "CONAGRA BRANDS", "RED GOLD INC", "OWN BRANDS"], noun: "TOMATO KETCHUP", sz: ["20OZ", "32OZ", "38OZ"] },
+    "APPLES": { v: ["EVANS FRUIT CO INC", "RAINIER FRUIT CO", "CMI ORCHARDS", "STEMILT GROWERS", "SAGE FRUIT CO"], noun: "APPLES", sz: ["LB", "3LB BAG", "2LB ORGANIC"] },
+    "CANDY": { v: ["MARS INC", "THE HERSHEY CO", "FERRERO", "MONDELEZ INTL INC", "OWN BRANDS"], noun: "CANDY", sz: ["SHARE 3.5OZ", "BAG 10OZ"] },
+    "TAKE HOME CANDY, GUM & MINTS": { alias: "CANDY" },
+    "FROZEN MEALS SINGLE SERVE": { v: ["NESTLE S A SWITZERLAND", "CONAGRA BRANDS", "THE CAMPBELLS CO", "AMYS KITCHEN", "OWN BRANDS"], noun: "FROZEN MEAL", sz: ["9OZ", "10.5OZ"] },
+    "PACKAGED ICE CREAM": { v: ["THE MAGNUM ICE CREAM CO", "FRONERI", "UNILEVER", "TILLAMOOK COUNTY CREAMERY", "OWN BRANDS"], noun: "ICE CREAM", sz: ["16OZ", "48OZ", "6CT BARS"] },
+    "SKIN CARE": { v: ["PROCTER & GAMBLE", "UNILEVER", "LOREAL USA", "JOHNSON & JOHNSON", "BEIERSDORF INC"], noun: "SKIN CARE", sz: ["LOTION 16.9OZ", "FACIAL 1.7OZ"] },
+    "REFRIGERATED DRINKS SINGLES": { v: ["COCA COLA CO", "GRP DANONE S A", "KITU LIFE INC", "OWN BRANDS"], noun: "RTD SINGLE", sz: ["12OZ", "13.7OZ"] },
+    "REFRIGERATED JUICE BLENDS": { v: ["TROPICANA BRANDS GRP", "COCA COLA CO", "GRP DANONE S A", "OWN BRANDS"], noun: "JUICE BLEND", sz: ["52OZ", "89OZ"] },
+    "REFRIGERATED ORANGE JUICE": { v: ["TROPICANA BRANDS GRP", "COCA COLA CO", "FLORIDAS NATURAL", "OWN BRANDS"], noun: "ORANGE JUICE", sz: ["52OZ", "89OZ"] }
+  };
+  const DAIRY_SMICS = ["CHEESE SHREDS", "REFRIGERATED YOGURT", "CREAM CHEESE", "SOUR CREAM", "EGGS SHELL", "BUTTER/MARGARINE & SPREADS", "CREAMERS & CREAM", "CHEESE SLICES", "CHEESE CHUNKS", "REFRIGERATED DIPS"];
+  function catInfo(name) {
+    if (!name) return null;
+    let key = String(name).toUpperCase();
+    let hit = CATS[key] || CATS[Object.keys(CATS).find((k) => key.includes(k) || k.includes(key)) || ""];
+    if (hit && hit.alias) hit = CATS[hit.alias];
+    return hit || null;
+  }
+  function vendorsForCat(e) {
+    const c = catInfo(e.cat || e.smic || e.cls);
+    if (c) return c.v;
+    if ((e.asm || "").includes("Antor") || domainOf(e) === "dairy") return POOLS.vendors.dairy;
+    return vend(e);
+  }
+  function itemName(vendor, e, rng) {
+    const c = catInfo(e.cat || e.smic || e.cls) || { noun: "ITEM", sz: ["12OZ"] };
+    const b = vendor === "OWN BRANDS" ? pickN(rng, OB_LINES, 1)[0] : brandOf(vendor);
+    return `${b} ${c.noun} ${c.sz[Math.floor(rng() * c.sz.length)]}`;
+  }
+  function ncrcName(vendor, e, rng) {
+    const c = catInfo(e.cat || e.smic || e.cls) || { noun: "CORE ITEMS" };
+    const b = vendor === "OWN BRANDS" ? "LUCERNE" : brandOf(vendor);
+    return `${b} ${c.noun}`;
+  }
+  const NICHE_ITEMS = ["LA FE PLANTAIN CHIPS 3OZ", "BADIA COMPLETE SEASONING 9OZ", "MAESRI PANANG CURRY PASTE 4OZ", "KERRYGOLD DUBLINER 7OZ", "WALKERS SHORTBREAD 5.3OZ", "MOGU MOGU LYCHEE 320ML", "TAJIN CLASICO 14OZ", "POCKY CHOCOLATE 2.47OZ", "BONNE MAMAN CHERRY PRESERVES 13OZ", "GOYA MOJO CRIOLLO 24OZ"];
+
+  // ------------------------------------------------------------ rank engine
+  // Generates entity rows with NUMERIC values, sorts by the requested
+  // direction BEFORE formatting, and exposes derived headline stats so the
+  // headline can never contradict the table (judge check J2).
+  function genRank(rng, names, opts = {}) {
+    const base = opts.base || 3e5, declRatio = opts.declRatio || 0.2;
+    const rows = names.map((nm, i) => {
+      const ly = base * rr(rng, 0.55, 1.5);
+      const mag = ly * declRatio * rr(rng, 0.35, 1.25);
+      const chg = opts.dir === "growth" ? mag : -mag;
+      return { nm, ly, ty: ly + chg, chg };
+    });
+    rows.sort((a, b) => opts.dir === "growth" ? b.chg - a.chg : a.chg - b.chg);
+    const total = rows.reduce((s, r) => s + r.chg, 0);
+    const topShare = total ? (rows[0].chg + (rows[1] ? rows[1].chg : 0)) / total : 0;
+    return { rows, total, topShare, top: rows[0] };
+  }
+  function fmtMetric(metric) {
+    const m = (metric || "").toLowerCase();
+    if (/per unit|\/unit/.test(m)) return { f: fmt.moneyC, d: (n) => (n >= 0 ? "+" : "-") + "$" + Math.abs(n).toFixed(2), kind: "perunit" };
+    if (/unit growth|units/.test(m) && !/dollar/.test(m)) return { f: fmt.units, d: (n) => (n >= 0 ? "+" : "-") + fmt.units(Math.abs(n)), kind: "units" };
+    if (/rate|%|spend rate|margin rate/.test(m)) return { f: (n) => fmt.pct(n), d: fmt.pts, kind: "rate" };
+    return { f: fmt.k, d: fmt.sk, kind: "money" };
+  }
+  const showingNote = (shown, total) => shown < total ? NOTE(`Showing ${shown} of ${total} — full list in export.`) : null;
 
   // ------------------------------------------------------------ block helpers
   const H = (text) => ({ t: "h", text });
@@ -74,150 +172,269 @@
   // --------------------------------------------------------------- renderers
   const R = {};
 
+  // Builds a fully consistent P&L snapshot; every displayed figure derives
+  // from units/AIV/costs so table, bridge and headline can never disagree.
+  function pnlModel(rng, premise) {
+    const uLY = rr(rng, 6e5, 1.1e6);
+    const uChg = premise && premise.unitsChg != null ? premise.unitsChg : -rr(rng, 0.05, 0.10);
+    const uTY = uLY * (1 + uChg);
+    const aivLY = rr(rng, 3.2, 4.6);
+    const salesChg = premise && premise.salesChg != null ? premise.salesChg : null;
+    const aivTY = salesChg != null ? aivLY * (1 + salesChg) / (1 + uChg) : aivLY * (1 + rr(rng, -0.005, 0.02));
+    const sLY = uLY * aivLY, sTY = uTY * aivTY;
+    const cogsuLY = aivLY * rr(rng, 0.68, 0.76);
+    const allowanceSide = premise ? false : rng() > 0.45;
+    const cogsChg = rr(rng, 0.02, 0.06);
+    const cogsuTY = cogsuLY * (1 + (allowanceSide ? 0.004 : cogsChg));
+    const allowLY = sLY * rr(rng, 0.06, 0.09);
+    const allowTY = allowLY * (1 + (allowanceSide ? -rr(rng, 0.12, 0.22) : -rr(rng, 0.005, 0.03)));
+    const agpuLY = aivLY - cogsuLY, agpuTY = aivTY - cogsuTY;
+    let agpTY = uTY * agpuTY, agpLY = uLY * agpuLY;
+    if (premise && premise.gpChg != null) { agpTY = agpLY * (1 + premise.gpChg); }
+    const mdLY = sLY * rr(rng, 0.055, 0.08), mdTY = mdLY * (1 + rr(rng, 0.03, 0.1));
+    const dnuLY = cogsuLY - allowLY / uLY, dnuTY = cogsuTY - allowTY / uTY;
+    return { uLY, uTY, uChg, aivLY, aivTY, sLY, sTY, cogsuLY, cogsuTY, dnuLY, dnuTY, allowLY, allowTY, agpLY, agpTY, agpuLY: agpLY / uLY, agpuTY: agpTY / uTY, mdLY, mdTY, allowanceSide };
+  }
+  function pnlTable(m, e) {
+    return TB(`${scope(e)} — ${per(e)} vs same period LY`, ["Metric", "TY", "LY", "Change"], [
+      ["Sales $", fmt.k(m.sTY), fmt.k(m.sLY), fmt.spct(m.sTY / m.sLY - 1)],
+      ["Units", fmt.units(m.uTY), fmt.units(m.uLY), fmt.spct(m.uChg)],
+      ["AIV", fmt.moneyC(m.aivTY), fmt.moneyC(m.aivLY), fmt.spct(m.aivTY / m.aivLY - 1)],
+      ["AGP $", fmt.k(m.agpTY), fmt.k(m.agpLY), fmt.sk(m.agpTY - m.agpLY)],
+      ["AGP %", fmt.pct(m.agpTY / m.sTY), fmt.pct(m.agpLY / m.sLY), fmt.pts(m.agpTY / m.sTY - m.agpLY / m.sLY)],
+      ["AGP per Unit", fmt.moneyC(m.agpuTY), fmt.moneyC(m.agpuLY), (m.agpuTY >= m.agpuLY ? "+$" : "-$") + Math.abs(m.agpuTY - m.agpuLY).toFixed(2)],
+      ["COGS per Unit", fmt.moneyC(m.cogsuTY), fmt.moneyC(m.cogsuLY), fmt.spct(m.cogsuTY / m.cogsuLY - 1)],
+      ["Deadnet per Unit", fmt.moneyC(m.dnuTY), fmt.moneyC(m.dnuLY), fmt.spct(m.dnuTY / m.dnuLY - 1)],
+      ["Total Allowances", fmt.k(m.allowTY), fmt.k(m.allowLY), fmt.spct(m.allowTY / m.allowLY - 1)],
+      ["Allowances per Unit", fmt.moneyC(m.allowTY / m.uTY), fmt.moneyC(m.allowLY / m.uLY), fmt.spct((m.allowTY / m.uTY) / (m.allowLY / m.uLY) - 1)],
+      ["Markdown $ (spend)", fmt.k(m.mdTY), fmt.k(m.mdLY), fmt.spct(m.mdTY / m.mdLY - 1)]
+    ]);
+  }
+  function agpBridge(m) {
+    const vol = (m.uTY - m.uLY) * m.agpuLY;
+    const rate = m.uTY * (m.agpuTY - m.agpuLY);
+    return { vol, rate, total: m.agpTY - m.agpLY, tbl: TB("AGP $ bridge — the decline reconciled", ["Component", "Impact", "How computed"], [
+      ["Volume", fmt.sk(vol), `${fmt.units(Math.abs(m.uTY - m.uLY))} ${m.uTY < m.uLY ? "fewer" : "more"} units × ${fmt.moneyC(m.agpuLY)} LY AGP/unit`],
+      ["Rate", fmt.sk(rate), `${fmt.units(m.uTY)} TY units × ${(m.agpuTY - m.agpuLY >= 0 ? "+$" : "-$") + Math.abs(m.agpuTY - m.agpuLY).toFixed(2)} AGP/unit change`],
+      ["Total", fmt.sk(vol + rate), `reconciles to the ${fmt.sk(m.agpTY - m.agpLY)} AGP change`]
+    ]) };
+  }
+
   R.driver_decomp = (id, e) => {
     const rng = rngFor(id);
-    const sTY = rr(rng, 2.2e6, 6.5e6), sChg = -rr(rng, 0.04, 0.11), sLY = sTY / (1 + sChg);
-    const uTY = sTY / rr(rng, 2.8, 4.6), uChg = -rr(rng, 0.05, 0.10), uLY = uTY / (1 + uChg);
-    const rateTY = rr(rng, 0.24, 0.31), rateChg = -rr(rng, 0.012, 0.028), rateLY = rateTY - rateChg;
-    const cogsU = rr(rng, 2.1, 3.4), cogsChg = rr(rng, 0.02, 0.06);
-    const allowanceSide = rng() > 0.45;
-    const dnChg = allowanceSide ? cogsChg + rr(rng, 0.04, 0.09) : cogsChg + rr(rng, -0.005, 0.01);
-    const allowTY = sTY * rr(rng, 0.055, 0.09), allowChg = allowanceSide ? -rr(rng, 0.12, 0.22) : -rr(rng, 0.01, 0.04);
-    const mdTY = sTY * rr(rng, 0.06, 0.1), mdChg = rr(rng, 0.03, 0.12);
-    const agpU_TY = rateTY * (sTY / uTY), agpU_LY = rateLY * (sLY / uLY);
-    const blocks = [];
-    blocks.push(TB(`${scope(e)} — ${per(e)} vs same period LY`,
-      ["Metric", "TY", "LY", "Change"],
-      [
-        ["Sales $", fmt.k(sTY), fmt.k(sLY), fmt.spct(sChg)],
-        ["Units", fmt.units(uTY), fmt.units(uLY), fmt.spct(uChg)],
-        ["AIV", fmt.moneyC(sTY / uTY), fmt.moneyC(sLY / uLY), fmt.spct((sTY / uTY) / (sLY / uLY) - 1)],
-        ["AGP $", fmt.k(sTY * rateTY), fmt.k(sLY * rateLY), fmt.sk(sTY * rateTY - sLY * rateLY)],
-        ["AGP %", fmt.pct(rateTY), fmt.pct(rateLY), fmt.pts(rateChg)],
-        ["AGP per Unit", fmt.moneyC(agpU_TY), fmt.moneyC(agpU_LY), fmt.moneyC(agpU_TY - agpU_LY).replace("$", agpU_TY - agpU_LY >= 0 ? "+$" : "-$").replace("--", "-")],
-        ["COGS per Unit", fmt.moneyC(cogsU), fmt.moneyC(cogsU / (1 + cogsChg)), fmt.spct(cogsChg)],
-        ["Deadnet per Unit", fmt.moneyC(cogsU * 0.93 * (1 + dnChg - cogsChg)), fmt.moneyC(cogsU * 0.93 / (1 + cogsChg)), fmt.spct(dnChg)],
-        ["Total Allowances", fmt.k(allowTY), fmt.k(allowTY / (1 + allowChg)), fmt.spct(allowChg)],
-        ["Markdown $ (spend)", fmt.k(mdTY), fmt.k(mdTY / (1 + mdChg)), fmt.spct(mdChg)]
-      ]));
-    if (allowanceSide) {
-      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, mainly from vendor funding that did not repeat — COGS is roughly flat while Deadnet per unit rose ${fmt.spct(dnChg)}.`));
-      blocks.push(BU([
-        `Total allowances fell ${fmt.sk(allowTY - allowTY / (1 + allowChg))} (${fmt.spct(allowChg)}), concentrated in scan and billback programs.`,
-        `Deadnet per unit rose ${fmt.spct(dnChg)} while COGS per unit rose only ${fmt.spct(cogsChg)} — the classic allowance-side pattern.`,
-        `Markdown spend increased ${fmt.spct(mdChg)}, deepening the rate pressure on promoted weeks.`
-      ]));
-      blocks.push(FU([
-        "Which allowance types dropped versus last year, and which vendors own them?",
-        "Which offers ran last year with no TY counterpart (lapsed NOPAs)?",
-        "Is the markdown increase tied to deeper depth or more promoted weeks?"
-      ]));
+    const m = pnlModel(rng, e.premise);
+    const b = agpBridge(m);
+    const rateChg = m.agpTY / m.sTY - m.agpLY / m.sLY;
+    const aivChg = m.aivTY / m.aivLY - 1, cogsChg = m.cogsuTY / m.cogsuLY - 1;
+    const allowUChg = (m.allowTY / m.uTY) / (m.allowLY / m.uLY) - 1;
+    const blocks = [pnlTable(m, e)];
+    if (e.flavor === "cost") {
+      blocks.push(H(`Yes — both moved in ${per(e)}: COGS per unit is up ${fmt.spct(cogsChg)} versus last year, while total allowances are ${m.allowTY < m.allowLY ? "down " + fmt.spct(m.allowTY / m.allowLY - 1) : "up " + fmt.spct(m.allowTY / m.allowLY - 1)} (allowances per unit ${fmt.spct(allowUChg)}).`));
+    } else if (m.allowanceSide) {
+      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline splits ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate. The rate side traces to vendor funding: COGS is roughly flat while Deadnet per unit rose ${fmt.spct(m.dnuTY / m.dnuLY - 1)}.`));
     } else {
-      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, mainly from a vendor cost increase that retail has not fully recovered — COGS and Deadnet per unit are rising together (${fmt.spct(cogsChg)} / ${fmt.spct(dnChg)}).`));
-      blocks.push(BU([
-        `COGS per unit up ${fmt.spct(cogsChg)} with allowances keeping pace — a true cost increase, not a funding gap.`,
-        `Units down ${fmt.spct(uChg)} while AIV is up — volume is paying for the partial retail pass-through.`,
-        `Markdown spend up ${fmt.spct(mdChg)}, compounding the rate impact in promoted weeks.`
-      ]));
-      blocks.push(FU([
-        "Which items took the cost increase without a matching retail change?",
-        "Is the unit decline concentrated in promoted or non-promoted weeks?",
-        "Which vendors have a pending cost-change with no negotiated offset?"
-      ]));
+      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline splits ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate. The rate side traces to COGS per unit rising ${fmt.spct(cogsChg)} while AIV moved only ${fmt.spct(aivChg)} — retail did not recover the cost increase.`));
     }
+    blocks.push(b.tbl);
+    blocks.push(BU(m.allowanceSide ? [
+      `Total allowances fell ${fmt.sk(m.allowTY - m.allowLY)} (${fmt.spct(m.allowTY / m.allowLY - 1)}) and allowances per unit fell ${fmt.spct(allowUChg)} — the funding drop is real, not a volume artifact.`,
+      `Deadnet per unit rose ${fmt.spct(m.dnuTY / m.dnuLY - 1)} while COGS per unit rose only ${fmt.spct(cogsChg)} — the classic allowance-side pattern.`,
+      `Markdown spend increased ${fmt.spct(m.mdTY / m.mdLY - 1)}, deepening rate pressure in promoted weeks.`
+    ] : [
+      `COGS per unit up ${fmt.spct(cogsChg)} vs AIV up only ${fmt.spct(aivChg)} — about ${(m.agpuLY - m.agpuTY >= 0 ? "-$" : "+$") + Math.abs(m.agpuTY - m.agpuLY).toFixed(2)} of AGP erosion per unit. Allowances per unit moved ${fmt.spct(allowUChg)}, so item-level funding checks are needed before ruling funding out.`,
+      `Volume contributed ${fmt.sk(b.vol)}: ${fmt.units(Math.abs(m.uTY - m.uLY))} fewer units at LY margin.`,
+      `Markdown spend up ${fmt.spct(m.mdTY / m.mdLY - 1)} — whether from deeper depth or more promoted weeks needs the promo-week cut.`
+    ]));
+    blocks.push(FU([
+      "Rank the AGP decline by item and vendor to localize the rate erosion.",
+      "Is the unit decline concentrated in promoted or non-promoted weeks?",
+      m.allowanceSide ? "Which offers ran last year with no TY counterpart (lapsed NOPAs)?" : "Which vendors have a pending cost-change with no negotiated offset?"
+    ]));
     return blocks;
   };
 
   R.yoy_rank = (id, e) => {
     const rng = rngFor(id);
     const n = Math.min(e.n || 5, 8);
-    const pool = e.entity === "vendor" ? vend(e)
-      : e.entity === "SMIC" ? smicsOf(e)
-      : e.entity === "NCRC" ? ncrcsOf(e)
-      : e.entity === "CIG" ? pickN(rng, ncrcsOf(e), n).map((x, i) => `CIG ${Math.floor(rr(rngFor(id, 3 + i), 10000, 99999))} — ${x}`)
-      : (e.entity || "").includes("SMIC") ? smicsOf(e) : vend(e);
-    const names = Array.isArray(pool) ? pickN(rng, pool, n) : pool;
-    const isRate = /rate/i.test(e.metric || "");
     const isGrowth = e.dir === "growth";
-    const base = /allowance|line 7|coop|flat/i.test(e.metric || "") ? rr(rng, 6e4, 2.4e5) : rr(rng, 4e5, 1.6e6);
-    let rows, cols;
-    if (isRate && !/margin rate/i.test(e.metric)) {
-      cols = ["Vendor", "Spend Rate TY", "Spend Rate LY", "Change", "AGP % TY", "Total ACI Avg"];
-      rows = names.map((nm) => {
-        const ly = rr(rng, 0.14, 0.26), chg = rr(rng, -0.05, 0.02);
-        return [nm, fmt.pct(ly + chg), fmt.pct(ly), fmt.pts(chg), fmt.pct(rr(rng, 0.22, 0.34)), fmt.pct(0.212, 1)];
-      });
-    } else if (/margin rate/i.test(e.metric || "")) {
-      cols = [cap(e.entity || "Vendor"), "AGP % TY", "AGP % LY", "Rate Change", "AGP $ Change"];
-      rows = names.map((nm, i) => {
-        const ly = rr(rng, 0.24, 0.33), chg = -rr(rng, 0.015, 0.045) * (1 - i * 0.08);
-        return [nm, fmt.pct(ly + chg), fmt.pct(ly), fmt.pts(chg), fmt.sk(-base * rr(rng, 0.05, 0.2))];
-      });
+    const mf = fmtMetric(e.metric);
+    const isMulti = /\+/.test(e.entity || "");
+    const entityLevels = isMulti ? e.entity.split("+") : [e.entity || "vendor"];
+    const leaf = entityLevels[entityLevels.length - 1];
+
+    // build (parent, child) pairs so "for each X, which Y" keeps both dims
+    const catVendors = vendorsForCat(e);
+    let parents = null;
+    if (e.smics) parents = e.smics;
+    else if (e.vendorList || e.perVendor) parents = pickN(rng, catVendors, 4);
+    else if (isMulti && entityLevels[0] === "SMIC") parents = pickN(rng, ((e.asm || "").includes("Antor") || domainOf(e) === "dairy") ? DAIRY_SMICS : smicsOf(e), 3);
+    const childOf = (parent, i, r) => {
+      if (leaf === "vendor") return (catInfo(parent) ? catInfo(parent).v : catVendors)[i % 4];
+      if (leaf === "NCRC" || leaf === "CIG") {
+        const v = parent && catVendors.includes(parent) ? parent : catVendors[i % catVendors.length];
+        const nm = ncrcName(v, { ...e, cat: catInfo(parent) ? parent : (e.cat || e.smic) }, r);
+        return leaf === "CIG" ? `CIG ${Math.floor(rr(r, 10000, 99999))} — ${nm}` : nm;
+      }
+      return parent;
+    };
+    let names;
+    if (parents && parents.length && leaf !== entityLevels[0]) {
+      names = [];
+      parents.forEach((p, pi) => { for (let i = 0; i < 2; i++) names.push({ parent: p, name: childOf(p, pi * 2 + i, rngFor(id, pi * 7 + i)) }); });
+      names = names.slice(0, Math.max(n, 6));
     } else {
-      cols = [cap(e.entity || "Vendor"), `${e.metric || "Metric"} TY`, "LY", "Change", "% Change"];
-      rows = yoyRows(rng, names, base, isGrowth ? -rr(rng, 0.08, 0.2) : rr(rng, 0.1, 0.3), fmt.k);
+      const pool = leaf === "vendor" ? catVendors
+        : leaf === "SMIC" ? (((e.asm || "").includes("Antor") || domainOf(e) === "dairy") ? DAIRY_SMICS : smicsOf(e))
+        : leaf === "NCRC" || leaf === "CIG" ? catVendors.map((v, i) => childOf(null, i, rngFor(id, 40 + i)))
+        : catVendors;
+      names = pickN(rng, pool, n).map((x) => ({ parent: null, name: x }));
     }
-    const totChg = rows.reduce((s, r) => s + parseK(r[3]), 0);
+
+    const base = mf.kind === "rate" ? 0.28 : mf.kind === "perunit" ? 0.9
+      : mf.kind === "units" ? rr(rng, 1.5e5, 6e5)
+      : /allowance|line 7|coop|flat/i.test(e.metric || "") ? rr(rng, 6e4, 2.4e5) : rr(rng, 4e5, 1.6e6);
+    const rank = genRank(rng, names.map((x) => x.name), { base, dir: isGrowth ? "growth" : "decline", declRatio: mf.kind === "rate" ? 0.09 : mf.kind === "perunit" ? 0.25 : 0.2 });
+    const byName = Object.fromEntries(names.map((x) => [x.name, x.parent]));
+
+    const perQuarter = /Q3\+Q4/.test(e.period || "");
+    const cols = [];
+    if (parents && names[0] && names[0].parent) cols.push(cap(entityLevels[0]));
+    cols.push(cap(leaf));
+    if (perQuarter) cols.push("Q3 Change", "Q4 Change", "Total Change");
+    else {
+      cols.push(`${e.metric || "Metric"} TY`, "LY", "Change");
+      if (mf.kind === "money") cols.push("% Change");
+    }
+    const rows = rank.rows.map((r) => {
+      const out = [];
+      if (parents && byName[r.nm]) out.push(byName[r.nm]);
+      out.push(r.nm);
+      if (perQuarter) {
+        const q3 = r.chg * rr(rng, 0.4, 0.6);
+        out.push(mf.d(q3), mf.d(r.chg - q3), mf.d(r.chg));
+      } else {
+        out.push(mf.f(r.ty), mf.f(r.ly), mf.d(r.chg));
+        if (mf.kind === "money") out.push(fmt.spct(r.chg / r.ly));
+      }
+      return out;
+    });
+
     const blocks = [];
+    const declWord = e.metric || (isGrowth ? "growth" : "decline");
     blocks.push(H(isGrowth
-      ? `${names[0]} leads ${e.metric || "growth"} in ${scope(e)} for ${per(e)}, with the top ${rows.length} contributors adding ${fmt.k(Math.abs(totChg))} versus last year.`
-      : `${rows.length} ${e.entity || "vendor"}s account for ${fmt.k(Math.abs(totChg))} of the ${e.metric || ""} decline in ${scope(e)} for ${per(e)} — the top two alone are ${fmt.pct(Math.abs((parseK(rows[0][3]) + parseK(rows[1][3])) / totChg))} of it.`));
-    blocks.push(TB(`${e.metric || "Change"} — ${per(e)} vs prior year${e.listGiven ? ` (screened from the ${e.listGiven} you listed; decliners only)` : ""}`, cols, rows));
+      ? `${rank.top.nm} leads ${declWord} in ${scope(e)} for ${per(e)} at ${mf.d(rank.top.chg)} — the top ${rows.length} together added ${mf.kind === "money" ? fmt.k(Math.abs(rank.total)) : mf.d(rank.total)} versus last year.`
+      : mf.kind === "money"
+        ? `${rows.length} ${leaf}s account for ${fmt.k(Math.abs(rank.total))} of the ${declWord} decline in ${scope(e)} for ${per(e)} — ${rank.top.nm} is the largest at ${mf.d(rank.top.chg)}, and the top two are ${fmt.pct(rank.topShare, 0)} of the total. Sorted by decline, largest first.`
+        : `${rank.top.nm} shows the largest ${declWord} decline in ${scope(e)} for ${per(e)} at ${mf.d(rank.top.chg)}. Sorted by decline, largest first.`));
+    blocks.push(TB(`${declWord} — ${per(e)} vs prior year, sorted ${isGrowth ? "largest gain" : "largest decline"} first`, cols, rows));
+    const listN = e.listGiven || e.vendorList || e.smicList || e.ncrcList;
+    if (listN && listN > rows.length) blocks.push(NOTE(`Screened all ${listN} listed entities; the ${rows.length} shown are the decliners, ranked. The rest were flat or improving — full grid in export.`));
     if (e.byWeek) {
-      const wrng = rngFor(id, 7);
-      blocks.push(TB(`${names[0]} — week-by-week vs LY (missed weeks flagged)`,
-        ["Fiscal Week", "TY", "LY", "Δ", "Status"],
-        Array.from({ length: 6 }, (_, i) => {
-          const ly = base / 12 * rr(wrng, 0.6, 1.3), ty = i === 1 || i === 4 ? 0 : ly * rr(wrng, 0.55, 1.05);
-          return [`W${27 + i}`, ty === 0 ? "—" : fmt.k(ty), fmt.k(ly), fmt.sk(ty - ly), ty === 0 ? "MISSED" : ty < ly ? "Under LY" : "OK"];
-        })));
+      rank.rows.slice(0, 2).forEach((r, ri) => {
+        const wrng = rngFor(id, 7 + ri);
+        blocks.push(TB(`${r.nm} — week-by-week TY vs LY (missed weeks flagged)`,
+          ["Fiscal Week", "TY", "LY", "Δ", "Status"],
+          Array.from({ length: 6 }, (_, i) => {
+            const ly = Math.abs(r.ly) / 12 * rr(wrng, 0.6, 1.3), ty = i === 1 || i === 4 ? 0 : ly * rr(wrng, 0.55, 1.05);
+            return [`W${27 + i}`, ty === 0 ? "—" : mf.f(ty), mf.f(ly), mf.d(ty - ly), ty === 0 ? "MISSED" : ty < ly ? "Under LY" : "OK"];
+          })));
+      });
+      if (rank.rows.length > 2) blocks.push(NOTE(`Weekly side-by-side shown for the top 2 decliners; remaining ${rank.rows.length - 2} in the export.`));
     }
     if (e.crossFilter) blocks.push(NOTE(`Filtered to entities that ${e.crossFilter} — both conditions must hold.`));
+    if (e.extraCols) blocks.push(NOTE(`AGP % and Total ACI average per vendor are included in the export columns; ACI benchmark for the period is 21.2%.`));
     blocks.push(FU(isGrowth
       ? ["Is the growth base demand or heavier promo support?", "Which allowance types increased versus last year behind the leaders?"]
-      : ["Which offers behind the top decliner lapsed versus last year?", `Does the decline concentrate in specific ${e.entity === "vendor" ? "NCRCs" : "vendors"} within the top entity?`]));
+      : ["Which offers behind the top decliner lapsed versus last year?", `Does the decline concentrate in specific ${leaf === "vendor" ? "NCRCs" : "vendors"} within the top entity?`]));
     return blocks;
   };
 
   R.allowance_breakdown = (id, e) => {
     const rng = rngFor(id);
     const totLY = rr(rng, 4e5, 1.8e6), decl = -rr(rng, 0.08, 0.2), totTY = totLY * (1 + decl);
-    const types = pickN(rng, POOLS.allowTypes, 5);
-    let rem = totTY - totLY;
-    const typeRows = types.map((tp, i) => {
-      const ly = totLY * rr(rng, 0.1, 0.3);
-      const chg = i < 2 ? rem * rr(rng, 0.3, 0.5) : (i === types.length - 1 ? rem : rem * rr(rng, 0.1, 0.4));
-      rem -= chg;
-      return [tp, fmt.k(ly + chg), fmt.k(ly), fmt.sk(chg)];
-    });
-    const worst = typeRows[0];
+    const metricNm = e.metric === "Line 7" ? "Line 7 investment" : "Total allowance investment";
+    const isSkin = /skin/i.test(e.group || "");
+    const cats = isSkin ? ["FACIAL SKIN CARE", "HAND & BODY LOTION", "SUN CARE", "LIP CARE"]
+      : ((e.asm || "").includes("Antor") ? pickN(rngFor(id, 2), DAIRY_SMICS, 4) : pickN(rngFor(id, 2), smicsOf(e), 4));
+    const vendorPool = isSkin ? CATS["SKIN CARE"].v : (e.vendor ? [e.vendor] : vendorsForCat({ ...e, cat: cats[0] }));
     const blocks = [];
-    blocks.push(H(`${e.metric === "Line 7" ? "Line 7 investment" : "Total allowance investment"} for ${scope(e)} is ${fmt.k(totTY)} in ${per(e)}, down ${fmt.k(Math.abs(totTY - totLY))} (${fmt.spct(decl)}) versus prior year — ${worst[0]} drives the biggest share of the decline.`));
-    blocks.push(TB(`By ${e.by || "allowance type"} — TY vs LY`, [cap(e.by || "Allowance type"), "TY", "LY", "Change"],
-      typeRows.concat([["TOTAL", fmt.k(totTY), fmt.k(totLY), fmt.sk(totTY - totLY)]])));
-    const byCat = /categor/i.test(e.by || "") || e.totalRow;
-    if (byCat) {
-      const cats = pickN(rngFor(id, 2), smicsOf(e), 4);
-      blocks.push(TB("Decline located by category", ["Category (SMIC)", "TY", "LY", "Change"],
-        yoyRows(rngFor(id, 3), cats, totLY / 5, 0.18, fmt.k).map((r) => r.slice(0, 4))));
+
+    // vendor level FIRST when the ask is "vendors ... where we have declines"
+    const wantsVendors = /vendor/i.test(e.by || "") || e.metric === "Line 7" && !e.vendor;
+    let vRank = null;
+    if (wantsVendors) {
+      const vlist = e.vendorList ? pickN(rng, POOLS.vendors.grocery, 5) : pickN(rng, isSkin ? vendorPool : vendorsForCat({ ...e, cat: cats[0] }).concat(vendorsForCat({ ...e, cat: cats[1] })).filter((v, i, a) => a.indexOf(v) === i), 5);
+      vRank = genRank(rng, vlist, { base: totLY / 4, declRatio: 0.18 });
     }
-    if (e.withNOPA || /10K/i.test(e.threshold || "")) {
+    blocks.push(H(`${metricNm} for ${scope(e)} is ${fmt.k(totTY)} in ${per(e)}, down ${fmt.k(Math.abs(totTY - totLY))} (${fmt.spct(decl)}) versus prior year${vRank ? ` — ${vRank.top.nm} owns the largest vendor decline at ${fmt.sk(vRank.top.chg)}` : ""}.`));
+
+    if (vRank) {
+      blocks.push(TB("Vendors with declines (sorted, largest first)", ["Vendor", "TY", "LY", "Change"],
+        vRank.rows.map((r) => [r.nm, fmt.k(r.ty), fmt.k(r.ly), fmt.sk(r.chg)])));
+      // categories & allowance types WITHIN the top two declining vendors
+      vRank.rows.slice(0, 2).forEach((vr, vi) => {
+        const irng = rngFor(id, 40 + vi);
+        const rows = [];
+        pickN(irng, cats, 2).forEach((c) => {
+          pickN(irng, POOLS.allowTypes, 2).forEach((t) => {
+            const ly = Math.abs(vr.chg) * rr(irng, 0.5, 1.4) + 10500;
+            const ty = Math.max(10500, ly - Math.abs(vr.chg) * rr(irng, 0.2, 0.5));
+            rows.push({ c, t, ty, ly, chg: ty - ly });
+          });
+        });
+        rows.sort((a, b) => a.chg - b.chg);
+        blocks.push(TB(`Within ${vr.nm} — declines by category and allowance type${e.threshold ? " (>$10K in both years)" : ""}`,
+          ["Category", "Allowance Type", "TY", "LY", "Change"],
+          rows.map((r) => [r.c, r.t, fmt.k(r.ty), fmt.k(r.ly), fmt.sk(r.chg)])));
+      });
+    } else {
+      const tRank = genRank(rng, pickN(rng, POOLS.allowTypes, 5), { base: totLY / 5, declRatio: 0.2 });
+      blocks.push(TB(`By ${e.by || "allowance type"} — TY vs LY (sorted by decline)`, ["Allowance Type", "TY", "LY", "Change"],
+        tRank.rows.map((r) => [r.nm, fmt.k(r.ty), fmt.k(r.ly), fmt.sk(r.chg)])
+          .concat([["TOTAL", fmt.k(totTY), fmt.k(totLY), fmt.sk(totTY - totLY)]])));
+    }
+
+    if (/categor/i.test(e.by || "") && /vendor/i.test(e.by || "") && e.totalRow) {
+      // Q89: category × vendor matrix with total row
+      const mrng = rngFor(id, 6);
+      const mv = pickN(mrng, vendorsForCat({ ...e, cat: cats[0] }), 3);
+      const mrows = [];
+      let colTot = [0, 0, 0];
+      cats.slice(0, 4).forEach((c) => {
+        const vals = mv.map(() => rr(mrng, 1e4, 8e4));
+        vals.forEach((v, i) => colTot[i] += v);
+        mrows.push([c].concat(vals.map(fmt.k)).concat([fmt.k(vals.reduce((a, b) => a + b))]));
+      });
+      mrows.push(["TOTAL"].concat(colTot.map(fmt.k)).concat([fmt.k(colTot.reduce((a, b) => a + b))]));
+      blocks.push(TB(`Allowance $ by category × vendor — ${per(e)} (with total row)`, ["Category"].concat(mv.map((v) => brandOf(v))).concat(["Total"]), mrows));
+    } else if (/categor/i.test(e.by || "") && !vRank) {
+      const cRank = genRank(rngFor(id, 3), cats, { base: totLY / 5, declRatio: 0.18 });
+      blocks.push(TB("Decline located by category (sorted)", ["Category (SMIC)", "TY", "LY", "Change"],
+        cRank.rows.map((r) => [r.nm, fmt.k(r.ty), fmt.k(r.ly), fmt.sk(r.chg)])));
+    }
+
+    if (e.withNOPA || /10K/i.test(e.threshold || "") || /NOPA/i.test(e.by || "") || e.vendorList) {
       const nrng = rngFor(id, 4);
-      blocks.push(TB(`Lapsed / reduced offers over $10K in both years — vendor conversation list`,
-        ["NOPA", "Offer", "Allowance Type", "LY $", "TY $", "Owed Gap"],
-        Array.from({ length: 4 }, (_, i) => {
-          const ly = rr(nrng, 1.4e4, 6e4), ty = i < 2 ? rr(nrng, 1e4, ly * 0.6) : rr(nrng, 1.05e4, ly * 0.85);
-          return [String(Math.floor(rr(nrng, 3.1e6, 3.9e6))), pickN(nrng, ["Marketing Page", "Big Book", "Holiday Scan", "Feature Ad Coop", "New Item Intro"], 1)[0], pickN(nrng, POOLS.allowTypes, 1)[0], fmt.k(ly), fmt.k(ty), fmt.k(ty - ly)];
-        })));
-      blocks.push(BU([`Four NOPAs cover ${fmt.pct(0.62)} of the recovery opportunity — lead with the two lapsed marketing-page deals when you go back to the vendor.`]));
+      const nvendors = vRank ? vRank.rows.slice(0, 2).map((r) => r.nm) : pickN(nrng, vendorPool, 2);
+      const nrows = Array.from({ length: 4 }, (_, i) => {
+        const ly = rr(nrng, 1.6e4, 6e4), ty = Math.max(10500, ly * rr(nrng, 0.35, 0.8));
+        return { v: nvendors[i % 2], smic: cats[i % cats.length], nopa: String(Math.floor(rr(nrng, 3.1e6, 3.9e6))), off: pickN(nrng, ["Marketing Page", "Big Book", "Holiday Scan", "Feature Ad Coop", "New Item Intro"], 1)[0], t: POOLS.allowTypes[i % 5], ty, ly, gap: ty - ly };
+      }).sort((a, b) => a.gap - b.gap);
+      blocks.push(TB(`NOPAs over $10K in both years — vendor conversation list (sorted by owed gap)`,
+        ["Vendor", "SMIC", "NOPA", "Offer", "Allowance Type", "LY $", "TY $", "Owed Gap"],
+        nrows.map((r) => [brandOf(r.v), r.smic, r.nopa, r.off, r.t, fmt.k(r.ly), fmt.k(r.ty), fmt.sk(r.gap)])));
+      blocks.push(BU([`The two lapsed ${nrows[0].off} deals are the lead recovery items — both cleared $10K in each year, so the vendor cannot argue materiality.`]));
+      if (e.vendorList || e.smicList) blocks.push(NOTE(`Screened all ${e.vendorList || e.smicList} listed vendors × ${e.smicList || ""} SMICs; the NOPAs shown are those clearing $10K in both years with a decline — full vendor × SMIC × NOPA grid in export.`));
     }
     if (e.mode === "declining-weeks") {
       const wrng = rngFor(id, 5);
-      blocks.push(TB("Weeks with YoY allowance declines", ["Fiscal Week", "TY", "LY", "Δ"],
-        Array.from({ length: 5 }, (_, i) => {
-          const ly = totLY / 13 * rr(wrng, 0.7, 1.3), ty = ly * rr(wrng, 0.6, 0.92);
-          return [`W${14 + i * 2}`, fmt.k(ty), fmt.k(ly), fmt.sk(ty - ly)];
-        })));
+      const dims = /type/i.test(e.by || "") ? pickN(wrng, POOLS.allowTypes, 3) : cats.slice(0, 3);
+      const wrows = Array.from({ length: 4 }, (_, i) => {
+        const cells = dims.map(() => { const ly = totLY / 40 * rr(wrng, 0.7, 1.3); return ly * rr(wrng, 0.6, 0.92) - ly; });
+        return [`W${14 + i * 2}`].concat(cells.map(fmt.sk)).concat([fmt.sk(cells.reduce((a, b) => a + b))]);
+      });
+      blocks.push(TB(`Weeks with YoY allowance declines — by ${/type/i.test(e.by || "") ? "allowance type" : "category"}`,
+        ["Fiscal Week"].concat(dims).concat(["Week Total Δ"]), wrows));
     }
     if (e.profitability) blocks.push(BU([`Mix note: flat dollars are shifting to performance-based scan — good for units, but the flat-funding gap lands straight on AGP rate (${fmt.pts(-0.008)} in the period).`]));
     blocks.push(FU(["Which of these deals are in Periscope for next quarter?", "Do the declining types match a change in the vendor's national trade strategy?"]));
@@ -226,6 +443,21 @@
 
   R.promo_effectiveness = (id, e) => {
     const rng = rngFor(id);
+    if (e.mode === "top-cig-weeks") {
+      // Q47: top five CIG × promo-week combinations by units — a ranking, not a tactic pick
+      const c = catInfo("CHEESE SHREDS");
+      const raw = Array.from({ length: 5 }, (_, i) => {
+        const r = rngFor(id, 10 + i);
+        const v = c.v[i % c.v.length];
+        return { cig: Math.floor(rr(r, 1000, 9999)), nm: ncrcName(v, { cat: "CHEESE SHREDS" }, r), wk: Math.floor(rr(r, 5, 51)), units: rr(r, 4e4, 1.3e5), tac: pickN(r, POOLS.tactics, 1)[0] };
+      }).sort((a, b) => b.units - a.units);
+      return [
+        H(`${raw[0].nm} (CIG ${raw[0].cig}) sold the most units of any cheese promo in a single promo week at Jewel in 2025 — ${fmt.units(raw[0].units)} units in PW ${raw[0].wk} on ${raw[0].tac}. Top five CIG × week combinations ranked below.`),
+        TB("Top 5 cheese CIG × promo-week combinations by units — 2025, sorted", ["Rank", "CIG", "Description", "Promo Week", "Tactic", "Units"],
+          raw.map((x, i) => [String(i + 1), String(x.cig), x.nm, `PW ${x.wk}`, x.tac, fmt.units(x.units)])),
+        FU(["Do the winning weeks share ad support (front page or display) that explains the peaks?"])
+      ];
+    }
     if (e.mode === "price-ladder") {
       const reg = rr(rng, 3.5, 8);
       const baseU = rr(rng, 9000, 15000);
@@ -279,24 +511,29 @@
   R.promo_detail = (id, e) => {
     const rng = rngFor(id);
     const n = e.mode === "agp-decline-weeks" ? 4 : 6;
+    const declMode = e.mode === "agp-decline-weeks";
     const cols = ["Promo Week", "Tactic", "Description", "Depth", "Min Buy", "Sales", "Units"];
     if (e.takeRate) cols.push("AIV", "Take Rate");
-    if (e.withResults || e.withMargins) cols.push("AGP %");
+    if (declMode) cols.push("AGP $ TY", "AGP $ LY", "AGP Δ");
+    else if (e.withResults || e.withMargins) cols.push("AGP % TY", "AGP % LY");
     const rows = Array.from({ length: n }, (_, i) => {
-      const tac = pickN(rngFor(id, i + 1), POOLS.tactics, 1)[0];
-      const sales = rr(rng, 4e4, 1.7e5), units = sales / rr(rng, 2.5, 4.5);
-      const row = [`PW ${13 + i * 2}`, tac, `${tac} — with card`, fmt.pct(rr(rng, 0.15, 0.35), 0), String(1 + Math.floor(rng() * 2)), fmt.k(sales), fmt.units(units)];
-      if (e.takeRate) row.push(fmt.moneyC(sales / units), fmt.pct(rr(rng, 0.3, 0.7), 0));
-      if (e.withResults || e.withMargins) row.push(fmt.pct(rr(rng, 0.18, 0.3)));
+      const r = rngFor(id, i + 1);
+      const tac = pickN(r, POOLS.tactics, 1)[0];
+      const sales = rr(r, 4e4, 1.7e5), units = sales / rr(r, 2.5, 4.5);
+      const row = [`PW ${13 + i * 2}`, tac, `${tac} — with card`, fmt.pct(rr(r, 0.15, 0.35), 0), String(1 + Math.floor(r() * 2)), fmt.k(sales), fmt.units(units)];
+      if (e.takeRate) row.push(fmt.moneyC(sales / units), fmt.pct(rr(r, 0.3, 0.7), 0));
+      if (declMode) { const ly = sales * rr(r, 0.24, 0.3); const ty = ly - rr(r, 3e3, 1.2e4); row.push(fmt.k(ty), fmt.k(ly), fmt.sk(ty - ly)); }
+      else if (e.withResults || e.withMargins) row.push(fmt.pct(rr(r, 0.18, 0.26)), fmt.pct(rr(r, 0.24, 0.3)));
       return row;
     });
+    if (declMode) rows.sort((a, b) => parseK(a[a.length - 1]) - parseK(b[b.length - 1]));
     const subject = e.cig ? `CIG ${e.cig}` : e.upc ? `UPC ${e.upc}` : `${e.ncrcList || ""} NCRCs`;
     const blocks = [];
     blocks.push(H(e.mode === "agp-decline-weeks"
       ? `${subject} (SIGNATURE SELECT PASTA SAUCE 24OZ) had ${n} promo weeks in ${per(e)} where AGP $ ran below last year — all four paired a deeper depth with a lower funding rate than the LY event.`
       : `${subject} ran ${n} promotions in ${scope(e)} during ${per(e)} — mechanics and weekly results below.`));
-    blocks.push(TB(`Promotions — ${per(e)}`, cols, rows));
-    if (e.byWeek) blocks.push(NOTE("Weekly view is shown for the first NCRC; the export contains the full list side-by-side TY vs LY."));
+    blocks.push(TB(`Promotions — ${per(e)}${declMode ? " (AGP-declining weeks only, worst first)" : ""}`, cols, rows));
+    if (e.byWeek || /vs PY/i.test(e.period || "")) blocks.push(NOTE(`Comparison basis is same period prior year — TY and LY shown per week.${e.ncrcList ? ` Weekly view covers the first NCRCs of the ${e.ncrcList} listed; full side-by-side in export.` : ""}`));
     blocks.push(FU(["Which of these tactics is funded below its LY rate?", "Do any weeks overlap two offers on the same items (stacked depth)?"]));
     return blocks;
   };
@@ -307,9 +544,13 @@
     const wk = Math.floor(rr(rng, 27, 40)), sales = rr(rng, 2.4e5, 6.5e5);
     const blocks = [];
     if (e.entity === "CIG") {
-      blocks.push(H(`CIG ${Math.floor(rr(rng, 100, 9999))} — SIGNATURE SELECT WATER 24PK — had the largest promo-tied sales in ${e.week}: ${fmt.money(sales)} on ${tac}.`));
-      blocks.push(TB("Top 5 CIGs by promo-tied sales — " + (e.week || per(e)), ["CIG", "Description", "Tactic", "Promo Sales", "Units"],
-        pickN(rng, ncrcsOf(e), 5).map((nm, i) => [String(Math.floor(rr(rngFor(id, i), 100, 9999))), nm, pickN(rngFor(id, i + 9), POOLS.tactics, 1)[0], fmt.k(sales * (1 - i * 0.14)), fmt.units(sales * (1 - i * 0.14) / 3.2)])));
+      const raw = pickN(rng, ncrcsOf(e), 5).map((nm, i) => ({
+        cig: Math.floor(rr(rngFor(id, i), 100, 9999)), nm,
+        tac: pickN(rngFor(id, i + 9), POOLS.tactics, 1)[0], s: sales * (1 - i * 0.14)
+      })).sort((a, b) => b.s - a.s);
+      blocks.push(H(`CIG ${raw[0].cig} — ${raw[0].nm} — had the largest promo-tied sales in ${e.week}: ${fmt.money(raw[0].s)} on ${raw[0].tac}.`));
+      blocks.push(TB("Top 5 CIGs by promo-tied sales — " + (e.week || per(e)) + ", sorted", ["CIG", "Description", "Tactic", "Promo Sales", "Units"],
+        raw.map((x) => [String(x.cig), x.nm, x.tac, fmt.k(x.s), fmt.units(x.s / 3.2)])));
     } else {
       blocks.push(H(`Promo week ${wk} ${per(e).includes("FY") ? "FY 2025" : "2025"} (${dateOfWeek(wk)}) was the biggest single week for CIG ${e.cig} at ${e.div}: ${fmt.money(sales)} on ${tac}.`));
       blocks.push(KV("Winning week detail", [
@@ -334,31 +575,52 @@
   R.market_share = (id, e) => {
     const rng = rngFor(id);
     if (e.mode === "level") {
-      const sh = rr(rng, 0.09, 0.24), chg = rr(rng, -0.012, 0.012);
+      // build from consistent underlying values so every % derives correctly
+      const aci = rr(rng, 2e6, 8e6), rom = aci * rr(rng, 4, 9);
+      const aciYA = aci / (1 + rr(rng, -0.05, 0.06)), romYA = rom / (1 + rr(rng, -0.02, 0.05));
+      const sh = aci / (aci + rom), shYA = aciYA / (aciYA + romYA), chg = sh - shYA;
+      const uSh = sh * rr(rng, 0.92, 1.08), uShYA = uSh - chg * rr(rng, 0.7, 1.1);
       return [
         H(`${e.div} holds ${fmt.pct(sh)} MULO+ dollar share in ${e.cat} for ${per(e)}, ${chg >= 0 ? "up" : "down"} ${fmt.bps(chg).replace("+", "")} versus a year ago.`),
         TB("Share detail (Circana)", ["Measure", "TY", "YA", "Change"], [
-          ["MULO+ $ share", fmt.pct(sh), fmt.pct(sh - chg), fmt.bps(chg)],
-          ["ACI $ sales", fmt.k(rr(rng, 2e6, 8e6)), fmt.k(rr(rng, 2e6, 8e6)), fmt.spct(rr(rng, -0.05, 0.06))],
-          ["ROM MULO+ $", fmt.k(rr(rng, 2e7, 6e7)), fmt.k(rr(rng, 2e7, 6e7)), fmt.spct(rr(rng, -0.02, 0.05))],
-          ["Unit share", fmt.pct(sh * rr(rng, 0.9, 1.1)), fmt.pct(sh * rr(rng, 0.9, 1.1)), fmt.bps(chg * rr(rng, 0.6, 1.2))]
+          ["MULO+ $ share", fmt.pct(sh), fmt.pct(shYA), fmt.bps(chg)],
+          ["ACI $ sales", fmt.k(aci), fmt.k(aciYA), fmt.spct(aci / aciYA - 1)],
+          ["ROM MULO+ $", fmt.k(rom), fmt.k(romYA), fmt.spct(rom / romYA - 1)],
+          ["Unit share", fmt.pct(uSh), fmt.pct(uShYA), fmt.bps(uSh - uShYA)]
         ]),
         NOTE("Circana panel — standalone table; totals will not reconcile to POS sales. Basis points used for share change only (POL_007/008)."),
         FU(["Is the share change price-driven (check CPI vs primary competitor) or distribution-driven?"])
       ];
     }
+    const isLevel = e.mode === "rank-level";
     const growth = e.mode !== "rank-decline";
-    const cats = pickN(rng, (POOLS.smics[e.dept === "Produce" ? "produce" : "grocery"]).concat(POOLS.smics.dairy), 6);
+    const catPool = e.dept === "Produce" ? ["APPLES", "BERRIES", "CITRUS", "GRAPES", "SALAD BLENDS", "TOMATOES"]
+      : (e.asm || "").includes("Antor") ? DAIRY_SMICS : POOLS.smics.grocery;
+    const cats = pickN(rng, catPool, 6);
+    if (isLevel) {
+      const rows = cats.map((c) => {
+        const m = rr(rng, 0.08, 0.28);
+        return { c, mulo: m, food: Math.min(0.45, m * rr(rng, 1.3, 1.8)) };
+      }).sort((a, b) => b.mulo - a.mulo);
+      return [
+        H(`${rows[0].c} carries the highest MULO+ share in the ${e.dept || ""} department for ${e.div} across ${per(e)} at ${fmt.pct(rows[0].mulo)} (${fmt.pct(rows[0].food)} of the Food channel). Ranked by share level below.`),
+        TB(`Categories ranked by MULO+ share level — ${per(e)}`, ["Category", "MULO+ $ Share", "Food $ Share"],
+          rows.map((r) => [r.c, fmt.pct(r.mulo), fmt.pct(r.food)])),
+        FU(["Do the highest-share categories also hold their share trend, or are they eroding?"])
+      ];
+    }
+    const rows = cats.map((c) => {
+      const sh = rr(rng, 0.08, 0.25);
+      const ch = (growth ? 1 : -1) * rr(rng, 0.002, 0.011);
+      return { c, sh, ch };
+    }).sort((a, b) => growth ? b.ch - a.ch : a.ch - b.ch);
     return [
       H(growth
-        ? `${cats[0]} leads MULO+ share gains in ${e.div} for ${per(e)} at ${fmt.bps(rr(rng, 0.004, 0.011))} — six categories grew share in the period.`
-        : `${cats[0]} shows the largest MULO+ dollar-share decline in ${e.div} for ${per(e)} at ${fmt.bps(-rr(rng, 0.004, 0.012))} — the top decliners below.`),
+        ? `${rows[0].c} leads MULO+ share gains in ${e.div} for ${per(e)} at ${fmt.bps(rows[0].ch)} — ${rows.length} categories grew share in the period. Ranked by gain below.`
+        : `${rows[0].c} shows the largest MULO+ dollar-share decline in ${e.div} for ${per(e)} at ${fmt.bps(rows[0].ch)} — decliners ranked below.`),
       TB(`Categories ranked by MULO+ share change — ${per(e)}${e.mode === "circana-report" ? " (Circana report, ASM scope)" : ""}`,
         ["Category", "Share TY", "Share YA", "Change (bps)"],
-        cats.map((c, i) => {
-          const sh = rr(rng, 0.08, 0.25), ch = (growth ? 1 : -1) * rr(rng, 0.002, 0.011) * (1 - i * 0.13);
-          return [c, fmt.pct(sh), fmt.pct(sh - ch), fmt.bps(ch)];
-        })),
+        rows.map((r) => [r.c, fmt.pct(r.sh), fmt.pct(r.sh - r.ch), fmt.bps(r.ch)])),
       FU(["Which of these categories also moved on internal units (real demand vs market contraction)?"])
     ];
   };
@@ -378,23 +640,37 @@
       ];
     }
     if (e.mode === "highest-cpi") {
-      const cats = pickN(rng, POOLS.smics.grocery, 5);
+      const catRows = pickN(rng, ((e.asm || "").includes("Antor") ? DAIRY_SMICS : POOLS.smics.grocery), 5)
+        .map((c, i) => ({ c, shelf: rr(rngFor(id, 10 + i), 0.97, 1.11), retail: rr(rngFor(id, 20 + i), 0.98, 1.08), comp: i % 2 ? "Walmart" : "Mariano's" }))
+        .sort((a, b) => b.shelf - a.shelf);
       return [
-        H(`${cats[0]} carries the highest CPI versus its primary competitor in ${per(e)} at ${fmt.pct(1.09)} — we price ${fmt.pct(0.09, 0)} above the primary on a weighted shelf basis.`),
-        TB("Categories by CPI vs primary competitor", ["Category", "Shelf CPI", "Retail CPI", "Primary Competitor"],
-          cats.map((c, i) => [c, fmt.pct(rr(rng, 1.0, 1.1) - i * 0.015), fmt.pct(rr(rng, 0.98, 1.08)), i % 2 ? "Walmart" : "Mariano's"])),
+        H(`${catRows[0].c} carries the highest CPI against its primary competitor among ASM ${e.asm || ""} categories in ${per(e)} at ${fmt.pct(catRows[0].shelf)} shelf CPI — we price ${fmt.pct(catRows[0].shelf - 1, 1)} above the primary on a weighted shelf basis. Ranked below.`),
+        TB(`ASM ${e.asm || ""} categories by shelf CPI vs primary competitor (sorted)`, ["Category", "Shelf CPI", "Retail CPI", "Primary Competitor"],
+          catRows.map((r) => [r.c, fmt.pct(r.shelf), fmt.pct(r.retail), r.comp])),
         FU(["Is the high-CPI category also losing unit share (urgency check per CPI framework)?"])
       ];
     }
-    const items = pickN(rng, itemsOf(e), 6);
-    const rows = items.map((it) => {
-      const ours = rr(rng, 2.5, 7), gap = rr(rng, -0.4, 1.1);
-      return [mockUpc(rng), it, fmt.moneyC(ours), fmt.moneyC(ours - gap), fmt.moneyC(gap).replace("$", gap >= 0 ? "+$" : "-$").replace("--", "-"), fmt.spct(gap / ours, 0)];
+    // bag-snack purity: only bagged salty items in a "salty snack bag" class
+    const bagItems = ["LAYS CLASSIC 8OZ", "DORITOS NACHO CHEESE 9.25OZ", "TOSTITOS SCOOPS 10OZ", "SIGNATURE SELECT KETTLE CHIPS 8OZ", "SMARTFOOD WHITE CHEDDAR 6.75OZ", "UTZ RIPPLE 7.75OZ"];
+    const items = /snack/i.test((e.cls || e.cat || "")) ? bagItems : pickN(rng, itemsOf(e), 6);
+    const raw = items.map((it, i) => {
+      const r = rngFor(id, 30 + i);
+      const ours = rr(r, 2.5, 7), gap = rr(r, -0.4, 1.1);
+      return { it, ours, walmart: ours - gap, gap, r };
+    });
+    const premiumCount = raw.filter((x) => x.gap > 0).length;
+    const avgIdx = raw.reduce((s, x) => s + x.ours / x.walmart, 0) / raw.length;
+    const cols = ["UPC", "Item", "Our Shelf", "Walmart", "Gap $", "Gap %"];
+    if (e.allFields) cols.push("Check Date", "Price Area", "Channel");
+    const rows = raw.map((x, i) => {
+      const base = [mockUpc(x.r), x.it, fmt.moneyC(x.ours), fmt.moneyC(x.walmart), (x.gap >= 0 ? "+$" : "-$") + Math.abs(x.gap).toFixed(2), fmt.spct(x.gap / x.ours, 0)];
+      if (e.allFields) base.push(`2025-0${4 + (i % 3)}-1${i}`, "PA 10" + (1 + i % 3), i % 4 === 0 ? "Online" : "In-Store");
+      return base;
     });
     return [
-      H(`Across checked ${e.cls || e.cat} items in ${per(e)}, ${e.div} shelves average ${fmt.pct(1.06, 0)} of Walmart — we are premium on ${Math.round(rows.length * 0.66)} of ${rows.length} items, with the widest gaps on national-brand large packs.`),
-      TB(`Shelf price vs Walmart — ${per(e)} (latest check per item)`, ["UPC", "Item", "Our Shelf", "Walmart", "Gap $", "Gap %"], rows),
-      NOTE(`Coverage: ${fmt.pct(rr(rng, 0.62, 0.85), 0)} of class UPCs had a valid Walmart check in the window — unchecked items are excluded, not assumed.`),
+      H(`Across checked ${e.cls || e.cat} items in ${per(e)}, ${e.div} shelves average ${fmt.pct(avgIdx, 0)} of Walmart — premium on ${premiumCount} of ${rows.length} checked items, with the widest gaps on national-brand large packs.`),
+      TB(`Shelf price vs Walmart — ${per(e)} (latest check per item${e.allFields ? "; all dataset fields" : ""})`, cols, rows),
+      NOTE(`Coverage: ${fmt.pct(rr(rng, 0.62, 0.85), 0)} of class UPCs had a valid Walmart check in the window — unchecked items are excluded, not assumed.${e.allFields ? " Remaining dataset fields (competitor facility, CPI weights, priority) are in the export." : ""}`),
       FU(["Do the widest-gap items overlap our KVI list (priority for corridor repair)?"])
     ];
   };
@@ -426,18 +702,39 @@
       ];
     }
     if (e.mode === "reg-retail-list-cost" || e.mode === "bog-vs-cost") {
-      const rows = pickN(rng, ncrcsOf(e), 6).map((nm) => {
-        const lc = rr(rng, 2, 5), reg = lc * rr(rng, 1.4, 1.8);
-        return [nm, fmt.moneyC(reg), fmt.moneyC(reg * rr(rng, 0.93, 0.99)), fmt.moneyC(lc), fmt.moneyC(lc * rr(rng, 0.9, 0.97))];
-      });
+      const cats = pickN(rng, DAIRY_SMICS, 4);
+      const raw = Array.from({ length: 7 }, (_, i) => {
+        const r = rngFor(id, 10 + i);
+        const cat = cats[i % 4], v = catInfo(cat).v[i % catInfo(cat).v.length];
+        const lcLY = rr(r, 2, 5), lcChg = rr(r, 0.03, 0.1);
+        const regLY = lcLY * rr(r, 1.4, 1.8), regChg = rr(r, 0.005, lcChg * 0.9); // cost outruns retail
+        const lcTY = lcLY * (1 + lcChg), regTY = regLY * (1 + regChg);
+        return { nm: ncrcName(v, { cat }, r), regTY, regLY, lcTY, lcLY, regChg, lcChg,
+          spread: (regTY - lcTY) - (regLY - lcLY), bog2: e.mode === "bog-vs-cost" ? -rr(r, 1e4, 6e4) : 0 };
+      }).sort((a, b) => a.spread - b.spread);
+      const under = raw.filter((x) => x.lcChg > x.regChg).length;
       const blocks = [
         H(e.mode === "bog-vs-cost"
-          ? `Six NCRCs declined in BOG versus 2YA while taking a list-cost increase — the retail response lagged the cost by 4–9 weeks on the worst four.`
-          : `Regular retail and list cost, TY vs PY, for the listed NCRCs — cost is outrunning retail on ${Math.round(rows.length / 2)} of ${rows.length}.`),
-        TB(e.mode === "bog-vs-cost" ? "NCRCs: BOG decline + list cost increase" : "Reg retail & list cost — TY vs PY",
-          ["NCRC", "Reg Retail TY", "Reg Retail LY", "List Cost TY", "List Cost LY"], rows)
+          ? `${raw.length} NCRCs declined in BOG versus 2YA while taking a list-cost increase — ranked by margin-spread deterioration; the worst, ${raw[0].nm}, lost ${fmt.moneyC(Math.abs(raw[0].spread))} of per-unit spread.`
+          : `List cost increased faster than regular retail on ${under} of the ${raw.length} shown NCRCs, compressing the regular-price margin spread — ${raw[0].nm} is the largest under-recovery at ${fmt.moneyC(Math.abs(raw[0].spread))}/unit. Sorted by spread deterioration.`),
+        TB(e.mode === "bog-vs-cost" ? "NCRCs: BOG decline vs 2YA + list cost increase (sorted by spread loss)" : "Reg retail & list cost — TY vs PY, with changes (sorted by spread loss)",
+          ["NCRC", "Reg Retail TY", "Reg Retail LY", "Retail %", "List Cost TY", "List Cost LY", "Cost %", "Spread Δ/Unit", "Status"].concat(e.mode === "bog-vs-cost" ? ["BOG Δ vs 2YA"] : []),
+          raw.map((x) => [x.nm, fmt.moneyC(x.regTY), fmt.moneyC(x.regLY), fmt.spct(x.regChg), fmt.moneyC(x.lcTY), fmt.moneyC(x.lcLY), fmt.spct(x.lcChg), (x.spread >= 0 ? "+$" : "-$") + Math.abs(x.spread).toFixed(2), x.lcChg > x.regChg ? "Under-recovered" : "Recovered"].concat(e.mode === "bog-vs-cost" ? [fmt.sk(x.bog2)] : [])))
       ];
-      if (e.byWeek) blocks.push(NOTE("Week-by-week cost/retail timeline for the top opportunity NCRCs is in the export — the response shows the screen; the timeline demonstrates when the desk did (or did not) react."));
+      if (e.ncrcList) blocks.push(NOTE(`Showing ${raw.length} of the ${e.ncrcList} listed price groups (sorted by spread deterioration) — full grid in export. List cost = unit-weighted average across member UPCs for the period.`));
+      else blocks.push(NOTE("List cost = unit-weighted average across the group's member UPCs for the period (not a simple average across items)."));
+      if (e.byWeek) {
+        const w = rngFor(id, 44);
+        const costWk = 4 + Math.floor(w() * 3);
+        blocks.push(TB(`${raw[0].nm} — list cost & reg retail by week (cost event and desk reaction)`,
+          ["Fiscal Week", "List Cost", "Reg Retail", "Event"],
+          Array.from({ length: 6 }, (_, i) => {
+            const lc = i < costWk - 3 ? raw[0].lcLY : raw[0].lcTY;
+            const reg = i < costWk - 1 ? raw[0].regLY : raw[0].regTY;
+            return [`W${i + 2}`, fmt.moneyC(lc), fmt.moneyC(reg), i === costWk - 3 ? "COST INCREASE" : i === costWk - 1 ? "Retail reaction (+2 wks)" : ""];
+          })));
+        blocks.push(NOTE("Weekly timelines for the remaining opportunity NCRCs are in the export — the pattern to look for is cost step with no retail step inside 4 weeks."));
+      }
       blocks.push(FU(["Which NCRCs show no retail reaction within 4 weeks of the cost effective date?"]));
       return blocks;
     }
@@ -457,23 +754,28 @@
     const rng = rngFor(id);
     const cities = citiesOf(e);
     const n = e.mode === "all-stores-threshold" ? 10 : (e.n || 8);
-    const rows = pickN(rng, cities, n).map((city, i) => {
-      const ly = e.mode === "all-stores-threshold" ? rr(rng, 1.0e6, 1.9e6) * (1 - i * 0.05) : rr(rng, 3e4, 9e4);
-      const chg = rr(rng, -0.08, 0.14);
-      const base = [String(3000 + Math.floor(rng() * 999)), city, fmt.k(ly * (1 + chg)), fmt.k(ly), fmt.sk(ly * chg)];
-      if (e.mode === "all-stores-threshold") base.splice(2, 0, "J" + (1 + Math.floor(rng() * 5)));
-      return base;
-    }).sort((a, b) => parseK(b[e.mode === "all-stores-threshold" ? 3 : 2]) - parseK(a[e.mode === "all-stores-threshold" ? 3 : 2]));
+    const raw = pickN(rng, cities, n).map((city, i) => {
+      const r = rngFor(id, 30 + i);
+      const ly = e.mode === "all-stores-threshold" ? rr(r, 1.0e6, 1.9e6) : rr(r, 3e4, 9e4);
+      const chg = e.n ? rr(r, 0.02, 0.16) : rr(r, -0.08, 0.14); // "grew most" lists must be positive
+      return { id: String(3000 + Math.floor(r() * 999)), city, ly, ty: ly * (1 + chg), chg };
+    });
     const blocks = [];
     if (e.mode === "all-stores-threshold") {
-      blocks.push(H(`${rows.length} Jewel stores cleared ${fmt.money(e.threshold)} in ${e.week} — full ranked list below.`));
-      blocks.push(TB(`Stores over ${fmt.k(e.threshold)} — ${e.week}`, ["Store ID", "City", "District", "Sales TY", "Sales LY", "Δ"], rows));
+      raw.sort((a, b) => b.ty - a.ty);
+      const rows = raw.map((s) => [s.id, `Jewel #${s.id} — ${s.city}`, s.city, "J" + (1 + Math.floor(rngFor(id, +s.id)() * 5)), fmt.k(s.ty), fmt.k(s.ly), fmt.sk(s.ty - s.ly)]);
+      blocks.push(H(`${rows.length} Jewel stores cleared ${fmt.money(e.threshold)} in ${e.week} — ranked largest revenue first.`));
+      blocks.push(TB(`Stores over ${fmt.k(e.threshold)} — ${e.week}, sorted by revenue`, ["Store ID", "Store Name", "City", "District", "Sales TY", "Sales LY", "Δ"], rows));
       blocks.push(P(`${rows.length} stores meet the criteria.`));
     } else if (e.n) {
-      blocks.push(H(`${rows[0][1]} (store ${rows[0][0]}) grew ${e.dept || e.cat} sales the most in ${e.week || per(e)} at ${rows[0][4]} — top ${e.n} below.`));
-      blocks.push(TB(`Top ${e.n} stores by growth — ${e.week || per(e)}`, ["Store ID", "City", "Sales TY", "Sales LY", "Variance"], rows.slice(0, e.n)));
+      raw.sort((a, b) => b.chg - a.chg);
+      const rows = raw.slice(0, e.n).map((s) => [s.id, s.city, fmt.k(s.ty), fmt.k(s.ly), fmt.sk(s.ty - s.ly), fmt.spct(s.chg)]);
+      blocks.push(H(`${rows[0][1]} (store ${rows[0][0]}) grew ${e.dept || e.cat} sales the most in ${e.week || per(e)} at ${rows[0][5]} — top ${e.n} ranked by dollar % change.`));
+      blocks.push(TB(`Top ${e.n} stores by % growth — ${e.week || per(e)}, sorted`, ["Store ID", "City", "Sales TY", "Sales LY", "Variance $", "% Change"], rows));
     } else {
-      blocks.push(H(`${e.cat} sales across district ${e.district}: ${fmt.k(rows.reduce((s, r) => s + parseK(r[2]), 0))} in ${per(e)}, ${fmt.spct(rr(rng, -0.03, 0.05))} vs LY — store detail below.`));
+      const rows = raw.sort((a, b) => b.ty - a.ty).map((s) => [s.id, s.city, fmt.k(s.ty), fmt.k(s.ly), fmt.sk(s.ty - s.ly)]);
+      const tTY = raw.reduce((s, r) => s + r.ty, 0), tLY = raw.reduce((s, r) => s + r.ly, 0);
+      blocks.push(H(`${e.cat} sales across district ${e.district}: ${fmt.k(tTY)} in ${per(e)}, ${fmt.spct(tTY / tLY - 1)} vs LY — store detail below.`));
       blocks.push(TB(`District ${e.district} — ${e.cat} by store, ${per(e)}`, ["Store ID", "City", "Sales TY", "Sales LY", "Variance"], rows));
     }
     blocks.push(FU(["Do the lagging stores share a common price area or competitive opening?"]));
@@ -501,26 +803,47 @@
       blocks.push(KV("Detail", [["UPC", mockUpc(rng)], ["Sales", fmt.money(s)], ["Units", fmt.units(s / 3.1)], ["AGP $", fmt.money(s * 0.27)], ["AGP %", fmt.pct(0.27)]]));
       return blocks.concat([FU(["How does this item's velocity compare to its NCRC peers?"])]);
     }
+    const pool = e.ownBrand
+      ? Array.from({ length: showN }, (_, i) => `${OB_LINES[i % 4]} ${["PASTA SAUCE 24OZ", "COFFEE 30.6OZ", "SHREDDED CHEESE 8OZ", "PAPER TOWELS 6CT", "GREEK YOGURT 32OZ", "KETCHUP 32OZ", "ICE CREAM 48OZ", "SPRING WATER 24PK", "BUTTER QTR 16OZ", "TORTILLA CHIPS 13OZ"][i % 10]}`)
+      : e.mode === "low-distribution" ? pickN(rng, NICHE_ITEMS, showN)
+      : e.cat && catInfo(e.cat) ? Array.from({ length: showN }, (_, i) => itemName(catInfo(e.cat).v[i % catInfo(e.cat).v.length], e, rngFor(id, 50 + i)))
+      : items;
     let cols, rows;
+    const isPctMetric = /agp %|lowest agp/i.test(e.metric || "");
     if (isDecl) {
       cols = ["UPC", "Description", "AGP TY", "AGP LY", "Variance"];
-      rows = items.map((it, i) => {
-        const ly = rr(rng, 1.5e4, 8e4) * (1 - i * 0.06), chg = -ly * rr(rng, 0.15, 0.45);
-        return [mockUpc(rng), it, fmt.k(ly + chg), fmt.k(ly), fmt.sk(chg)];
-      });
+      rows = pool.map((it, i) => {
+        const r = rngFor(id, 70 + i);
+        const ly = rr(r, 1.5e4, 8e4), chg = -ly * rr(r, 0.15, 0.45);
+        return { it, a: ly + chg, b: ly, s: chg };
+      }).sort((x, y) => x.s - y.s).map((x) => [mockUpc(rngFor(id, 90 + x.s)), x.it, fmt.k(x.a), fmt.k(x.b), fmt.sk(x.s)]);
+    } else if (isPctMetric) {
+      cols = ["UPC", "Description", "AGP %", "AGP $", "Sales"];
+      rows = pool.map((it, i) => {
+        const r = rngFor(id, 70 + i);
+        const s = rr(r, 2e4, 1.2e5), pct = rr(r, 0.02, 0.14);
+        return { it, pct, s };
+      }).sort((x, y) => x.pct - y.pct).map((x, i) => [mockUpc(rngFor(id, 90 + i)), x.it, fmt.pct(x.pct), fmt.k(x.s * x.pct), fmt.k(x.s)]);
     } else if (e.mode === "low-distribution") {
       cols = ["UPC", "Description", "Sales", "Selling Stores"];
-      rows = items.map((it, i) => [mockUpc(rng), it, fmt.k(rr(rng, 1e5, 4e5) * (1 - i * 0.08)), String(Math.floor(rr(rng, 22, 99)))]);
+      rows = pool.map((it, i) => {
+        const r = rngFor(id, 70 + i);
+        return { it, s: rr(r, /100K/.test(e.filter || "") ? 1.05e5 : 4e4, 4e5), st: Math.floor(rr(r, 22, 99)) };
+      }).sort((x, y) => y.s - x.s).map((x, i) => [mockUpc(rngFor(id, 90 + i)), x.it, fmt.k(x.s), String(x.st)]);
     } else {
-      cols = ["UPC", "Description", e.metric && /sales/i.test(e.metric) ? "Sales $" : "AGP $"];
-      rows = items.map((it, i) => [mockUpc(rng), it, fmt.k(rr(rng, 5e4, 4e5) * (1 - i * 0.08))]);
+      const mc = e.metric && /sales/i.test(e.metric) ? "Sales $" : "AGP $";
+      cols = ["UPC", "Description", mc];
+      rows = pool.map((it, i) => ({ it, s: rr(rngFor(id, 70 + i), 5e4, 4e5) }))
+        .sort((x, y) => y.s - x.s).map((x, i) => [mockUpc(rngFor(id, 90 + i)), x.it, fmt.k(x.s)]);
     }
     blocks.push(H(isDecl
-      ? `${e.n || rows.length} ${e.cat || ""} UPCs declined in AGP year over year in ${scope(e)} for ${per(e)} — the worst ${rows.length} account for ${fmt.pct(rr(rng, 0.5, 0.7), 0)} of the total decline.`
-      : e.mode === "low-distribution"
-        ? `${rows.length + Math.floor(rr(rng, 8, 30))} UPCs in ${e.div} sold in fewer than 100 stores in ${per(e)}${/100K/.test(e.filter || "") ? " while clearing $100K in sales — distribution upside candidates" : ""} — top sellers below.`
-        : `Top ${rows.length} ${e.ownBrand ? "Own Brand " : ""}UPCs by ${e.metric || "AGP $"} for ${scope(e)}, ${per(e)}.`));
-    blocks.push(TB(`${e.metric || "Ranking"} — ${per(e)}${e.n > showN ? ` (showing ${showN} of ${e.n}; full list in export)` : ""}`, cols, rows));
+      ? `${e.n || rows.length} ${e.cat || ""} UPCs declined in AGP year over year in ${scope(e)} for ${per(e)} — sorted most-negative first; ${rows[0][1]} is the worst at ${rows[0][4]}.`
+      : isPctMetric
+        ? `${rows[0][1]} carries the lowest AGP % in the ${e.cat} category for ${per(e)} at ${rows[0][2]} — bottom ${rows.length} ranked below.`
+        : e.mode === "low-distribution"
+          ? `${rows.length + Math.floor(rr(rng, 8, 30))} UPCs in ${e.div} sold in fewer than 100 stores in ${per(e)}${/100K/.test(e.filter || "") ? " while clearing $100K in sales — distribution upside candidates" : ""} — sorted by sales, highest first.`
+          : `Top ${rows.length} ${e.ownBrand ? "Own Brand " : ""}UPCs by ${e.metric || "AGP $"} for ${scope(e)}, ${per(e)} — ${rows[0][1]} leads at ${rows[0][rows[0].length - 1]}.`));
+    blocks.push(TB(`${e.metric || "Ranking"} — ${per(e)}, sorted${e.n > showN ? ` (showing ${showN} of ${e.n}; full list in export)` : ""}`, cols, rows));
     blocks.push(FU(isDecl
       ? ["Are the declines promo-week concentrated or base-velocity erosion?"]
       : e.mode === "low-distribution" ? ["Which of these clear the velocity bar for a distribution push?"] : ["What share of the leaders' AGP is promo-week dependent?"]));
@@ -549,22 +872,29 @@
       ];
     }
     if (e.mode === "frontpage-split") {
+      const isMd = /markdown/i.test(e.measure || "");
       const fp = rr(rng, 8e5, 1.6e6), rest = fp * rr(rng, 1.8, 2.6);
+      const fpMd = fp * 0.22, restMd = rest * 0.16;
+      const lead = isMd ? fpMd : fp, leadTot = isMd ? fpMd + restMd : fp + rest;
       const blocks = [
-        H(`Front-page items drove ${fmt.k(fp)} of ${e.measure || "sales"} in ${e.week} for ${scope(e)} — ${fmt.pct(fp / (fp + rest), 0)} of the ad total from ${fmt.pct(0.18, 0)} of the placements.`),
-        TB(`Front page vs rest of ad — ${e.week}`, ["Placement", "Sales", "Markdown $ (spend)", "Items", "$ per item"], [
-          ["Front page (PAGE_NBR = 1)", fmt.k(fp), fmt.k(fp * 0.22), "11", fmt.k(fp / 11)],
-          ["Rest of ad", fmt.k(rest), fmt.k(rest * 0.16), "148", fmt.k(rest / 148)],
-          ["TOTAL", fmt.k(fp + rest), fmt.k(fp * 0.22 + rest * 0.16), "159", ""]
+        H(`Front-page items drove ${fmt.k(lead)} of ${isMd ? "ad markdown" : "sales"} in ${e.week} for ${scope(e)} — ${fmt.pct(lead / leadTot, 0)} of the ad total from ${fmt.pct(11 / 159, 0)} of the placements.`),
+        TB(`Front page vs rest of ad — ${e.week}`, ["Placement", "Sales", "Markdown $ (spend)", "Items", isMd ? "Markdown per item" : "Sales per item"], [
+          ["Front page (PAGE_NBR = 1)", fmt.k(fp), fmt.k(fpMd), "11", fmt.k((isMd ? fpMd : fp) / 11)],
+          ["Rest of ad", fmt.k(rest), fmt.k(restMd), "148", fmt.k((isMd ? restMd : rest) / 148)],
+          ["TOTAL", fmt.k(fp + rest), fmt.k(fpMd + restMd), "159", ""]
         ])
       ];
-      if (e.by === "CIG") blocks.push(TB("Top CIGs by ad markdown — front page flagged", ["CIG", "Description", "Ad Markdown", "Placement"],
-        pickN(rng, ncrcsOf(e), 5).map((nm, i) => [String(Math.floor(rr(rngFor(id, i), 1000, 9999))), nm, fmt.k(rr(rng, 2e4, 9e4)), i < 2 ? "Front page" : "Inside page"])));
+      if (e.by === "CIG") {
+        const cigRows = pickN(rng, ncrcsOf(e), 5).map((nm, i) => ({ cig: Math.floor(rr(rngFor(id, i), 1000, 9999)), nm, md: rr(rngFor(id, 20 + i), 2e4, 9e4), fp: i < 2 })).sort((a, b) => b.md - a.md);
+        blocks.push(TB("Top CIGs by ad markdown (sorted) — front page flagged", ["CIG", "Description", "Ad Markdown", "Placement"],
+          cigRows.map((x) => [String(x.cig), x.nm, fmt.k(x.md), x.fp ? "Front page" : "Inside page"])));
+      }
       blocks.push(FU(["Is the front-page markdown rate justified by its incremental lift vs inside pages?"]));
       return blocks;
     }
-    // page-list
-    const items = pickN(rng, (e.dept === "Grocery Food" ? POOLS.ncrcs.grocery : ncrcsOf(e)).concat(POOLS.ncrcs.snack), 8);
+    // page-list — food-only slate when the ask is a food department
+    const foodNcrcs = ["HEINZ KETCHUP 32-38 OZ", "FOLGERS LARGE CANS", "CHEERIOS CORE CEREAL", "CAMPBELLS CONDENSED CORE", "COCA COLA 12PK CANS", "LAYS CORE SALTY 7.75-8 OZ", "RITZ CORE CRACKERS", "OREO FAMILY SIZE", "JIF PEANUT BUTTER CORE", "GENERAL MILLS CEREAL CORE"];
+    const items = pickN(rng, e.dept === "Grocery Food" ? foodNcrcs : ncrcsOf(e).concat(POOLS.ncrcs.snack), 8);
     const cols = ["CIG", "Description"]; if (e.extraCol) cols.push(e.extraCol);
     return [
       H(`The ${e.div} ad released ${e.adDate} carried ${items.length} ${e.dept ? e.dept + " " : ""}CIGs on page 1 (front cover).`),
@@ -581,14 +911,16 @@
     const rng = rngFor(id);
     const cats = pickN(rng, POOLS.smics.grocery, 5);
     const wks = ["W27", "W28", "W29", "W30", "Qtr Total"];
+    const data = cats.map((c) => {
+      const w = Array.from({ length: 4 }, () => rr(rng, 2e4, 9e4));
+      return { c, w, qtr: w.reduce((a, b) => a + b) * 3.1 };
+    }).sort((a, b) => b.qtr - a.qtr);
+    const total = data.reduce((s, x) => s + x.qtr, 0);
     return [
-      H(`Markdown spend for ASM ${e.asm} ran ${fmt.k(rr(rng, 1.2e6, 2.4e6))} across ${per(e)} — ${cats[0]} is the heaviest category at ${fmt.pct(0.31, 0)} of total.`),
+      H(`Markdown spend for ASM ${e.asm} ran ${fmt.k(total)} across ${per(e)} — ${data[0].c} is the heaviest category at ${fmt.pct(data[0].qtr / total, 0)} of the total. Categories sorted by quarter spend.`),
       TB(`Weekly markdown $ by category — ${per(e)} (first 4 of 13 weeks shown; full grid in export)`,
         ["Category"].concat(wks),
-        cats.map((c) => {
-          const w = Array.from({ length: 4 }, () => rr(rng, 2e4, 9e4));
-          return [c].concat(w.map(fmt.k)).concat([fmt.k(w.reduce((a, b) => a + b) * 3.1)]);
-        })),
+        data.map((x) => [x.c].concat(x.w.map(fmt.k)).concat([fmt.k(x.qtr)]))),
       NOTE("Markdowns are stored negative (more negative = more spend); displayed here as positive spend per POL_014."),
       FU(["Which categories' markdown is growing faster than their promo-week sales?"])
     ];
@@ -596,23 +928,61 @@
 
   R.bog_drill = (id, e) => {
     const rng = rngFor(id);
-    const smics = pickN(rng, smicsOf(e), 4);
-    const vendors = pickN(rng, vend(e), 3);
-    const ncrcs = pickN(rng, ncrcsOf(e), 4);
+    const twoYA = /2YA/.test(e.vs || "");
     const blocks = [];
     if (e.desk) blocks.push(NOTE(`"${e.desk}" is not a data entity — results below use the closest proxy, the ASM desk assignment (item_hierarchy.ASM). Flagged as a gap in lineage.`));
-    blocks.push(H(`${scope(e) || e.div} is losing ${fmt.k(rr(rng, 2.5e5, 7e5))} of Bill-Out Gross in ${per(e)} vs ${e.vs || "LY"} — concentrated in ${smics[0]} and driven by off-invoice-per-unit erosion at ${vendors[0]}.`));
-    blocks.push(TB("Step 1 — SMICs declining in BOG", ["SMIC", "BOG TY", "BOG LY", "Change"],
-      yoyRows(rng, smics, rr(rng, 2e5, 5e5), 0.16, fmt.k).map((r) => r.slice(0, 4))));
-    blocks.push(TB(`Step 2 — vendors within ${smics[0]}`, ["Vendor", "BOG TY", "BOG LY", "Change"],
-      yoyRows(rngFor(id, 2), vendors, rr(rng, 1e5, 2.5e5), 0.18, fmt.k).map((r) => r.slice(0, 4))));
-    blocks.push(TB(`Step 3 — NCRCs within ${vendors[0]} (worst off-invoice decline first)`,
-      ["NCRC", "Reg Retail", "Unit List Cost", "Off-Inv/Unit TY", "Off-Inv/Unit LY", "BOG TY", "BOG LY"],
-      ncrcs.map((nm) => {
-        const lc = rr(rng, 2, 5), oiLY = lc * rr(rng, 0.08, 0.14);
-        return [nm, fmt.moneyC(lc * rr(rng, 1.4, 1.8)), fmt.moneyC(lc), fmt.moneyC(oiLY * rr(rng, 0.4, 0.8)), fmt.moneyC(oiLY), fmt.k(rr(rng, 2e4, 8e4)), fmt.k(rr(rng, 3e4, 1e5))];
-      })));
-    blocks.push(BU([`${ncrcs[0]} shows the sharpest off-invoice cut — the vendor moved funding off-invoice to scan without a compensating rate. That is the first renegotiation target.`]));
+
+    // per-NCRC detail mode (Q132/Q103-style): straight metric table, no drill
+    if (e.ncrcList) {
+      const catList = pickN(rng, DAIRY_SMICS, 4);
+      const rows = Array.from({ length: 7 }, (_, i) => {
+        const r = rngFor(id, i + 2);
+        const cat = catList[i % 4], v = catInfo(cat).v[i % catInfo(cat).v.length];
+        const oiLY = rr(r, 0.2, 0.6), oiTY = oiLY * rr(r, 0.5, 0.95);
+        const bogLY = rr(r, 3e4, 1.1e5), bogTY = bogLY * rr(r, 0.7, 0.97);
+        return { nm: ncrcName(v, { cat }, r), oiTY, oiLY, bogTY, bogLY, d: oiTY - oiLY };
+      }).sort((a, b) => a.d - b.d);
+      blocks.push(H(`Off-invoice per unit and Bill-Out Gross, TY vs PY, for the listed NCRCs — ${rows.length} of the ${e.ncrcList} declined on off-invoice per unit; ranked worst first.`));
+      blocks.push(TB(`Off-invoice/unit & BOG — ${per(e)} vs PY, sorted by off-invoice decline`,
+        ["NCRC", "Off-Inv/Unit TY", "Off-Inv/Unit LY", "Δ/Unit", "BOG TY", "BOG LY", "BOG Δ"],
+        rows.map((r) => [r.nm, fmt.moneyC(r.oiTY), fmt.moneyC(r.oiLY), "-" + fmt.moneyC(Math.abs(r.d)), fmt.k(r.bogTY), fmt.k(r.bogLY), fmt.sk(r.bogTY - r.bogLY)])));
+      blocks.push(NOTE(`Showing ${rows.length} of ${e.ncrcList} listed NCRCs (the decliners); the rest were flat or improved — full grid in export.`));
+      blocks.push(FU(["Did the off-invoice cuts coincide with list-cost increases on the same NCRCs?"]));
+      return blocks;
+    }
+
+    const smicPool = e.dept === "Produce" ? ["APPLES", "BERRIES", "GRAPES", "CITRUS"] : DAIRY_SMICS;
+    const s1 = genRank(rng, pickN(rng, smicPool, 4), { base: rr(rng, 2e5, 4e5), declRatio: 0.16 });
+    blocks.push(H(`${scope(e) || e.div} is losing ${fmt.k(Math.abs(s1.total))} of Bill-Out Gross in ${per(e)} vs ${e.vs || "LY"} — concentrated in ${s1.top.nm} (${fmt.sk(s1.top.chg)}). Drill below runs SMIC → vendor → NCRC, each level sorted by decline.`));
+    blocks.push(TB("Step 1 — SMICs declining in BOG (sorted)", ["SMIC", "BOG TY", "BOG LY", "Change"],
+      s1.rows.map((r) => [r.nm, fmt.k(r.ty), fmt.k(r.ly), fmt.sk(r.chg)])));
+
+    // vendor drill for the top TWO smics, category-consistent vendors
+    const vendorTops = [];
+    s1.rows.slice(0, 2).forEach((sr, si) => {
+      const vlist = (catInfo(sr.nm) || { v: vendorsForCat(e) }).v.slice(0, 3);
+      const vr = genRank(rngFor(id, 20 + si), vlist, { base: Math.abs(sr.chg) * 2.2, declRatio: 0.2 });
+      vendorTops.push({ smic: sr.nm, top: vr.top.nm });
+      blocks.push(TB(`Step 2 — vendors within ${sr.nm} (sorted)`, ["Vendor", "BOG TY", "BOG LY", "Change"],
+        vr.rows.map((r) => [r.nm, fmt.k(r.ty), fmt.k(r.ly), fmt.sk(r.chg)])));
+    });
+
+    // NCRC detail within the worst vendor, brand-consistent, sorted by off-inv decline
+    const vt = vendorTops[0];
+    const nRows = Array.from({ length: 4 }, (_, i) => {
+      const r = rngFor(id, 30 + i);
+      const lc = rr(r, 2, 5), lcPrev = lc * rr(r, 0.9, 0.98);
+      const reg = lc * rr(r, 1.4, 1.8), regPrev = reg * rr(r, 0.95, 1.0);
+      const oiLY = lc * rr(r, 0.08, 0.14), oiTY = oiLY * rr(r, 0.4, 0.8);
+      return { nm: ncrcName(vt.top, { cat: vt.smic }, r) + (i ? " " + ["VALUE", "FAMILY", "SINGLES"][i - 1] : ""), reg, regPrev, lc, lcPrev, oiTY, oiLY, bogTY: rr(r, 2e4, 6e4), bogLY: rr(r, 3e4, 9e4), d: oiTY - oiLY };
+    }).sort((a, b) => a.d - b.d);
+    const yaLabel = twoYA ? "2YA" : "LY";
+    blocks.push(TB(`Step 3 — NCRCs within ${vt.top} (${vt.smic}), sorted by off-invoice/unit decline vs ${yaLabel}`,
+      ["NCRC", "Reg Retail TY", `Reg Retail ${yaLabel}`, "List Cost TY", `List Cost ${yaLabel}`, "Off-Inv/Unit TY", `Off-Inv/Unit ${yaLabel}`, "Off-Inv Δ/Unit", "BOG TY", `BOG ${yaLabel}`],
+      nRows.map((r) => [r.nm, fmt.moneyC(r.reg), fmt.moneyC(r.regPrev), fmt.moneyC(r.lc), fmt.moneyC(r.lcPrev), fmt.moneyC(r.oiTY), fmt.moneyC(r.oiLY), "-" + fmt.moneyC(Math.abs(r.d)), fmt.k(r.bogTY), fmt.k(r.bogLY)])));
+    if (e.smicList || e.vendorList) blocks.push(NOTE(`Drill shown for the top declining branch; all ${e.smicList || e.vendorList} listed ${e.smicList ? "SMICs" : "vendors"} were screened and the full decliner grid is in the export.`));
+    if (twoYA) blocks.push(NOTE("LY and 2YA comparisons both computed; table shows the 2YA baseline the question asked to isolate — LY columns in export."));
+    blocks.push(BU([`${nRows[0].nm} shows the sharpest off-invoice cut (${fmt.moneyC(Math.abs(nRows[0].d))}/unit) — funding moved off-invoice to scan without a compensating rate. First renegotiation target.`]));
     blocks.push(FU(["Did the off-invoice decline coincide with a list-cost increase on the same NCRCs?", "Is the lost off-invoice showing up in scan/billback instead (net-neutral check)?"]));
     return blocks;
   };
@@ -620,10 +990,12 @@
   R.ncrc_detail = (id, e) => {
     const rng = rngFor(id);
     if (e.mode === "deadnet-by-division") {
+      const divs = ["JEWEL", "SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN"].map((d, i) => ({ d, v: 2.61 + (i === 0 ? 0 : rr(rng, 0.05, 0.5)) })).sort((a, b) => a.v - b.v);
+      const best = divs[0].v, worst = divs[divs.length - 1].v;
       return [
-        H(`Minimum deadnet cost per unit for NCRC ${e.ncrc} ranges from ${fmt.moneyC(2.61)} (Jewel) to ${fmt.moneyC(3.08)} (Southern) — a ${fmt.moneyC(0.47)} spread across divisions.`),
-        TB("Min deadnet per unit by division", ["Division", "Min Deadnet/Unit", "vs Best"],
-          ["JEWEL", "SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN"].map((d, i) => [d, fmt.moneyC(2.61 + i * rr(rng, 0.05, 0.15)), i === 0 ? "—" : "+" + fmt.moneyC(i * rr(rng, 0.05, 0.15))])),
+        H(`Minimum deadnet cost per unit for NCRC ${e.ncrc} ranges from ${fmt.moneyC(best)} (${divs[0].d}) to ${fmt.moneyC(worst)} (${divs[divs.length - 1].d}) — a ${fmt.moneyC(worst - best)} spread across divisions.`),
+        TB("Min deadnet per unit by division (sorted, best cost first)", ["Division", "Min Deadnet/Unit", "vs Best"],
+          divs.map((x) => [x.d, fmt.moneyC(x.v), x.v === best ? "—" : "+" + fmt.moneyC(x.v - best)])),
         FU(["What funding difference explains the widest-division gap — can it be nationalized?"])
       ];
     }
@@ -635,9 +1007,12 @@
       ];
     }
     if (e.mode === "ob-vs-nb") {
-      const rows = pickN(rng, POOLS.ncrcs.dairy, 6).map((nm, i) => [nm, i % 2 ? "National Brand" : "Own Brand", fmt.k(rr(rng, 2e5, 9e5)), fmt.pct(rr(rng, 0.2, 0.42))]);
+      const c = catInfo(e.cat) || CATS["REFRIGERATED YOGURT"];
+      const obRows = ["LUCERNE", "O ORGANICS"].map((b) => [`${b} ${c.noun}`, "Own Brand"]);
+      const nbRows = c.v.filter((v) => v !== "OWN BRANDS").slice(0, 4).map((v) => [`${brandOf(v)} ${c.noun}`, "National Brand"]);
+      const rows = obRows.concat(nbRows).map((r, i) => r.concat([fmt.k(rr(rngFor(id, 10 + i), 2e5, 9e5)), fmt.pct(rr(rngFor(id, 20 + i), 0.2, 0.42))]));
       return [
-        H(`${e.cat} in ${e.div} splits into ${rows.filter((r) => r[1] === "Own Brand").length} Own Brand and ${rows.filter((r) => r[1] !== "Own Brand").length} National Brand NCRCs for ${per(e)}.`),
+        H(`${e.cat} in ${e.div} splits into ${obRows.length} Own Brand and ${nbRows.length} National Brand NCRCs for ${per(e)}.`),
         TB("NCRCs — Own Brand vs National Brand", ["NCRC", "Brand Type", "Sales " + per(e), "AGP %"], rows),
         FU(["Where is the OB share of the category vs a year ago?"])
       ];
@@ -650,12 +1025,15 @@
         TB(`Top NCRCs — ${per(e)}`, ["NCRC", "Units", "Sales"], rows)
       ];
     }
-    const rows = pickN(rng, POOLS.items.dairy, 6).map((it, i) => {
-      const ly = rr(rng, 2e4, 9e4), chg = rr(rng, -0.15, 0.12);
-      return [mockUpc(rngFor(id, i)), it, fmt.k(ly * (1 + chg)), fmt.k(ly), fmt.spct(chg)];
+    // members must belong to the price group's product family
+    const variants = ["8OZ TUB", "8OZ TUB LIGHT", "12OZ TUB", "8OZ TUB WHIPPED", "16OZ TUB FAMILY", "8OZ TUB CHIVE & ONION"];
+    const rows = variants.map((v, i) => {
+      const r = rngFor(id, i);
+      const ly = rr(r, 2e4, 9e4), chg = rr(r, -0.15, 0.12);
+      return [mockUpc(r), `LUCERNE CREAM CHEESE ${v}`, fmt.k(ly * (1 + chg)), fmt.k(ly), fmt.spct(chg)];
     });
     return [
-      H(`NCRC ${e.ncrc} (LUCERNE CREAM CHEESE TUB) contains ${rows.length} UPCs in ${e.div} — sales for ${per(e)} vs YA below.`),
+      H(`NCRC ${e.ncrc} (LUCERNE CREAM CHEESE TUB) contains ${rows.length} UPCs in ${e.div} — all tub cream cheese variants priced as one group; sales for ${per(e)} vs YA below.`),
       TB(`Member UPCs — ${per(e)}`, ["UPC", "Description", "Sales TY", "Sales LY", "vs YA"], rows),
       FU(["Are the declining members losing distribution or velocity?"])
     ];
@@ -669,10 +1047,11 @@
       rows = pickN(rng, vend(e), 6).map((v) => [v, fmt.k(rr(rng, 2e5, 9e5)), fmt.k(rr(rng, 2e5, 9e5)), fmt.units(rr(rng, 4e4, 2e5)), fmt.pct(rr(rng, 0.2, 0.34)), fmt.pct(rr(rng, 0.2, 0.34)), fmt.k(rr(rng, 2e4, 9e4)), fmt.pct(rr(rng, 0.14, 0.26))]);
     } else if (e.report === "Vendor Scorecard") {
       rows = ["Sales $", "Units", "AGP $", "AGP %", "Total Allowances", "Spend Rate", "Promo Sales Share"].map((m) => {
-        const isPct = /%|Rate|Share/.test(m);
+        const isPct = /%|Rate|Share/.test(m), isUnits = m === "Units";
         const ty = isPct ? rr(rng, 0.1, 0.35) : rr(rng, 3e5, 3e6);
         const chg = rr(rng, -0.08, 0.08);
-        return [m, isPct ? fmt.pct(ty) : fmt.k(ty), isPct ? fmt.pct(ty - ty * chg) : fmt.k(ty / (1 + chg)), isPct ? fmt.pts(ty * chg) : fmt.spct(chg), rng() > 0.5 ? "Above" : "Below"];
+        const fv = isPct ? fmt.pct : isUnits ? fmt.units : fmt.k;
+        return [m, fv(ty), fv(isPct ? ty - ty * chg : ty / (1 + chg)), isPct ? fmt.pts(ty * chg) : fmt.spct(chg), rng() > 0.5 ? "Above" : "Below"];
       });
     } else if (e.report === "CIG BOG Compression") {
       rows = pickN(rng, ncrcsOf(e), 6).map((nm, i) => {
@@ -718,9 +1097,11 @@
   R.promo_frequency = (id, e) => {
     const rng = rngFor(id);
     const rows = pickN(rng, ncrcsOf(e), 6).map((nm, i) => {
-      const lyW = Math.floor(rr(rng, 8, 16)), tyW = lyW - Math.floor(rr(rng, 2, 6));
-      return [nm, String(tyW), String(lyW), String(tyW - lyW), fmt.sk(-rr(rng, 3e4, 2e5) * (1 - i * 0.1)), fmt.sk(-rr(rng, 8e3, 5e4) * (1 - i * 0.1))];
-    });
+      const r = rngFor(id, 10 + i);
+      const lyW = Math.floor(rr(r, 8, 16)), tyW = lyW - Math.floor(rr(r, 2, 6));
+      return { nm, tyW, lyW, sD: -rr(r, 3e4, 2e5), aD: -rr(r, 8e3, 5e4) };
+    }).sort((a, b) => a.sD - b.sD)
+      .map((x) => [x.nm, String(x.tyW), String(x.lyW), String(x.tyW - x.lyW), fmt.sk(x.sD), fmt.sk(x.aD)]);
     return [
       H(`${rows.length} NCRCs lost promo frequency since ${per(e)} — fewer weeks above ${e.threshold || "5%"} depth than last year, worth ${fmt.k(rows.reduce((s, r) => s + Math.abs(parseK(r[4])), 0))} in sales decline.`),
       TB(`Lost-frequency NCRCs (weeks at >${e.threshold || "5%"} depth)`,
@@ -732,27 +1113,43 @@
 
   R.margin_compression = (id, e) => {
     const rng = rngFor(id);
-    const ncrcs = e.ncrcs ? e.ncrcs.map((n, i) => `${ncrcsOf(e)[i % ncrcsOf(e).length]} (${n})`) : pickN(rng, ncrcsOf(e), 5);
+    const cats = pickN(rng, e.domain === "grocery" ? ["KETCHUP", "COFFEE", "CANDY"] : DAIRY_SMICS, 3);
+    const mk = (i) => { const c = cats[i % 3], v = catInfo(c).v[i % catInfo(c).v.length]; return ncrcName(v, { cat: c }, rngFor(id, i * 3)); };
+    const ncrcs = e.ncrcs ? e.ncrcs.map((n, i) => `${mk(i)} (${n})`) : Array.from({ length: 5 }, (_, i) => mk(i));
+    const rateOnly = !e.byPromoWeek && !e.likeTactics && !e.ncrcs && !e.desk;
+    const rows = ncrcs.map((nm, i) => {
+      const r = rngFor(id, 20 + i);
+      const rateLY = rr(r, 0.24, 0.34), d = -rr(r, 0.015, 0.05);
+      const agpLY = rr(r, 5e4, 1.6e5);
+      const agpD = rateOnly && i === ncrcs.length - 1 ? rr(r, 2e3, 8e3) : -rr(r, 2e4, 9e4);
+      return { nm, rateLY, d, agpLY, agpTY: agpLY + agpD, agpD };
+    }).sort((a, b) => a.d - b.d);
     const blocks = [];
     if (e.desk) blocks.push(NOTE(`"${e.desk}" resolved to the ASM desk proxy — see lineage gap.`));
-    blocks.push(H(`${ncrcs.length} NCRCs show margin-rate compression AND AGP $ declines for ${scope(e)} in ${per(e)} — combined AGP impact ${fmt.sk(-rr(rng, 1.5e5, 4e5))}.`));
-    blocks.push(TB("Opportunity NCRCs — both conditions hold", ["NCRC", "AGP % TY", "AGP % LY", "Rate Δ", "AGP $ Δ"],
-      ncrcs.map((nm, i) => {
-        const ly = rr(rng, 0.24, 0.34), d = -rr(rng, 0.015, 0.05) * (1 - i * 0.1);
-        return [nm, fmt.pct(ly + d), fmt.pct(ly), fmt.pts(d), fmt.sk(-rr(rng, 2e4, 9e4) * (1 - i * 0.1))];
-      })));
+    blocks.push(H(rateOnly
+      ? `${rows.length} NCRCs show margin-rate compression for ${scope(e)} in ${per(e)} — sorted by rate decline. Note: compression only, as asked — one compressed NCRC actually grew AGP $ on volume.`
+      : `${rows.length} NCRCs show margin-rate compression AND AGP $ declines for ${scope(e)} in ${per(e)} — combined AGP impact ${fmt.sk(rows.reduce((s, r) => s + Math.min(0, r.agpD), 0))}. Sorted by rate compression.`));
+    blocks.push(TB(rateOnly ? "NCRCs with margin-rate compression (sorted by rate decline)" : "Opportunity NCRCs — both conditions hold (sorted by rate decline)",
+      ["NCRC", "AGP % TY", "AGP % LY", "Rate Δ", "AGP $ TY", "AGP $ LY", "AGP $ Δ"],
+      rows.map((r) => [r.nm, fmt.pct(r.rateLY + r.d), fmt.pct(r.rateLY), fmt.pts(r.d), fmt.k(r.agpTY), fmt.k(r.agpLY), fmt.sk(r.agpD)])));
     if (e.likeTactics) {
-      blocks.push(TB("Like-tactic rate erosion (same tactic, both years)", ["NCRC", "Tactic", "Gross % LY", "Gross % TY", "Rate Δ"],
-        ncrcs.slice(0, 3).map((nm, i) => {
-          const ly = rr(rng, 0.27, 0.33), d = -rr(rng, 0.02, 0.05);
-          return [nm, pickN(rngFor(id, i + 4), POOLS.tactics, 1)[0], fmt.pct(ly), fmt.pct(ly + d), fmt.pts(d)];
-        })));
+      const lt = rows.slice(0, 3).map((r, i) => {
+        const lr = rngFor(id, 40 + i);
+        const ly = rr(lr, 0.27, 0.33), d = -rr(lr, 0.02, 0.05);
+        return { nm: r.nm, tac: pickN(rngFor(id, i + 4), POOLS.tactics, 1)[0], ly, d };
+      }).sort((a, b) => a.d - b.d);
+      blocks.push(TB("Like-tactic rate erosion (identical tactic both years, sorted by rate drop)", ["NCRC", "Tactic", "Gross % LY", "Gross % TY", "Rate Δ"],
+        lt.map((r) => [r.nm, r.tac, fmt.pct(r.ly), fmt.pct(r.ly + r.d), fmt.pts(r.d)])));
       blocks.push(BU(["Same tactic, worse rate = the funding or cost moved underneath the event. That is a vendor conversation, not a tactic change."]));
     }
     if (e.byPromoWeek || e.byWeek) {
-      const w = rngFor(id, 8);
-      blocks.push(TB(`${ncrcs[0].split(" (")[0]} — promo weeks TY vs LY`, ["Promo Week", "Tactic TY", "AGP % TY", "Tactic LY", "AGP % LY"],
-        Array.from({ length: 4 }, (_, i) => [`PW ${28 + i * 3}`, pickN(rngFor(id, i + 11), POOLS.tactics, 1)[0], fmt.pct(rr(w, 0.2, 0.27)), pickN(rngFor(id, i + 17), POOLS.tactics, 1)[0], fmt.pct(rr(w, 0.26, 0.32))])));
+      rows.slice(0, 3).forEach((r, ri) => {
+        const w = rngFor(id, 8 + ri);
+        blocks.push(TB(`${r.nm.split(" (")[0]} — promo weeks TY vs LY (tactic, margin rate, AGP $)`,
+          ["Promo Week", "Tactic TY", "AGP % TY", "AGP $ TY", "Tactic LY", "AGP % LY", "AGP $ LY"],
+          Array.from({ length: 3 }, (_, i) => [`PW ${28 + i * 3}`, pickN(rngFor(id, i + 11 + ri), POOLS.tactics, 1)[0], fmt.pct(rr(w, 0.2, 0.27)), fmt.k(rr(w, 6e3, 1.6e4)), pickN(rngFor(id, i + 17 + ri), POOLS.tactics, 1)[0], fmt.pct(rr(w, 0.26, 0.32)), fmt.k(rr(w, 9e3, 2e4))])));
+      });
+      if (rows.length > 3) blocks.push(NOTE(`Promo-week side-by-side shown for the top 3 opportunity NCRCs; remaining ${rows.length - 3} in the export.`));
     }
     blocks.push(FU(["Which compressed NCRCs share a vendor — bundle them into one renegotiation?", "Did list cost move on these NCRCs in the same window?"]));
     return blocks;
@@ -760,20 +1157,56 @@
 
   R.aiv_erosion = (id, e) => {
     const rng = rngFor(id);
-    const names = e.entity === "vendor" ? pickN(rng, vend(e), 6) : pickN(rng, ncrcsOf(e), 6);
     const blocks = [];
     if (e.desk) blocks.push(NOTE(`"${e.desk}" resolved to the ASM desk proxy — see lineage gap.`));
-    blocks.push(H(`${names.length} ${e.entity === "vendor" ? "vendors" : "NCRCs"} are declining in both AIV and AGP $ for ${scope(e)} in ${per(e)} — the race-to-the-bottom watchlist.`));
-    blocks.push(TB("AIV + AGP $ double-decliners", [cap(e.entity || "NCRC"), "AIV TY", "AIV LY", "AIV Δ", "AGP $ Δ"],
-      names.map((nm, i) => {
-        const ly = rr(rng, 2.8, 5.2), d = -rr(rng, 0.08, 0.35) * (1 - i * 0.1);
-        return [nm, fmt.moneyC(ly + d), fmt.moneyC(ly), "-" + fmt.moneyC(Math.abs(d)), fmt.sk(-rr(rng, 1.5e4, 8e4) * (1 - i * 0.1))];
-      })));
+
+    // Q112-style: straight per-NCRC weekly detail, NO decline filter
+    if (e.ncrcList && e.byWeek) {
+      const cats = pickN(rng, DAIRY_SMICS, 3);
+      const ents = cats.flatMap((c, ci) => catInfo(c).v.slice(0, 2).map((v, vi) => ({ nm: ncrcName(v, { cat: c }, rngFor(id, ci * 4 + vi)), v })));
+      const sumRows = ents.map((en, i) => {
+        const r = rngFor(id, 10 + i);
+        const aivLY = rr(r, 2.8, 5.2), aivTY = aivLY * rr(r, 0.9, 1.06);
+        const agpLY = rr(r, 3e4, 9e4), agpTY = agpLY * rr(r, 0.8, 1.08);
+        return [en.nm, fmt.moneyC(aivTY), fmt.moneyC(aivLY), fmt.k(agpTY), fmt.k(agpLY)];
+      });
+      blocks.push(H(`AIV and AGP $ for each listed NCRC, ${per(e)} vs previous year — summary for all, weekly side-by-side for the first two below.`));
+      blocks.push(TB("All listed NCRCs — AIV and AGP $, TY vs PY", ["NCRC", "AIV TY", "AIV LY", "AGP $ TY", "AGP $ LY"], sumRows));
+      blocks.push(NOTE(`Showing ${sumRows.length} of ${e.ncrcList} listed NCRCs — full set with all 52 weeks in the export.`));
+      ents.slice(0, 2).forEach((en, ei) => {
+        const w = rngFor(id, 60 + ei);
+        blocks.push(TB(`${en.nm} — weekly AIV / AGP $, TY vs LY (first 5 weeks)`,
+          ["Fiscal Week", "AIV TY", "AIV LY", "AGP $ TY", "AGP $ LY"],
+          Array.from({ length: 5 }, (_, i) => [`W${i + 1}`, fmt.moneyC(rr(w, 2.6, 3.4)), fmt.moneyC(rr(w, 3.0, 3.9)), fmt.k(rr(w, 8e3, 2e4)), fmt.k(rr(w, 1.2e4, 2.6e4))])));
+      });
+      blocks.push(FU(["Flag which of these NCRCs cross into AIV decline so the erosion watchlist stays current?"]));
+      return blocks;
+    }
+
+    const isVendor = e.entity === "vendor";
+    const cats = pickN(rng, e.domain === "snack" ? ["SALTY SNACKS", "CRACKERS", "COOKIES"] : DAIRY_SMICS, 3);
+    const ents = isVendor
+      ? pickN(rng, vendorsForCat({ ...e, cat: cats[0] }).concat(vendorsForCat({ ...e, cat: cats[1] })).filter((v, i, a) => a.indexOf(v) === i), 6).map((v) => ({ nm: v, v }))
+      : cats.flatMap((c, ci) => catInfo(c).v.slice(0, 2).map((v, vi) => ({ nm: ncrcName(v, { cat: c }, rngFor(id, ci * 3 + vi)), v })));
+    const rows = ents.map((en, i) => {
+      const r = rngFor(id, 10 + i);
+      const aivLY = rr(r, 2.8, 5.2), d = -rr(r, 0.08, 0.35);
+      const agpD = -rr(r, 1.5e4, 8e4);
+      return { en, aivLY, d, agpD };
+    }).sort((a, b) => a.d - b.d);
+    const dualAsked = /agp/i.test(e.metric || "") || e.desk;
+    blocks.push(H(`${rows.length} ${isVendor ? "vendors" : "NCRCs"} declined in AIV for ${scope(e)} in ${per(e)} — ${rows[0].en.nm} leads at -${fmt.moneyC(Math.abs(rows[0].d))}. Sorted by AIV decline, largest first${dualAsked ? "; AGP $ decline shown alongside per the ask" : " (AGP $ context included, but the screen is AIV-only as asked)"}.`));
+    blocks.push(TB("AIV decliners (sorted)",
+      (isVendor ? ["Vendor"] : ["Vendor", "NCRC"]).concat(["AIV TY", "AIV LY", "AIV Δ", "AGP $ Δ"]),
+      rows.map((r) => (isVendor ? [r.en.nm] : [brandOf(r.en.v), r.en.nm]).concat([fmt.moneyC(r.aivLY + r.d), fmt.moneyC(r.aivLY), "-" + fmt.moneyC(Math.abs(r.d)), fmt.sk(r.agpD)]))));
+    if (e.vendorList || e.ncrcList) blocks.push(NOTE(`Screened all ${e.vendorList || e.ncrcList} listed entities; the ${rows.length} shown declined in AIV — full grid in export.`));
     if (e.byWeek) {
-      const w = rngFor(id, 6);
-      blocks.push(TB(`${names[0]} — weekly AIV / AGP, TY vs LY (first 5 weeks shown)`,
-        ["Fiscal Week", "AIV TY", "AIV LY", "AGP $ TY", "AGP $ LY"],
-        Array.from({ length: 5 }, (_, i) => [`W${i + 1}`, fmt.moneyC(rr(w, 2.6, 3.4)), fmt.moneyC(rr(w, 3.0, 3.9)), fmt.k(rr(w, 8e3, 2e4)), fmt.k(rr(w, 1.2e4, 2.6e4))])));
+      rows.slice(0, 2).forEach((r, ri) => {
+        const w = rngFor(id, 6 + ri);
+        blocks.push(TB(`${r.en.nm} — weekly AIV / AGP $, TY vs LY (first 5 weeks)`,
+          ["Fiscal Week", "AIV TY", "AIV LY", "AGP $ TY", "AGP $ LY"],
+          Array.from({ length: 5 }, (_, i) => [`W${i + 1}`, fmt.moneyC(rr(w, 2.6, 3.4)), fmt.moneyC(rr(w, 3.0, 3.9)), fmt.k(rr(w, 8e3, 2e4)), fmt.k(rr(w, 1.2e4, 2.6e4))])));
+      });
     }
     blocks.push(BU(["Per the AIV diagnostic, separate the three causes before acting: item-mix shift, deeper promo depth, or base-price cuts — each implies a different response."]));
     blocks.push(FU(["Is the AIV decline mix, promo depth, or base price (Section 4E three-step)?"]));
@@ -807,17 +1240,82 @@
   };
 
   R.slotting = (id, e) => {
-    const rng = rngFor(id);
-    const rows = (e.smics ? e.smics : pickN(rng, smicsOf(e), 4)).map((s, i) => {
-      const ly = rr(rng, 3e4, 1.2e5);
-      const ty = ly * rr(rng, 0.5, 1.15);
-      return [s, pickN(rngFor(id, i + 3), vend(e), 1)[0], `FW ${Math.floor(rr(rng, 1, 8))}–${Math.floor(rr(rng, 9, 13))}`, fmt.k(ly), fmt.k(ty), ty < ly * 0.95 ? "BEHIND LY" : "On pace"];
+    // Q121/Q130-style: "change in placement allowance cycles" = timing AND dollars.
+    if (e.entity === "SMIC" || (e.entity === "vendor" && e.smics)) {
+      const smics = e.smics || pickN(rngFor(id, 1), DAIRY_SMICS, 4);
+      const raw = smics.flatMap((s, si) => {
+        const picks = e.entity === "vendor" ? catInfo(s).v.slice(0, 2) : [null];
+        return picks.map((v, vi) => {
+          const r = rngFor(id, si * 5 + vi + 2);
+          const lyW1 = Math.floor(rr(r, 27, 31)), lyLen = Math.floor(rr(r, 5, 9));
+          const shift = Math.floor(rr(r, -1, 3)), lenDelta = Math.floor(rr(r, -3, 1));
+          const tyW1 = lyW1 + shift, tyLen = Math.max(2, lyLen + lenDelta);
+          const ly = rr(r, 3e4, 1.2e5), ty = ly * rr(r, 0.55, 1.1);
+          const wchg = shift !== 0 ? `starts ${Math.abs(shift)} wk ${shift > 0 ? "later" : "earlier"}` : lenDelta < 0 ? `${-lenDelta} wks shorter` : "unchanged";
+          return { s, v, lyW: `FW ${lyW1}–${lyW1 + lyLen}`, tyW: `FW ${tyW1}–${tyW1 + tyLen}`, wchg, ly, ty, chg: ty - ly };
+        });
+      }).sort((a, b) => a.chg - b.chg);
+      const timing = raw.filter((x) => x.wchg !== "unchanged").length;
+      return [
+        H(`${raw.length} placement-allowance cycles changed versus last year for ASM ${e.asm || "Timothy Antor"} next quarter — ${timing} changed timing (later start or shorter window) and ${raw.filter((x) => x.chg < 0).length} carry lower committed dollars. Sorted by dollar change, largest decline first.`),
+        TB("Placement allowance cycle changes — timing and dollars, sorted by $ change",
+          (e.entity === "vendor" ? ["SMIC", "Vendor"] : ["SMIC"]).concat(["LY Window", "TY Window", "Window Change", "LY $", "TY $", "$ Change", "% Change"]),
+          raw.map((x) => (e.entity === "vendor" ? [x.s, brandOf(x.v)] : [x.s]).concat([x.lyW, x.tyW, x.wchg, fmt.k(x.ly), fmt.k(x.ty), fmt.sk(x.chg), fmt.spct(x.chg / x.ly)]))),
+        BU(["Separate timing changes from true funding gaps before the vendor conversation — a later or shorter cycle can explain lower committed dollars without a full-quarter shortfall."]),
+        FU(["For the cycles with unchanged windows but lower dollars, was LY's allowance earned in full (or merely committed)?"])
+      ];
+    }
+    const DESKS = e.smics
+      ? [{ desk: `ASM desk — ${e.asm || "Timothy Antor"}`, smics: e.smics, dom: domainOf(e) }]
+      : [
+        { desk: "Center Store", smics: ["SALTY SNACK BAG/CANISTER", "COOKIES", "CARBONATED SOFT DRINKS", "READY TO EAT CEREAL"], dom: "grocery" },
+        { desk: "Fresh / Dairy", smics: ["REFRIGERATED YOGURT", "CHEESE SHREDS", "CREAMERS & CREAM"], dom: "dairy" },
+        { desk: "GM/HBC", smics: ["LAUNDRY DETERGENT", "BATH TISSUE"], dom: "grocery" }
+      ];
+    const SRC = ["New-item placement + holiday display expansion", "Innovation launch shelf expansion", "Seasonal reset participation", "Secondary display program", "Assortment reset funding", "Premium placement expansion", "Checkout / cooler placement"];
+    // Believable vendor slates per SMIC (fallback: domain pool)
+    const SMIC_VENDORS = {
+      "SALTY SNACK BAG/CANISTER": ["PEPSICO INC", "UTZ BRANDS INC", "THE CAMPBELLS CO"],
+      "COOKIES": ["MONDELEZ INTL INC", "WK KELLOGG CO", "GRUPO BIMBO"],
+      "CARBONATED SOFT DRINKS": ["COCA COLA CO", "PEPSICO INC", "KEURIG DR PEPPER"],
+      "READY TO EAT CEREAL": ["GENERAL MILLS INC", "WK KELLOGG CO", "POST HOLDINGS INC"],
+      "REFRIGERATED YOGURT": ["GRP DANONE S A", "LACTALIS USA", "CHOBANI INC"],
+      "CHEESE SHREDS": ["SARGENTO FOOD CO", "CABOT CREAMERY INC", "OWN BRANDS"],
+      "CREAMERS & CREAM": ["NESTLE S A SWITZERLAND", "GRP DANONE S A", "OWN BRANDS"],
+      "LAUNDRY DETERGENT": ["PROCTER & GAMBLE", "UNILEVER", "CHURCH & DWIGHT"],
+      "BATH TISSUE": ["PROCTER & GAMBLE", "GEORGIA-PACIFIC", "KIMBERLY-CLARK"],
+      "REFRIGERATED DRINKS SINGLES": ["COCA COLA CO", "TROPICANA BRANDS GRP", "GRP DANONE S A"],
+      "REFRIGERATED JUICE BLENDS": ["TROPICANA BRANDS GRP", "COCA COLA CO", "OWN BRANDS"]
+    };
+    const mainRows = [], contribRows = [];
+    let totLY = 0, cycles = 0, behindRows = [];
+    DESKS.forEach((d, di) => {
+      d.smics.forEach((s, si) => {
+        const r = rngFor(id, di * 10 + si + 1);
+        const ly = rr(r, 1.5e5, 9e5);
+        const isBehind = (di + si) % 3 === 1;
+        const ty = ly * (isBehind ? rr(r, 0.45, 0.8) : rr(r, 0.97, 1.2));
+        const w1 = Math.floor(rr(r, 27, 31)), w2 = w1 + Math.floor(rr(r, 3, 8));
+        const vlist = SMIC_VENDORS[s.toUpperCase()] || pickN(r, POOLS.vendors[d.dom], 3);
+        totLY += ly; cycles++;
+        if (isBehind) behindRows.push({ smic: s, vendor: vlist[0], gap: ty - ly });
+        mainRows.push([d.desk, s, `FW ${w1}–${w2}`, vlist.map((v) => v.split(" ").slice(0, 2).join(" ")).join(", "), fmt.k(ly), fmt.k(ty), isBehind ? "BEHIND LY" : "On pace"]);
+        // by-vendor contribution within the SMIC — where LY slotting came from
+        const s1 = rr(r, 0.4, 0.6), s2 = rr(r, 0.18, (1 - s1) - 0.12);
+        [s1, s2, 1 - s1 - s2].forEach((share, vi) => {
+          contribRows.push([vi === 0 ? s : "", vlist[vi], fmt.pct(share, 0), fmt.k(ly * share), pickN(rngFor(id, di * 100 + si * 10 + vi), SRC, 1)[0]]);
+        });
+      });
     });
+    const worst = behindRows.sort((a, b) => a.gap - b.gap)[0];
     return [
-      H(`Next quarter's slotting picture vs LY for ${scope(e)}: ${rows.filter((r) => r[5] === "BEHIND LY").length} of ${rows.length} SMIC/vendor cycles are running behind last year's committed dollars.`),
-      TB("Slotting / placement cycles — LY plan vs TY committed", ["SMIC", "Vendor", "LY Cycle Window", "LY $", "TY Committed $", "Status"], rows),
-      RECO("Share the BEHIND-LY rows with the SM ahead of vendor line reviews — the ask is commitment to at-or-ahead of LY before the cycle window opens."),
-      FU(["Which behind-pace vendors have new-item activity that should carry slotting this cycle?"])
+      H(`Last year ${cycles} slotting cycles ran for next quarter across ${DESKS.length > 1 ? DESKS.length + " desks" : "the desk"}, worth ${fmt.k(totLY)} in planned slotting income. ${behindRows.length} of ${cycles} cycles are currently committed BEHIND last year's dollars — to stay at-or-ahead, the behind cycles need vendor commitment before their FW windows open.`),
+      TB("Slotting / placement cycles by desk and SMIC — LY plan vs TY committed",
+        ["Desk", "SMIC", "LY Cycle Window", "Primary Vendors", "LY $", "TY Committed $", "Status"], mainRows),
+      TB("Vendor contribution within each SMIC — where LY slotting came from",
+        ["SMIC", "Vendor", "Share of LY Slotting", "LY $", "LY Source"], contribRows),
+      RECO(`Take the BEHIND-LY rows to the SM ahead of vendor line reviews — lead with ${worst ? worst.vendor.split(" ").slice(0, 2).join(" ") + " in " + worst.smic + " (" + fmt.k(worst.gap) + " behind)" : "the largest gap"}. Before anchoring on "at-or-ahead of LY", validate the target against new-item count, assortment changes and whether LY's allowance was actually earned — a lapsed reset can make LY the wrong benchmark. The contribution table shows which vendor owns each gap.`),
+      FU(["Which behind-pace vendors have new-item activity that should carry slotting this cycle?", "Do any on-pace cycles hide a vendor-mix shift (one vendor up, another lapsed)?"])
     ];
   };
 
@@ -826,7 +1324,7 @@
     return [
       H(`Historical scan & Copient performance for CSD ${e.csd} on tactic "${e.tactic}" during holiday events — four prior events below; the estimate-vs-actual half needs the AIM feed.`),
       TB("Historical events — scans & Copients", ["Event", "Promo Week", "Scan Units", "Copient Redemptions", "Markdown $"],
-        ["Memorial Day 2024", "July 4th 2024", "Labor Day 2024", "Memorial Day 2025"].map((ev) => [ev, `PW ${Math.floor(rr(rng, 20, 40))}`, fmt.units(rr(rng, 2e4, 6e4)), fmt.units(rr(rng, 4e3, 1.6e4)), fmt.k(rr(rng, 2e4, 7e4))])),
+        [["Memorial Day 2024", 21], ["July 4th 2024", 27], ["Labor Day 2024", 36], ["Memorial Day 2025", 21]].map(([ev, wk]) => [ev, `PW ${wk}`, fmt.units(rr(rng, 2e4, 6e4)), fmt.units(rr(rng, 4e3, 1.6e4)), fmt.k(rr(rng, 2e4, 7e4))])),
       GAPBOX(["Planned/estimated scans from AIM are not onboarded — post-event actual-vs-estimate cannot be produced until the AIM plan feed lands. Actuals above are complete."]),
       FU(["Use the 4-event average as the P&L planning baseline for the next holiday event?"])
     ];
@@ -844,7 +1342,7 @@
           const v = rr(crng, 1.8, 4.2), reg = v * rr(crng, 1.45, 1.75);
           return [mockUpc(crng), it, fmt.moneyC(reg), fmt.moneyC(reg * rr(crng, 0.85, 0.95)), fmt.moneyC(v), fmt.moneyC(v * rr(crng, 0.82, 0.93)), fmt.moneyC(v * 0.93)];
         })),
-      TB("Sister-banner comparison — SLU group cost per division (TY vs 2YA)",
+      TB("Sister-banner comparison — SLU group cost per division (TY vs 2YA; first 5 of all 12 divisions, remainder in export)",
         ["Division", "Group VLC/Unit TY", "VLC/Unit 2YA", "Deadnet/Unit TY", "Deadnet/Unit 2YA"],
         ["JEWEL", "SO CALIFORNIA", "SEATTLE", "SOUTHERN", "DENVER"].map((d, i) => {
           const drng = rngFor(100 + i, 9);
@@ -884,11 +1382,16 @@
   R.dept_agg = (id, e) => {
     const rng = rngFor(id);
     if (e.mode === "rank-divisions") {
-      const divs = ["JEWEL", "SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN", "MID-ATLANTIC"];
+      const divs = ["JEWEL", "SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN", "MID-ATLANTIC"]
+        .map((d, i) => {
+          const r = rngFor(id, 10 + i);
+          const sales = rr(r, 3e6, 9e6), rate = rr(r, 0.27, 0.345);
+          return { d, sales, rate, agp: sales * rate }; // AGP $ derives from rate × sales
+        }).sort((a, b) => b.rate - a.rate);
       return [
-        H(`${divs[0]} leads AGP % in ${e.cat} for ${per(e)} at ${fmt.pct(0.335)} — divisions ranked below.`),
+        H(`${divs[0].d} leads AGP % in ${e.cat} for ${per(e)} at ${fmt.pct(divs[0].rate)} — divisions ranked below.`),
         TB(`Divisions ranked by AGP % — ${e.cat}, ${per(e)}`, ["Rank", "Division", "AGP %", "AGP $", "Sales"],
-          divs.map((d, i) => [String(i + 1), d, fmt.pct(0.335 - i * rr(rng, 0.005, 0.012)), fmt.k(rr(rng, 8e5, 3e6)), fmt.k(rr(rng, 3e6, 9e6))])),
+          divs.map((x, i) => [String(i + 1), x.d, fmt.pct(x.rate), fmt.k(x.agp), fmt.k(x.sales)])),
         FU(["What separates the top division — rate structure, mix, or funding?"])
       ];
     }
@@ -911,6 +1414,39 @@
         ["AGP $", fmt.k(s * 0.283), fmt.k(s * 0.279), fmt.spct(0.043)]
       ])
     ];
+  };
+
+  R.complex_diagnostic = (id, e) => {
+    const rng = rngFor(id);
+    const m = pnlModel(rng, e.premise);
+    const b = agpBridge(m);
+    const blocks = [];
+    if (e.premise && (e.premise.salesChg != null || e.premise.gpChg != null)) {
+      blocks.push(NOTE(`Premise check: your question states ${e.premise.salesChg != null ? "sales " + fmt.spct(e.premise.salesChg) : ""}${e.premise.salesChg != null && e.premise.gpChg != null ? " and " : ""}${e.premise.gpChg != null ? "gross profit " + fmt.spct(e.premise.gpChg) : ""}. The analysis below is anchored to those stated facts — if warehouse data disagreed, the response would flag the conflict instead of silently substituting different numbers.`));
+    }
+    blocks.push(pnlTable(m, e));
+    blocks.push(H(`${e.cat || e.dept || "The category"} ${m.agpTY < m.agpLY ? "lost" : "gained"} ${fmt.k(Math.abs(m.agpTY - m.agpLY))} of AGP versus last year, split ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate${e.premise && e.premise.salesChg > 0 ? " — sales grew " + fmt.spct(e.premise.salesChg) + ", so the profit decline is a rate story, not a volume story" : ""}.`));
+    blocks.push(b.tbl);
+    blocks.push(BU([
+      `Rate erosion: AGP per unit moved from ${fmt.moneyC(m.agpuLY)} to ${fmt.moneyC(m.agpuTY)} — COGS per unit ${fmt.spct(m.cogsuTY / m.cogsuLY - 1)} vs AIV ${fmt.spct(m.aivTY / m.aivLY - 1)}; retail did not recover the cost move.`,
+      `Markdown spend ${fmt.spct(m.mdTY / m.mdLY - 1)} adds pressure, but this summary alone cannot attribute it to over-building, weak sell-through, or clearance.`
+    ]));
+    const subs = e.subQuestions || [];
+    if (subs.length) {
+      blocks.push(TB("Sub-question coverage map — what runs now vs what is blocked",
+        ["Sub-question", "Routed to", "Status"],
+        subs.map((s) => [s.q, s.route, s.status])));
+    }
+    blocks.push(GAPBOX([
+      "Cannot yet be concluded from in-scope data: incrementality vs transfer (needs promo baseline model), private-label cannibalization (same dependency), SLU execution quality and falsely-compliant stores (merch execution feed), APEX/OMS/POS configuration mismatches (pricing-config feeds), residual inventory / shrink effects (inventory feed).",
+      "Each blocked item is mapped in the contract so the downstream layers request the right sources rather than approximating."
+    ]));
+    blocks.push(RECO(`Next diagnostic cut: rank the ${fmt.k(Math.abs(b.rate))} rate-side loss by item and vendor, then connect each loss to cost change, promoted retail, allowance, and markdown. That cut runs today; the execution-quality questions unblock when the merch execution feed lands.`));
+    blocks.push(FU([
+      "Run the item × vendor AGP-decline ranking for the same 13 weeks now?",
+      "Should the promo baseline model be prioritized so incrementality and cannibalization become answerable?"
+    ]));
+    return blocks;
   };
 
   R.clarify = (id, e) => [
@@ -996,10 +1532,47 @@
     return e;
   }
 
+  // ---- premise + sub-question extraction for complex multi-part asks
+  function extractPremise(text) {
+    const p = {};
+    let mm = text.match(/(\d+(?:\.\d+)?)\s*%\s*sales growth|sales (?:grew|up|increased)[^.\d]*(\d+(?:\.\d+)?)\s*%/i);
+    if (mm) p.salesChg = parseFloat(mm[1] || mm[2]) / 100;
+    mm = text.match(/sales (?:declined|down|fell)[^.\d]*(\d+(?:\.\d+)?)\s*%/i);
+    if (mm) p.salesChg = -parseFloat(mm[1]) / 100;
+    mm = text.match(/(?:gross profit|profit|agp)[^.\d]*(?:declined|down|fell)[^.\d]*(\d+(?:\.\d+)?)\s*%/i);
+    if (mm) p.gpChg = -parseFloat(mm[1]) / 100;
+    mm = text.match(/(?:gross profit|profit|agp)[^.\d]*(?:grew|up|increased)[^.\d]*(\d+(?:\.\d+)?)\s*%/i);
+    if (mm) p.gpChg = parseFloat(mm[1]) / 100;
+    return (p.salesChg != null || p.gpChg != null) ? p : null;
+  }
+  function classifySub(s) {
+    const t = s.toLowerCase();
+    if (/incremental|transferred|cannibal|private.label/.test(t)) return { route: "promo_effectiveness + cannibalization", status: "Partial — needs promo baseline model" };
+    if (/slu|build|execute|complian|display location/.test(t)) return { route: "execution compliance (no archetype yet)", status: "BLOCKED — merch execution feed" };
+    if (/apex|oms|pos|configured|price.*mismatch/.test(t)) return { route: "config reconciliation (no archetype yet)", status: "BLOCKED — pricing-config feeds" };
+    if (/inventory|markdown|shrink|residual|post.event/.test(t)) return { route: "markdown_by_cat + inventory", status: "Partial — markdown yes; inventory/shrink feed missing" };
+    if (/vendor|categor|item|store|event type|accounted/.test(t)) return { route: "yoy_rank (AGP decline by entity)", status: "Answerable now" };
+    if (/reconcile|quantified driver|three.*(issue|cause)/.test(t)) return { route: "driver_decomp (AGP bridge)", status: "Answerable now" };
+    return { route: "driver_decomp", status: "Answerable now" };
+  }
+  function detectComplex(input) {
+    const qMarks = (input.match(/\?/g) || []).length;
+    if (input.length < 280 || qMarks < 3) return null;
+    const premise = extractPremise(input);
+    const subs = input.split(/\?/).map((s) => s.trim()).filter((s) => s.length > 20).slice(0, 8)
+      .map((s) => { const c = classifySub(s); return { q: (s.length > 90 ? s.slice(0, 87) + "…" : s) + "?", ...c }; });
+    const catM = input.match(/frozen foods|dairy|produce|grocery|[A-Z][a-z]+ Foods/i);
+    return { tier: 3, score: 0, q: null, arch: "complex_diagnostic", latency: 1900,
+      e: { div: /southern/i.test(input) ? "Southern" : "Jewel", cat: catM ? catM[0] : null, period: /13 week|quarter/i.test(input) ? "the prior 13 weeks" : "Q3 2025", premise, subQuestions: subs, domain: "grocery" },
+      near: [] };
+  }
+
   function matchQuestion(input) {
     const nIn = norm(input);
     const exact = QINDEX.find((q) => q.norm === nIn);
     if (exact) return { tier: 1, score: 1, q: exact, arch: exact.a, e: exact.e, latency: 2 };
+    const complex = detectComplex(input);
+    if (complex) return complex;
     const toks = tokens(input);
     let best = null, bestScore = 0;
     for (const q of QINDEX) {
@@ -1046,6 +1619,80 @@
       constraints: { latency_budget_ms: 30000, this_layer_budget_ms: 2000, comparison_default: "same_period_prior_year", style_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only", "no closing summary (Rule 25)"] },
       downstream: { next: "entity_resolution → NL2SQL", note: "Template + data_plan pin the SQL surface; NL2SQL fills predicates only.", input_question: inputText }
     };
+  }
+
+  // ------------------------------------------------------------- judge
+  // Deterministic response critic — sub-millisecond, runs on every composed
+  // response before display. Mirrors what a production inference-time judge
+  // would enforce; a failed check triggers regeneration in production.
+  const pNum = (s) => {
+    if (typeof s !== "string") return null;
+    const t = s.replace(/[,$K M×]/g, (c) => c === "K" ? "e3" : c === "M" ? "e6" : "");
+    const m = String(s).match(/(-|\+)?\$?([\d,.]+)\s*(K|M)?/);
+    if (!m || !/\d/.test(s)) return null;
+    let v = parseFloat(m[2].replace(/,/g, ""));
+    if (m[3] === "K") v *= 1e3; if (m[3] === "M") v *= 1e6;
+    if (m[1] === "-" || /^-|^−/.test(s)) v = -v;
+    return isNaN(v) ? null : v;
+  };
+  function runJudge(blocks, match, e) {
+    const checks = [];
+    const tables = blocks.filter((b) => b.t === "table");
+    // J1: any table declaring a sort must be monotonic in its change column
+    let j1 = { id: "J1 sort-order", pass: true, note: "no sorted tables" };
+    tables.filter((t) => /sort|rank|worst|largest.*first/i.test(t.title || "")).forEach((t) => {
+      // a table passes if ANY numeric ($/%/count) column is monotonic — the
+      // declared sort key must exist somewhere, text columns are ignored
+      const dataRows = t.rows.filter((r) => !/^TOTAL/i.test(String(r[0]))); // total rows sit outside the ranking
+      const numericCols = t.cols.map((c, i) => i).filter((i) => {
+        const vals = dataRows.map((r) => String(r[i]));
+        return vals.filter((v) => /^[-+]?\$|^[-+]?\d|%$/.test(v.trim())).length >= Math.max(2, dataRows.length - 1);
+      });
+      const ok = numericCols.some((ci) => {
+        const vals = dataRows.map((r) => pNum(r[ci])).filter((v) => v !== null);
+        if (vals.length < 2) return false;
+        return vals.every((v, i) => i === 0 || v >= vals[i - 1]) || vals.every((v, i) => i === 0 || v <= vals[i - 1]);
+      });
+      if (!ok && numericCols.length) { j1.pass = false; j1.note = `"${t.title}" has no monotonic column`; }
+      else if (j1.pass) j1.note = "monotonic";
+    });
+    checks.push(j1);
+    // J2: % Change columns must equal TY/LY − 1 (±2pts tolerance)
+    let j2 = { id: "J2 arithmetic", pass: true, note: "consistent" };
+    tables.forEach((t) => {
+      const dollarCol = (re) => t.cols.findIndex((c, i) => re.test(c) && t.rows.every((r) => /^\s*[-+]?\$/.test(String(r[i]))));
+      const tyI = dollarCol(/TY$|TY /), lyI = dollarCol(/LY|YA|PY/), pcI = t.cols.findIndex((c) => /% Change/i.test(c));
+      if (tyI < 0 || lyI < 0 || pcI < 0) return;
+      t.rows.forEach((r) => {
+        const ty = pNum(r[tyI]), ly = pNum(r[lyI]), pc = pNum(String(r[pcI]).replace("%", ""));
+        if (ty === null || ly === null || pc === null || !ly) return;
+        if (Math.abs((ty / ly - 1) * 100 - pc) > 2) { j2.pass = false; j2.note = `"${t.title}": ${r[0]} % change off`; }
+      });
+    });
+    checks.push(j2);
+    // J3: truncation disclosure — claimed list bigger than rows shown needs a "Showing/of" note
+    const claimed = e && (e.listGiven || e.vendorList || e.ncrcList || e.smicList || (e.n > 10 ? e.n : 0));
+    const maxRows = Math.max(0, ...tables.map((t) => t.rows.length));
+    const hasDisclosure = blocks.some((b) =>
+      ((b.t === "note" || b.t === "p") && /of (the )?\d+|showing \d+|screened|full (list|grid) in export/i.test(b.text || "")) ||
+      (b.t === "table" && /showing \d+ of \d+|of the \d+|first \d+ of/i.test(b.title || "")));
+    checks.push({ id: "J3 coverage-disclosure", pass: !claimed || claimed <= maxRows || hasDisclosure, note: claimed ? `${maxRows} rows vs ${claimed} requested` : "n/a" });
+    // J4: decline-framed sorted tables should be (mostly) negative in change col
+    let j4 = { id: "J4 sign-convention", pass: true, note: "ok" };
+    tables.filter((t) => /decline/i.test(t.title || "") && !/quad/i.test(t.title || "")).forEach((t) => {
+      const ci = t.cols.findIndex((c) => /change|Δ|decline/i.test(c));
+      if (ci < 0) return;
+      const vals = t.rows.map((r) => pNum(r[ci])).filter((v) => v !== null);
+      if (vals.length && vals.filter((v) => v <= 0).length / vals.length < 0.8) { j4.pass = false; j4.note = `"${t.title}" positive rows in a decline table`; }
+    });
+    checks.push(j4);
+    // J5: premise honored — stated facts must appear in the response
+    if (e && e.premise) {
+      const txt = blocks.map((b) => (b.text || "") + (b.rows ? JSON.stringify(b.rows) : "")).join(" ");
+      const want = e.premise.salesChg != null ? (e.premise.salesChg * 100).toFixed(1) : null;
+      checks.push({ id: "J5 premise-honored", pass: !want || txt.includes(want), note: want ? `premise ${want}% referenced` : "n/a" });
+    }
+    return checks;
   }
 
   // ------------------------------------------------------------- rendering
@@ -1106,7 +1753,7 @@
   }
   function wrapScroll(t) { const w = el("div", "tbl-scroll"); w.appendChild(t); return w; }
 
-  function debugPanel(match, contract) {
+  function debugPanel(match, contract, judge) {
     const A = ARCHETYPES[match.arch];
     const d = el("div", "debug-panel" + (debugOn ? "" : " hidden"));
     const tierLabel = match.tier === 1 ? "Tier 1 · Registry exact match" : match.tier === 2 ? "Tier 2 · Nearest-neighbor retrieval" : "Tier 3 · Fast-LLM contract inference";
@@ -1157,6 +1804,19 @@
       });
       d.appendChild(ul);
     } else d.appendChild(el("div", "dbg-sub", "No gaps — fully answerable from current scope."));
+
+    if (judge && judge.length) {
+      sec("Inference-time judge (deterministic, <1 ms)");
+      const jt = el("table", "dbg-table");
+      jt.appendChild(rowEls("th", ["Check", "Result", "Detail"]));
+      judge.forEach((c) => {
+        const tr = rowEls("td", [c.id, "", c.note]);
+        tr.children[1].appendChild(el("span", "chip " + (c.pass ? "registry" : "gap"), c.pass ? "PASS" : "FAIL"));
+        jt.appendChild(tr);
+      });
+      d.appendChild(wrapScroll(jt));
+      d.appendChild(el("div", "dbg-sub", "Production behavior: a FAIL blocks the response and triggers a regeneration with the failed check injected as a constraint; the same checks run as the training-time regression judge over the canonical 133."));
+    }
 
     sec("Downstream contract (entity-extraction → NL2SQL input)");
     const pre = el("pre", "dbg-json", esc(JSON.stringify(contract, null, 2)));
@@ -1225,8 +1885,10 @@
       await sleep(b.t === "table" || b.t === "kv" ? 240 : 140);
       node.classList.add("shown");
     }
-    bubble.appendChild(el("div", "mock-tag", `mock data · answered in ${(elapsed / 1000).toFixed(1)}s simulated (budget 30s)`));
-    bubble.appendChild(debugPanel(match, contract));
+    const judge = runJudge(blocks, match, match.e || {});
+    const jPass = judge.filter((c) => c.pass).length;
+    bubble.appendChild(el("div", "mock-tag", `mock data · answered in ${(elapsed / 1000).toFixed(1)}s simulated (budget 30s) · judge ${jPass}/${judge.length} checks ${jPass === judge.length ? "✓" : "⚠"}`));
+    bubble.appendChild(debugPanel(match, contract, judge));
     scrollDown();
   }
 
