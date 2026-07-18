@@ -1694,48 +1694,177 @@
     return blocks;
   };
 
-  R.novel_analysis = (id, e) => [
-    H(`I don't have an analytical contract that covers ${e.concepts && e.concepts.length ? e.concepts.join(", ") : "this analysis"} — rather than force the nearest pattern, here is the contract I would construct.`),
-    P("The core concepts in your question are not represented in any archetype's metrics or data plan. A forced nearest-pattern answer would look polished and be wrong — so the layer stops here and proposes instead."),
-    NOTE(`Captured request (verbatim, so nothing is silently dropped): “${(e.rawAsk || "").slice(0, 220)}${(e.rawAsk || "").length > 220 ? "…" : ""}”`),
-    BU([
-      "Stage 1 — define the metric: formula, denominator, and grain need explicit definition (stated in the proposal so it can be corrected before any query runs).",
-      "Stage 2 — source check: identify which required tables are onboarded and which are missing from scope.",
-      "Stage 3 — on your confirmation, the constructed contract runs and is promoted into the archetype library so the next similar question is a fast hit."
-    ]),
-    NOTE("Contract status: NOVEL_ANALYSIS_PROPOSAL — downstream entity-extraction/NL2SQL is NOT invoked on a guessed pattern."),
-    FU(["Reply with any corrections to the proposed definition and I'll run the constructed analysis."])
-  ];
-
-  R.complex_diagnostic = (id, e) => {
-    const rng = rngFor(id);
-    const m = pnlModel(rng, e.premise);
-    const b = agpBridge(m);
+  R.novel_analysis = (id, e) => {
+    // Even without schema support, the target response SHAPE renders with
+    // illustrative values — lineage marks every figure as not yet traceable
+    // to any known table or derived feature.
+    const rng = rngFor(id + (e.rawAsk || "").length);
+    const concept = (e.concepts && e.concepts[0]) || "this analysis";
+    const isPen = /penetration/i.test(concept), isBasket = /basket/i.test(concept);
     const blocks = [];
-    if (e.premise && (e.premise.salesChg != null || e.premise.gpChg != null)) {
-      blocks.push(NOTE(`Premise check: your question states ${e.premise.salesChg != null ? "sales " + fmt.spct(e.premise.salesChg) : ""}${e.premise.salesChg != null && e.premise.gpChg != null ? " and " : ""}${e.premise.gpChg != null ? "gross profit " + fmt.spct(e.premise.gpChg) : ""}. The analysis below is anchored to those stated facts — if warehouse data disagreed, the response would flag the conflict instead of silently substituting different numbers.`));
-    }
-    blocks.push(pnlTable(m, e));
-    blocks.push(H(`${e.cat || e.dept || "The category"} ${m.agpTY < m.agpLY ? "lost" : "gained"} ${fmt.k(Math.abs(m.agpTY - m.agpLY))} of AGP versus last year, split ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate${e.premise && e.premise.salesChg > 0 ? " — sales grew " + fmt.spct(e.premise.salesChg) + ", so the profit decline is a rate story, not a volume story" : ""}.`));
-    blocks.push(b.tbl);
-    blocks.push(BU([
-      `Rate erosion: AGP per unit moved from ${fmt.moneyC(m.agpuLY)} to ${fmt.moneyC(m.agpuTY)} — COGS per unit ${fmt.spct(m.cogsuTY / m.cogsuLY - 1)} vs AIV ${fmt.spct(m.aivTY / m.aivLY - 1)}; retail did not recover the cost move.`,
-      `Markdown spend ${fmt.spct(m.mdTY / m.mdLY - 1)} adds pressure, but this summary alone cannot attribute it to over-building, weak sell-through, or clearance.`
-    ]));
-    const subs = e.subQuestions || [];
-    if (subs.length) {
-      blocks.push(TB("Sub-question coverage map — what runs now vs what is blocked",
-        ["Sub-question", "Routed to", "Status"],
-        subs.map((s) => [s.q, s.route, s.status])));
+    blocks.push(NOTE(`No stored contract covers ${concept} — this is the CONSTRUCTED target response. Every figure below is illustrative: the lineage panel marks this analysis as not traceable to any known table or derived feature yet.`));
+    blocks.push(NOTE(`Captured request (verbatim, so nothing is silently dropped): “${(e.rawAsk || "").slice(0, 200)}${(e.rawAsk || "").length > 200 ? "…" : ""}”`));
+    if (isPen) {
+      const pen = rr(rng, 0.1, 0.3), penLY = pen - rr(rng, -0.02, 0.03);
+      blocks.push(H(`Illustrative shape: household penetration for the asked scope would read ${fmt.pct(pen)} of active households, ${pen >= penLY ? "up" : "down"} ${fmt.pts(pen - penLY).replace("+", "")} versus last year.`));
+      blocks.push(TB("Target output shape — penetration trend (illustrative values)",
+        ["Period", "Buying HH", "Active HH", "Penetration", "vs LY"],
+        Array.from({ length: 4 }, (_, i) => { const r = rngFor(id, i); const a = rr(r, 8e5, 1.1e6); const b = a * rr(r, 0.1, 0.3); return [`P${i + 7}`, fmt.units(b), fmt.units(a), fmt.pct(b / a), fmt.pts(rr(r, -0.01, 0.015))]; })));
+    } else if (isBasket) {
+      blocks.push(H(`Illustrative shape: when a household buys the first item, it would buy the second in the same trip some share of the time — attach rate, lift vs independence, and the co-purchase direction.`));
+      blocks.push(TB("Target output shape — basket affinity (illustrative values)",
+        ["Pair", "Attach Rate", "Lift vs Independence", "Direction"],
+        [["Chips → Salsa", fmt.pct(rr(rng, 0.1, 0.25)), rr(rng, 1.5, 3.2).toFixed(1) + "×", "Chips leads"], ["Salsa → Chips", fmt.pct(rr(rng, 0.3, 0.5)), rr(rng, 1.5, 3.2).toFixed(1) + "×", "Symmetric check"]]));
+      blocks.push(NOTE("Note: the co-purchase graph in the demand platform computes exactly these statistics per key-pair — the gap is conversational access to it, not the science."));
+    } else {
+      blocks.push(H(`Illustrative shape: the constructed metric would be defined, computed at the stated grain, and compared vs prior year — rendered in the house response structure (headline, evidence table, follow-ups).`));
+      blocks.push(TB("Target output shape (illustrative values)", ["Entity", "Metric TY", "Metric LY", "Change"],
+        Array.from({ length: 3 }, (_, i) => { const r = rngFor(id, 5 + i); const ly = rr(r, 1e5, 6e5); const chg = rr(r, -0.15, 0.15); return [["Scope A", "Scope B", "Scope C"][i], fmt.k(ly * (1 + chg)), fmt.k(ly), fmt.spct(chg)]; })));
     }
     blocks.push(GAPBOX([
-      "Cannot yet be concluded from in-scope data: incrementality vs transfer (needs promo baseline model), private-label cannibalization (same dependency), SLU execution quality and falsely-compliant stores (merch execution feed), APEX/OMS/POS configuration mismatches (pricing-config feeds), residual inventory / shrink effects (inventory feed).",
-      "Each blocked item is mapped in the contract so the downstream layers request the right sources rather than approximating."
+      "Not traceable yet: none of the figures above map to a known table or derived feature in the current scope. The definition (formula, denominator, grain) is proposed in the contract for correction before anything runs for real.",
+      "On confirmation, the constructed contract joins the archetype library and the data requirement joins the gap backlog — the next similar question is a known intent."
     ]));
-    blocks.push(RECO(`Next diagnostic cut: rank the ${fmt.k(Math.abs(b.rate))} rate-side loss by item and vendor, then connect each loss to cost change, promoted retail, allowance, and markdown. That cut runs today; the execution-quality questions unblock when the merch execution feed lands.`));
+    blocks.push(FU(["Correct the proposed definition (formula / denominator / grain) so the contract can be finalized?"]));
+    return blocks;
+  };
+
+  R.complex_diagnostic = (id, e) => {
+    // Partial execution: EVERY supportable section runs; blocked areas are
+    // stated in merchant language. Never one card + a routing map.
+    const rng = rngFor(id);
+    const s2 = e.sections || {};
+    const cat = e.cat || "the category";
+    const per3 = e.periodRaw ? `${e.periodRaw} (${e.period})` : per(e);
+    const blocks = [];
+
+    // 1 — scenario vs retrieved data
+    if (e.premise && (e.premise.salesChg != null || e.premise.gpChg != null)) {
+      blocks.push(NOTE(`Scenario check: your question states ${e.premise.salesChg != null ? "sales " + fmt.spct(e.premise.salesChg) + " in several divisions" : ""}${e.premise.salesChg != null && e.premise.gpChg != null ? " and " : ""}${e.premise.gpChg != null ? "enterprise AGP " + fmt.spct(e.premise.gpChg) : ""}. The analysis below is anchored to those stated facts; per-division results mark which parts of the scenario the (mock) data confirms and which it contradicts.`));
+    }
+
+    // 2 — enterprise division table (all divisions + reconciled total)
+    const divNames = ["JEWEL", "SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN"];
+    const divs = divNames.map((d, i) => {
+      const r = rngFor(id, 10 + i);
+      const salesLY = rr(r, 2.4e6, 4.2e6);
+      const sChg = i < 3 ? rr(r, 0.01, 0.07) : -rr(r, 0.02, 0.06); // several grow (premise), some decline
+      const uChg = sChg - rr(r, 0.02, 0.05);
+      const agpLY = salesLY * rr(r, 0.24, 0.28);
+      const aChg = sChg - rr(r, 0.03, 0.08); // AGP lags sales → enterprise AGP down
+      const share = -rr(r, 0.001, 0.008) + (i === 2 ? 0.004 : 0);
+      const trend = sChg - rr(r, -0.02, 0.035);
+      return { d, salesLY, salesTY: salesLY * (1 + sChg), sChg, uChg, agpLY, agpTY: agpLY * (1 + aChg), aChg, aiv: sChg - uChg, share, trend };
+    }).sort((a, b) => b.sChg - a.sChg);
+    const ent = divs.reduce((a, x) => ({ salesTY: a.salesTY + x.salesTY, salesLY: a.salesLY + x.salesLY, agpTY: a.agpTY + x.agpTY, agpLY: a.agpLY + x.agpLY }), { salesTY: 0, salesLY: 0, agpTY: 0, agpLY: 0 });
+    if (!s2.byDivision) {
+      // single-scope ask: full metrics table + reconciled bridge (as before)
+      const m0 = pnlModel(rng, e.premise);
+      const b0 = agpBridge(m0);
+      blocks.push(pnlTable(m0, e));
+      blocks.push(H(`${cat} ${m0.agpTY < m0.agpLY ? "lost" : "gained"} ${fmt.k(Math.abs(m0.agpTY - m0.agpLY))} of AGP versus last year, split ${fmt.pct(Math.abs(b0.vol / b0.total), 0)} volume / ${fmt.pct(Math.abs(b0.rate / b0.total), 0)} rate${e.premise && e.premise.salesChg > 0 ? " — sales grew " + fmt.spct(e.premise.salesChg) + ", so the profit decline is a rate story" : ""}.`));
+      blocks.push(b0.tbl);
+    }
+    if (s2.byDivision) {
+      const cols = ["Division", "Sales vs PY"];
+      if (s2.trend) cols.push("vs 13-wk Trend");
+      cols.push("Units vs PY", "AGP $ Δ", "AIV vs PY");
+      if (s2.share) cols.push("Share Δ");
+      const rows = divs.map((x) => {
+        const row = [x.d, fmt.spct(x.sChg)];
+        if (s2.trend) row.push(fmt.spct(x.trend));
+        row.push(fmt.spct(x.uChg), fmt.sk(x.agpTY - x.agpLY), fmt.spct(x.aiv));
+        if (s2.share) row.push(fmt.bps(x.share));
+        return row;
+      });
+      const entRow = ["ENTERPRISE (reconciled)", fmt.spct(ent.salesTY / ent.salesLY - 1)];
+      if (s2.trend) entRow.push("—");
+      entRow.push("—", fmt.sk(ent.agpTY - ent.agpLY), "—");
+      if (s2.share) entRow.push(fmt.bps(-0.004));
+      rows.push(entRow);
+      blocks.push(TB(`${cat} by division — ${per3}, ranked by sales growth; division rows sum to the enterprise row (offsetting gains and losses shown, not netted away)`, cols, rows));
+      const grew = divs.filter((x) => x.sChg > 0);
+      blocks.push(H(`Scenario partially confirmed: ${grew.length} of ${divs.length} divisions grew sales (${grew.map((g) => g.d).join(", ")}) while enterprise AGP fell ${fmt.sk(ent.agpTY - ent.agpLY)} — sales growth is concentrated where AGP rate erosion is worst, so the growth is price/mix-led rather than margin-accretive.`));
+    }
+
+    // 3 — AGP decomposition (components sum to the enterprise change)
+    const agpD = ent.agpTY - ent.agpLY;
+    const comp = [["Volume", 0.42], ["Retail price", -0.18], ["List cost", 0.38], ["Off-invoice + scan/billback funding", 0.22], ["Markdowns", 0.16]];
+    let acc = 0;
+    const compRows = comp.map(([nm, w], i) => {
+      const v = i === comp.length - 1 ? agpD - acc : agpD * w; acc += v;
+      return [nm, fmt.sk(v), v < 0 ? "erodes" : "offsets"];
+    });
+    blocks.push(TB("Enterprise AGP $ decomposition — components reconcile to the total change",
+      ["Component", "Impact", "Direction"], compRows.concat([["TOTAL", fmt.sk(agpD), "reconciles"]])));
+
+    // 4 — item winners & losers (materiality stated; item status separated)
+    if (s2.items !== false) {
+      const seafood = /shrimp|bacon|seafood/i.test(cat);
+      const items = (seafood
+        ? [["2 LB RAW PELD/DEVEINED 31/40", "New/expanded distribution"], ["3 LB RAW SHELL-ON BAG", "Continuing"], ["12 OZ COOKED TAIL-ON", "Continuing"], ["10 OZ PREMIUM JUMBO COOKED", "Continuing"], ["1 LB RAW EZ-PEEL 41/50", "New/expanded distribution"], ["8 OZ COOKED SALAD SHRIMP", "Discontinued LY"]]
+        : [["LARGE VALUE PACK", "New/expanded distribution"], ["FAMILY SIZE", "Continuing"], ["SINGLE SERVE", "Continuing"], ["PREMIUM SMALL PACK", "Continuing"], ["OWN BRAND VALUE PACK", "New/expanded distribution"], ["LEGACY CORE PACK", "Discontinued LY"]])
+        .map(([nm, st], i) => {
+          const r = rngFor(id, 40 + i);
+          const sales = rr(r, 1.4e5, 6e5);
+          const g = st.startsWith("New") ? rr(r, 0.15, 0.4) : i < 3 ? rr(r, 0.02, 0.12) : -rr(r, 0.05, 0.18);
+          return { nm, st, d: divs[i % 3].d, sales, g, contrib: sales * g / (1 + g) };
+        }).sort((a, b) => b.contrib - a.contrib);
+      blocks.push(TB("Item winners & losers (materiality: ≥ $100K period sales; sorted by contribution; item status separated per the ask)",
+        ["Division", "Item", "Status", "Sales $", "Growth vs PY", "Contribution"],
+        items.map((x) => [x.d, x.nm, x.st, fmt.k(x.sales), fmt.spct(x.g, 0), fmt.sk(x.contrib)])));
+      blocks.push(NOTE("Note the concentration: the largest gains sit in NEW / expanded-distribution rows — consistent with your scenario that apparent growth may be distribution-driven rather than incremental demand. The causal test (household switching) is in the blocked set below."));
+    }
+
+    // 5 — attribute synthesis
+    if (s2.attrs !== false) {
+      blocks.push(TB("Attribute synthesis — growth vs decline concentrations (after price/distribution normalization where available)",
+        ["Attribute", "Direction", "Evidence"], [
+          ["Large packs (2–3 LB)", "GROWING", fmt.pct(rr(rng, 0.55, 0.66), 0) + " of net item-level gains"],
+          ["Raw / peeled & deveined", "GROWING", "positive in every growing division"],
+          ["Cooked small packs, premium tier", "DECLINING", "down despite higher AIV"],
+          ["Own brand value packs", "OUTPERFORMING", "ahead of national equivalents in 4 of 5 divisions"],
+          ["Attribute trend net of distribution", "PARTIAL", "descriptor parsing available; full distribution controls need the store-item coverage cut (runs, but wide) "]
+        ]));
+    }
+
+    // 6 — ranked drivers with evidence class
+    if (s2.drivers !== false) {
+      blocks.push(TB("Top 5 enterprise drivers by financial impact — with evidence class, as asked",
+        ["#", "Driver", "Impact", "Evidence class"], [
+          ["1", "List-cost increases not recovered in retail", fmt.sk(agpD * 0.38), "Observed (cost & retail data)"],
+          ["2", "Funding decline (off-invoice → scan shift, net negative)", fmt.sk(agpD * 0.22), "Observed (allowance data)"],
+          ["3", "Volume decline in non-growing divisions", fmt.sk(agpD * 0.42 * 0.6), "Observed (transactions)"],
+          ["4", "Growth concentrated in lower-margin new items", fmt.sk(agpD * 0.42 * 0.4), "Supported inference (mix math)"],
+          ["5", "Cannibalization of continuing SKUs by expanded-distribution SKUs", "not quantifiable yet", "Unresolved hypothesis (needs household data)"]
+        ]));
+    }
+
+    // 7 — decision answers
+    if (s2.decisions !== false) {
+      blocks.push(BU([
+        "Is the category genuinely growing? Partially — units are flat-to-down enterprise-wide while sales rise; growth is price/mix-led in 3 of 5 divisions (observed).",
+        "Which divisions have sustainable momentum? " + divs[0].d + " and " + divs[1].d + " grow ahead of their own 13-week trend; " + divs[divs.length - 1].d + "'s decline is broad-based (observed).",
+        "Is there a meaningful attribute shift? Yes — large raw value packs, robust across divisions (observed at descriptor level; distribution-normalized cut is partial).",
+        "Expand / repair / remove? Expand the top two contribution rows; repair premium small cooked (rate, not volume); the 'replacing existing demand' verdict on new SKUs is blocked pending household data.",
+        "Single largest controllable cause of the AGP gap? Retail recovery of list-cost increases — " + fmt.sk(agpD * 0.38) + ", the largest observed component (see decomposition)."
+      ]));
+    }
+
+    // 8 — user-facing coverage table
+    const subs = e.subQuestions || [];
+    if (subs.length) {
+      blocks.push(TB("Analysis coverage — what this response includes vs what remains blocked",
+        ["Analysis area", "Status", "Reason"],
+        subs.map((s) => [s.area, s.status, s.reason])));
+    }
+    blocks.push(GAPBOX([
+      "Blocked conclusions are left explicitly unresolved above (never approximated): true incrementality, household switching and cannibalization (loyalty feed + promo baseline model), store execution quality (merch execution feed), APEX/OMS/POS configuration mismatches (pricing-config feeds), residual inventory / shrink (inventory feed)."
+    ]));
+    blocks.push(RECO(`Available now: the division, item, attribute, price/cost, funding and markdown decompositions above can be re-run at any grain. Blocked: household incrementality, store execution, configuration mismatch. Required feeds, in impact order: promo baseline model (unlocks incrementality + cannibalization + quad labels), loyalty/household feed, merch execution feed, pricing-config feeds.`));
     blocks.push(FU([
-      "Run the item × vendor AGP-decline ranking for the same 13 weeks now?",
-      "Should the promo baseline model be prioritized so incrementality and cannibalization become answerable?"
+      "Drill the retail-recovery driver to item × vendor for the same periods?",
+      "Prioritize the promo baseline model so the cannibalization hypothesis (driver #5) becomes testable?"
     ]));
     return blocks;
   };
@@ -1836,15 +1965,20 @@
     if (mm) p.gpChg = parseFloat(mm[1]) / 100;
     return (p.salesChg != null || p.gpChg != null) ? p : null;
   }
+  // User-facing analysis areas (never internal route names) — drives BOTH
+  // the coverage table and which sections actually execute.
   function classifySub(s) {
     const t = s.toLowerCase();
-    if (/incremental|transferred|cannibal|private.label/.test(t)) return { route: "promo_effectiveness + cannibalization", status: "Partial — needs promo baseline model" };
-    if (/slu|build|execute|complian|display location/.test(t)) return { route: "execution compliance (no archetype yet)", status: "BLOCKED — merch execution feed" };
-    if (/apex|oms|pos|configured|price.*mismatch/.test(t)) return { route: "config reconciliation (no archetype yet)", status: "BLOCKED — pricing-config feeds" };
-    if (/inventory|markdown|shrink|residual|post.event/.test(t)) return { route: "markdown_by_cat + inventory", status: "Partial — markdown yes; inventory/shrink feed missing" };
-    if (/vendor|categor|item|store|event type|accounted/.test(t)) return { route: "yoy_rank (AGP decline by entity)", status: "Answerable now" };
-    if (/reconcile|quantified driver|three.*(issue|cause)/.test(t)) return { route: "driver_decomp (AGP bridge)", status: "Answerable now" };
-    return { route: "driver_decomp", status: "Answerable now" };
+    if (/incremental|transferred|cannibal|switching|household overlap|basket migration/.test(t)) return { area: "Incrementality & cannibalization", status: "Blocked", reason: "Needs household purchase data + promo baseline model — neither feed is onboarded" };
+    if (/slu|build|execute|complian|display location|falsely/.test(t)) return { area: "Store execution quality", status: "Blocked", reason: "Merch execution feed not onboarded" };
+    if (/apex|oms|pos|configur|price.*mismatch/.test(t)) return { area: "System configuration reconciliation", status: "Blocked", reason: "Pricing-config feeds not side-by-side yet" };
+    if (/inventory|shrink|residual|post.event/.test(t)) return { area: "Inventory / shrink effects", status: "Partial", reason: "Markdown available; inventory & shrink feeds missing" };
+    if (/market share/.test(t)) return { area: "Market share by division", status: "Available", reason: "Circana panel (lags POS ~1 week)" };
+    if (/attribute|pack|count size|raw|cooked|peeled|tail|frozen|brand|tier/.test(t)) return { area: "Item attribute trends", status: "Partial", reason: "Descriptors parsed from item text; distribution controls partial" };
+    if (/item|winner|declin|expand|repair|remov/.test(t)) return { area: "Item winners & losers", status: "Available", reason: "Transaction + item hierarchy data" };
+    if (/division|enterprise|reconcil/.test(t)) return { area: "Division & enterprise reconciliation", status: "Available", reason: "Transaction, cost and allowance data" };
+    if (/penetration|frequency|units per household/.test(t)) return { area: "Household metrics", status: "Blocked", reason: "No household grain in current scope" };
+    return { area: "Sales & AGP decomposition", status: "Available", reason: "Transaction, cost and allowance data" };
   }
   function parsePeriod6(input) {
     const m = input.match(/fiscal period (\d{4})(\d{2})|period (\d{4})(\d{2})/i);
@@ -1871,18 +2005,41 @@
     if (!Object.values(e.sections).some(Boolean)) return null;
     return { tier: 3, score: 0, q: null, arch: "compound_review", e, latency: 1950, near: [], guarded: true };
   }
+  function parsePeriodRange(input) {
+    const m = input.match(/(?:fiscal )?periods? (\d{4})(\d{2})\s*[–-]\s*(?:(\d{4}))?(\d{2})/i);
+    if (m) return { label: `FY${m[1]} P${parseInt(m[2], 10)}–P${parseInt(m[4], 10)}`, raw: m[0] };
+    return null;
+  }
   function detectComplex(input) {
     const compound = detectCompound(input);
     if (compound && (input.match(/\?/g) || []).length < 3) return compound;
     const qMarks = (input.match(/\?/g) || []).length;
     if (input.length < 280 || qMarks < 3) return null;
     const premise = extractPremise(input);
-    const subs = input.split(/\?/).map((s) => s.trim()).filter((s) => s.length > 20).slice(0, 8)
-      .map((s) => { const c = classifySub(s); return { q: (s.length > 90 ? s.slice(0, 87) + "…" : s) + "?", ...c }; });
-    const catM = input.match(/frozen foods|dairy|produce|grocery|[A-Z][a-z]+ Foods/i);
-    return { tier: 3, score: 0, q: null, arch: "complex_diagnostic", latency: 1900,
-      e: { div: /southern/i.test(input) ? "Southern" : "Jewel", cat: catM ? catM[0] : null, period: /13 week|quarter/i.test(input) ? "the prior 13 weeks" : "Q3 2025", premise, subQuestions: subs, domain: "grocery" },
-      near: [] };
+    const dedupe = new Set();
+    const subs = input.split(/\?|(?:\n|^)\s*(?:>?\s*)?\d+\.\s/).map((s) => s.trim()).filter((s) => s.length > 25).slice(0, 14)
+      .map((s) => classifySub(s)).filter((c) => { if (dedupe.has(c.area)) return false; dedupe.add(c.area); return true; });
+    const range = parsePeriodRange(input);
+    const catM = input.match(/\b(SHRIMP|BACON|frozen foods|dairy|produce|grocery)\b/i);
+    // section flags mirror detectCompound so the renderer executes every
+    // supportable cut, not one card
+    const sections = {
+      byDivision: /every division|by division|each division|division level|enterprise/i.test(input),
+      enterprise: /enterprise|reconcil/i.test(input),
+      share: /market share/i.test(input),
+      trend: /trend/i.test(input),
+      items: /winning|declining item|item-level|materially sized/i.test(input),
+      attrs: /attribute|pack|package size|count|raw versus cooked|tier/i.test(input),
+      drivers: /rank.*(driver|cause)|most important.*driver|largest controllable/i.test(input),
+      decisions: /conclude|decision-oriented|genuinely growing|should be expanded/i.test(input)
+    };
+    return { tier: 3, score: 0, q: null, arch: "complex_diagnostic", latency: 1950,
+      e: { div: /southern/i.test(input) ? "Southern" : "Jewel",
+        cat: catM ? catM[1].toUpperCase() : null,
+        period: range ? range.label : (/13 week|quarter/i.test(input) ? "the prior 13 weeks" : "Q3 2025"),
+        periodRaw: range ? range.raw : null,
+        premise, subQuestions: subs, sections, domain: "grocery" },
+      near: [], guarded: true };
   }
 
   function matchQuestion(input) {
@@ -1931,6 +2088,24 @@
   }
 
   // ------------------------------------------------------------- contract
+  // Knowledge-index resolution: make explicit which registry rows resolved
+  // the period and metrics (mirrors time_registry_dev / metric_registry_dev).
+  function kxResolve(text, e) {
+    const out = { time_registry: null, metric_registry: [], policy_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only"], note: "Synonym folding in tier-1/2 matching is derived from the metric registry's synonym map; table/join resolution stays with the custom NL2SQL layer's schema-linking registries (15 tables, 28 join definitions) — not duplicated here." };
+    const per2 = (e && (e.period || e.week)) || "";
+    let m;
+    if ((m = per2.match(/Q([1-4])\s*(?:FY)?\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_QTR = ${m[1]} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
+    else if ((m = per2.match(/P(\d{1,2})\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_PERIOD_NBR = ${parseInt(m[1], 10)} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
+    else if ((m = per2.match(/FY\s?(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_YEAR_NBR = ${m[1]}`;
+    else if ((m = per2.match(/(Promo|Fiscal) Week (\d{1,2})/i))) out.time_registry = `phrase “${per2}” → ${m[1].toLowerCase() === "promo" ? "pc.PROMOTION_WEEK_NBR" : "fc.FISCAL_WEEK_NBR"} = ${parseInt(m[2], 10)} (promo weeks resolve per division)`;
+    else if (per2) out.time_registry = `phrase “${per2}” → resolved via fiscal_calendar predicates`;
+    const q = (text || "").toLowerCase();
+    [["profit|agp", "AGP → sca.AGP_AMT (metric dictionary INT_MET family)"], ["margin rate|agp %|rate", "AGP % → AGP_AMT / NET_AMT"], ["aiv", "AIV → NET_AMT / ITEM_QTY (INT_MET_0018)"], ["spend rate", "Spend Rate → TOTAL_ALLOWANCES / VENDOR_LIST_COST (INT_MET_0072)"], ["allowance", "allowance buckets → TOTAL_* allowance columns"], ["markdown", "markdown → TOTAL_MARKDOWN_AMT (stored negative)"], ["units|lift", "units → ITEM_QTY"], ["sales|revenue", "sales → NET_AMT"], ["deadnet", "deadnet → DEADNET_COST"]].forEach(([re, res]) => {
+      if (new RegExp(re, "i").test(q) && out.metric_registry.length < 5) out.metric_registry.push(res);
+    });
+    return out;
+  }
+
   function buildContract(match, inputText) {
     const A = ARCHETYPES[match.arch];
     return {
@@ -1944,7 +2119,8 @@
         few_shot_injected: match.tier === 3 ? (match.near || []).map((n) => ({ question_id: n.q.id, archetype: n.q.a, similarity: Number(n.s.toFixed(3)) })) : undefined,
         latency_ms: match.latency
       },
-      entities: match.e,
+      entity_hints: { ...match.e, _note: "HINTS ONLY — the NL2SQL pipeline's trained phrase-extraction NER (entity F1 ≈ 0.98) and deterministic linker remain the entity authority; their resolution overwrites these." },
+      kx_resolution: kxResolve(inputText, match.e),
       response_template: {
         sections: A.style === "exemplar" ? ["headline", "evidence_stat", "detail_table", "recommendation", "why_it_won", "follow_ups"]
           : A.style === "diagnostic" ? ["metrics_table", "headline", "driver_bullets", "follow_ups"]
@@ -1959,7 +2135,7 @@
       },
       gaps: A.gaps.map((g) => ({ severity: g.sev, gap: g.text })),
       constraints: { latency_budget_ms: 30000, this_layer_budget_ms: 2000, comparison_default: "same_period_prior_year", style_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only", "no closing summary (Rule 25)"] },
-      downstream: { next: "entity_resolution → NL2SQL", note: "Template + data_plan pin the SQL surface; NL2SQL fills predicates only.", input_question: inputText }
+      downstream: { next: "existing enrichment / phrase-extraction → custom NL2SQL pipeline (§22)", note: "ADDITIVE to the current pipeline: the NL2SQL phrase-extraction NER and schema-linking stages stay authoritative for entities and grounding; data_plan pre-scopes the table+join resolver to the intent's subset of the 15 tables / 28 joins; response_template is the contract the planner-first reasoning layer binds its synthesized answer to; the judge adds structure checks to the existing LLM-judge + numeric-diff evaluation.", input_question: inputText }
     };
   }
 
@@ -2156,7 +2332,7 @@
       mt.appendChild(rowEls("th", ["Metric", "Formula / logic", "Status"]));
       A.derived.forEach((m) => {
         const tr = rowEls("td", [m.name, m.formula, ""]);
-        const chip = el("span", "chip " + m.status, m.status === "registry" ? "in registry" : m.status === "computed" ? "computed" : "GAP");
+        const chip = el("span", "chip " + m.status, m.status === "registry" ? "in registry" : m.status === "computed" ? "computed" : "NOT TRACEABLE YET");
         tr.lastChild.appendChild(chip);
         mt.appendChild(tr);
       });
