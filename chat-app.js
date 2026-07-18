@@ -1869,7 +1869,12 @@
     return blocks;
   };
 
-  R.clarify = (id, e) => [
+  R.clarify = (id, e) => e.llmClarify ? [
+    H("One value needs confirming before this can run."),
+    P(e.llmClarify),
+    BU(["Reply with the missing value and the full response runs immediately — everything else in the request is already resolved."]),
+    NOTE("Contract status: HOLD_FOR_CLARIFICATION — enrichment and the NL2SQL pipeline are never invoked on a guessed filter.")
+  ] : [
     H(`One value is missing before this can run: the ${e.missing}.`),
     P(`The request filters stores by revenue ("over ___ in revenue for the fiscal week") but the threshold didn't come through. Rather than guess, the best-response layer holds the query and asks — downstream layers are never invoked on a guessed filter.`),
     BU([
@@ -2117,7 +2122,10 @@
         similarity: Number(match.score.toFixed(3)),
         matched_question_id: match.q ? match.q.id : null,
         few_shot_injected: match.tier === 3 ? (match.near || []).map((n) => ({ question_id: n.q.id, archetype: n.q.a, similarity: Number(n.s.toFixed(3)) })) : undefined,
-        latency_ms: match.latency
+        latency_ms: match.latency,
+        inference: match.tier === 3 && !match.guarded ? (match.live
+          ? { mode: "live", model: match.model, confidence: match.llm ? match.llm.confidence : null, usage: match.llm ? match.llm.usage : null }
+          : { mode: "simulated", reason: match.llmError || "ANTHROPIC_API_KEY not configured on the server" }) : undefined
       },
       entity_hints: { ...match.e, _note: "HINTS ONLY — the NL2SQL pipeline's trained phrase-extraction NER (entity F1 ≈ 0.98) and deterministic linker remain the entity authority; their resolution overwrites these." },
       kx_resolution: kxResolve(inputText, match.e),
@@ -2307,11 +2315,19 @@
   function debugPanel(match, contract, judge) {
     const A = ARCHETYPES[match.arch];
     const d = el("div", "debug-panel" + (debugOn ? "" : " hidden"));
-    const tierLabel = match.tier === 1 ? "Tier 1 · Registry exact match" : match.tier === 2 ? "Tier 2 · Nearest-neighbor retrieval" : "Tier 3 · Fast-LLM contract inference";
+    const tierLabel = match.tier === 1 ? "Tier 1 · Registry exact match" : match.tier === 2 ? "Tier 2 · Nearest-neighbor retrieval"
+      : match.guarded ? "Tier 3 · Deterministic guard"
+      : match.live ? `Tier 3 · LIVE ${match.model}` : "Tier 3 · Fast-LLM SIMULATED";
     const head = el("div", "dbg-head");
     head.appendChild(el("span", "dbg-tier t" + match.tier, tierLabel));
     head.appendChild(el("span", "dbg-meta", `similarity ${match.score.toFixed(2)} · ${match.latency} ms · archetype: ${match.arch}`));
     d.appendChild(head);
+    if (match.tier === 3 && !match.guarded && !match.live) {
+      d.appendChild(el("div", "dbg-sub", "⚠ SIMULATED tier-3: " + (match.llmError || "ANTHROPIC_API_KEY not configured on the server") + " — set the key and this becomes a real " + LLM.model + " structured-output call."));
+    }
+    if (match.tier === 3 && match.live && match.llm) {
+      d.appendChild(el("div", "dbg-sub", `Live call: ${match.model} · confidence ${match.llm.confidence != null ? Number(match.llm.confidence).toFixed(2) : "—"} · ${match.llm.usage ? match.llm.usage.input_tokens + " in / " + match.llm.usage.output_tokens + " out tokens" : ""}`));
+    }
     if (match.tier === 3 && match.near) {
       d.appendChild(el("div", "dbg-sub", "Few-shot injected into the fast-LLM call (nearest known intents): " +
         match.near.map((n) => `#${n.q.id} (${n.q.a}, ${n.s.toFixed(2)})`).join(" · ")));
@@ -2376,6 +2392,51 @@
   }
   function rowEls(tag, cells) { const tr = el("tr"); cells.forEach((c) => tr.appendChild(el(tag, "", esc(c)))); return tr; }
 
+  // ------------------------------------------------------------- live T3
+  // Tier-3 is a REAL fast-model call, made server-side (/api/llm/t3-resolve
+  // → claude-haiku-4-5 with a structured-output schema). The deterministic
+  // path below runs only when no ANTHROPIC_API_KEY is configured, and is
+  // labeled SIMULATED everywhere it surfaces.
+  let LLM = { live: false, model: "claude-haiku-4-5", reason: "status not fetched yet" };
+  fetch("/api/llm/status").then((r) => r.json()).then((s) => { LLM = s; }).catch(() => {});
+
+  const ARCH_CATALOG = Object.entries(ARCHETYPES).map(([id, a]) => ({ id, name: a.name, intent: a.intent }));
+
+  async function t3Live(text, match) {
+    const started = Date.now();
+    try {
+      const resp = await fetch("/api/llm/t3-resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: text,
+          archetype_catalog: ARCH_CATALOG,
+          few_shot: (match.near || []).map((n) => ({ question: n.q.text, archetype: n.q.a }))
+        })
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+      const out = await resp.json();
+      const e = { ...(match.e || {}) };
+      // LLM entities fill hint slots the lexical pass missed; non-null only.
+      Object.entries(out.entities || {}).forEach(([k, v]) => { if (v && !e[k]) e[k] = v; });
+      let arch = ARCHETYPES[out.archetype] ? out.archetype : match.arch;
+      if ((out.uncovered_concepts || []).length && !["novel_analysis", "household_exclusivity"].includes(arch)) {
+        arch = "novel_analysis";
+        e.concepts = out.uncovered_concepts;
+        e.rawAsk = text;
+      }
+      if (out.needs_clarification && out.clarification_question) {
+        arch = "clarify";
+        e.llmClarify = out.clarification_question;
+      }
+      return { ...match, arch, e, live: true, model: out._meta.model,
+        latency: out._meta.latency_ms || (Date.now() - started),
+        llm: { confidence: out.confidence, usage: { input_tokens: out._meta.input_tokens, output_tokens: out._meta.output_tokens }, uncovered_concepts: out.uncovered_concepts } };
+    } catch (err) {
+      return { ...match, live: false, llmError: err.message };
+    }
+  }
+
   // ------------------------------------------------------------- chat flow
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -2387,7 +2448,11 @@
   }
 
   async function answer(text) {
-    const match = matchQuestion(text);
+    let match = matchQuestion(text);
+    // Generic tier-3 misses go through the live fast-model call when a key
+    // is configured. Deterministic guards (compound decomposition, concept-
+    // coverage, clarification hold) are policy checks and stay code-side.
+    if (match.tier === 3 && !match.guarded && LLM.live) match = await t3Live(text, match);
     const contract = buildContract(match, text);
     const m = el("div", "msg bot");
     const bubble = el("div", "bubble");
@@ -2402,7 +2467,8 @@
       match.tier === 1 ? { label: `Intent matched — registry exact hit`, ms: 240 }
         : match.tier === 2 ? { label: `Intent matched — nearest neighbor (${match.score.toFixed(2)})`, ms: 380 }
           : match.guarded ? { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one`, ms: 950 }
-          : { label: `No direct hit — inferring contract via fast-LLM (3 nearest archetypes injected)`, ms: 900 },
+          : match.live ? { label: `No direct hit — contract inferred via ${match.model} (live call, 3 nearest archetypes injected)`, ms: 120 }
+          : { label: `No direct hit — inferring contract via fast-LLM (SIMULATED — no API key configured)`, ms: 900 },
       { label: `Answer contract built — ${ARCHETYPES[match.arch].name}`, ms: 320 },
       { label: "Fetching data (mock)", ms: 620 },
       { label: "Composing response", ms: 300 }
@@ -2439,7 +2505,7 @@
     }
     const judge = runJudge(blocks, match, match.e || {}, text);
     const jPass = judge.filter((c) => c.pass).length;
-    bubble.appendChild(el("div", "mock-tag", `mock data · answered in ${(elapsed / 1000).toFixed(1)}s simulated (budget 30s) · judge ${jPass}/${judge.length} checks ${jPass === judge.length ? "✓" : "⚠"}`));
+    bubble.appendChild(el("div", "mock-tag", `mock data · ${match.live ? `intent via ${match.model} (live)` : "answered"} in ${(elapsed / 1000).toFixed(1)}s ${match.live ? "" : "simulated "}(budget 30s) · judge ${jPass}/${judge.length} checks ${jPass === judge.length ? "✓" : "⚠"}`));
     bubble.appendChild(debugPanel(match, contract, judge));
     scrollDown();
   }

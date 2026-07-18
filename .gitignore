@@ -7,3 +7,4 @@ _pdfx.js
 /.nimbalyst
 /server.log
 .DS_Store
+node_modules/
