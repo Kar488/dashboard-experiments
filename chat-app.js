@@ -2112,7 +2112,7 @@
     let m;
     if ((m = per2.match(/Q([1-4])\s*(?:FY)?\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_QTR = ${m[1]} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
     else if ((m = per2.match(/P(\d{1,2})\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_PERIOD_NBR = ${parseInt(m[1], 10)} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
-    else if ((m = per2.match(/FY\s?(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_YEAR_NBR = ${m[1]}`;
+    else if ((m = per2.match(/FY\s?(\d{2,4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_YEAR_NBR = ${m[1].length === 2 ? "20" + m[1] : m[1]}`;
     else if ((m = per2.match(/(Promo|Fiscal) Week (\d{1,2})/i))) out.time_registry = `phrase “${per2}” → ${m[1].toLowerCase() === "promo" ? "pc.PROMOTION_WEEK_NBR" : "fc.FISCAL_WEEK_NBR"} = ${parseInt(m[2], 10)} (promo weeks resolve per division)`;
     else if (per2) out.time_registry = `phrase “${per2}” → resolved via fiscal_calendar predicates`;
     const q = (text || "").toLowerCase();
@@ -2144,15 +2144,34 @@
     line7_nopa: "week_dt", market_share: "WEEK_DT",
     master_primary_promo_data: "WEEK_START_DATE", master_promo_genie_discount_depth: "PROMO_START_DATE"
   };
-  // Join predicates on shared keys verified against table_schema_1.json.
+  // Shared-key columns per table, verified against table_schema_1.json —
+  // used to derive join predicates when two lineage tables share keys.
+  const SQL_TABLE_KEYS = {
+    sales_cost_allowances: ["UPC_NBR", "FACILITY_INTEGRATION_ID", "DIVISION_ID", "ROG_ID"],
+    master_bill_out_gross: ["UPC_NBR", "FACILITY_INTEGRATION_ID", "DIVISION_ID", "ROG_ID"],
+    master_promo_redemption: ["PROMOTION_ID", "UPC_NBR", "FACILITY_INTEGRATION_ID", "DIVISION_ID"],
+    master_ads: ["UPC_NBR", "FACILITY_INTEGRATION_ID", "PROMOTION_ID", "DIVISION_ID", "ROG_ID"],
+    master_primary_promo_data: ["UPC_NBR", "FACILITY_INTEGRATION_ID", "DIVISION_ID", "ROG_ID"],
+    master_promo_genie_discount_depth: ["UPC_NBR", "FACILITY_INTEGRATION_ID", "PROMOTION_ID", "ROG_ID"],
+    master_promo_clip: ["PROMOTION_ID"],
+    allowance_promo_map: ["UPC_NBR", "PROMOTION_ID", "DIVISION_ID"],
+    competitor_price: ["UPC_NBR", "DIVISION_ID", "ROG_ID"],
+    item_store_price: ["UPC_NBR", "FACILITY_INTEGRATION_ID", "DIVISION_ID", "ROG_ID"],
+    item_promo_group: ["UPC_NBR", "DIVISION_ID", "ROG_ID"],
+    item_price_group: ["UPC_NBR", "DIVISION_ID", "ROG_ID"],
+    market_share: ["DIVISION_ID", "CATEGORY_ID"],
+    line7_nopa: ["DIVISION_ID", "CATEGORY_ID"],
+    store_hierarchy: ["FACILITY_INTEGRATION_ID", "DIVISION_ID", "ROG_ID"],
+    item_hierarchy: ["UPC_NBR", "ROG_ID", "DIVISION_ID"]
+  };
+  const SQL_KEY_PRIORITY = ["UPC_NBR", "FACILITY_INTEGRATION_ID", "PROMOTION_ID", "DIVISION_ID", "ROG_ID", "CATEGORY_ID"];
   function sqlJoin(table, alias, factAlias, factTable) {
     const dateCol = SQL_DATE_COL[factTable] || "TRANSACTION_DT";
-    if (table === "item_hierarchy") return `JOIN item_hierarchy ${alias} ON ${alias}.UPC_NBR = ${factAlias}.UPC_NBR AND ${alias}.ROG_ID = ${factAlias}.ROG_ID`;
-    if (table === "store_hierarchy") return `JOIN store_hierarchy ${alias} ON ${alias}.FACILITY_INTEGRATION_ID = ${factAlias}.FACILITY_INTEGRATION_ID`;
     if (table === "fiscal_calendar") return `JOIN fiscal_calendar ${alias} ON ${alias}.calendarDate = ${factAlias}.${dateCol}`;
     if (table === "promo_calendar") return `JOIN promo_calendar ${alias} ON ${alias}.calendarDate = ${factAlias}.${dateCol} AND ${alias}.DIVISION_ID = ${factAlias}.DIVISION_ID`;
-    if (table === "item_price_group") return `JOIN item_price_group ${alias} ON ${alias}.UPC_NBR = ${factAlias}.UPC_NBR AND ${alias}.DIVISION_ID = ${factAlias}.DIVISION_ID`;
-    return `JOIN ${table} ${alias} ON /* join keys per NL2SQL registry (28 join definitions) */`;
+    const shared = SQL_KEY_PRIORITY.filter((k) => (SQL_TABLE_KEYS[table] || []).includes(k) && (SQL_TABLE_KEYS[factTable] || []).includes(k)).slice(0, 3);
+    if (shared.length) return `JOIN ${table} ${alias} ON ` + shared.map((k) => `${alias}.${k} = ${factAlias}.${k}`).join(" AND ");
+    return `JOIN ${table} ${alias} ON /* no shared key with ${factTable} — join definition from the NL2SQL registry (28 defs), e.g. via allowance_promo_map */`;
   }
   function sqlEsc(v) { return String(v).replace(/'/g, "''"); }
   function sqlHint(match, e, inputText) {
@@ -2172,24 +2191,35 @@
     if (e.smic && hasItem) dims.push("item.CATEGORY_ID");
     if (!dims.length) dims.push(`${fAlias}.DIVISION_NM`);
 
-    const metrics = [], gapsInline = [], usedAliases = new Set();
+    // Only formulas that are literal SQL expressions go in the SELECT list;
+    // prose recipes (baseline modeling, multi-step lift math) become comment
+    // lines so the hint never renders pseudo-SQL as if it were runnable.
+    const metrics = [], computedNotes = [], gapsInline = [], usedAliases = new Set();
     (A.derived || []).forEach((m) => {
       const expr = String(m.formula).split(" — ")[0].trim();
+      // Prose signature: two consecutive lowercase words ("vendor funding",
+      // "over promo window") never appear in a real column-ref expression.
+      const isSqlExpr = /^[A-Za-z0-9_.()\/*+\-, ]+$/.test(expr) && /\(/.test(expr) && !/[a-z]{2,}\s+[a-z]{2,}/.test(expr);
       if (m.status === "gap") gapsInline.push(`-- NOT TRACEABLE YET: ${m.name} — no known table/derived feature; requires new feed`);
-      else if (/^[A-Za-z0-9_.()\/*+\-, ]+$/.test(expr)) {
+      else if (isSqlExpr) {
         let alias = m.name.toLowerCase().replace(/%/g, " pct").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
         while (usedAliases.has(alias)) alias += "_2";
         usedAliases.add(alias);
-        metrics.push(`  ${expr} AS ${alias}`);
-      } else metrics.push(`  /* ${m.name}: ${expr} */`);
+        metrics.push(`${expr} AS ${alias}`);
+      } else computedNotes.push(`-- computed at query time (${m.status}) — ${m.name}: ${expr}`);
     });
 
     const where = [];
     const kx = kxResolve(inputText, e);
     if (kx.time_registry) {
       const pred = kx.time_registry.split("→")[1];
-      if (pred && !/resolved via/.test(pred)) where.push(pred.trim().replace(/\(promo weeks.*\)$/, "").trim());
-      else where.push(`/* fiscal predicate from time registry: ${e.period || e.week || "period"} */`);
+      if (pred && !/resolved via/.test(pred)) {
+        where.push(pred.trim().replace(/\(promo weeks.*\)$/, "").trim());
+        // The predicate references fc.* — make sure fiscal_calendar is joined.
+        if (/\bfc\./.test(pred) && !real.some((l) => l.table === "fiscal_calendar")) {
+          joins.push(`JOIN fiscal_calendar fc ON fc.calendarDate = ${fAlias}.${SQL_DATE_COL[fact.table] || "TRANSACTION_DT"}  -- added for the period predicate`);
+        }
+      } else where.push(`/* fiscal predicate from time registry: ${e.period || e.week || "period"} */`);
     }
     if (e.division) where.push(`${fAlias}.DIVISION_NM = '${sqlEsc(e.division)}'`);
     if (e.vendor && hasItem) where.push(`item.VENDOR_NM LIKE '%${sqlEsc(String(e.vendor).toUpperCase())}%'`);
@@ -2197,6 +2227,7 @@
     if (e.ncrc) where.push(hasIpg ? `ipg.PRICE_GROUP_ID = '${sqlEsc(e.ncrc)}' /* NCRC */` : `/* NCRC ${sqlEsc(e.ncrc)} resolves via item_price_group.PRICE_GROUP_ID */`);
     if (!where.length) where.push("/* period + entity predicates from NL2SQL enrichment */");
 
+    const selectItems = dims.concat(metrics);
     const lines = [
       "-- SQL HINT v0 — generated deterministically from this contract's data_plan",
       "-- (tables/columns: table_schema_1.json · formulas: metric dictionary · fiscal predicates: time registry).",
@@ -2204,8 +2235,8 @@
       ...gapsInline,
       ...untraceable.map((l) => `-- NOT TRACEABLE YET: ${l.table} (${l.why || "hypothetical feed"}) — excluded from SQL`),
       "SELECT",
-      ...dims.map((d) => `  ${d},`),
-      metrics.length ? metrics.join(",\n") : "  /* metrics per data_plan.derived_metrics */",
+      "  " + (selectItems.length ? selectItems.join(",\n  ") : "/* metrics per data_plan.derived_metrics */"),
+      ...computedNotes,
       `FROM ${fact.table} ${fAlias}  -- grain: ${fact.grain || "see data_plan"}`,
       ...joins,
       "WHERE " + where.join("\n  AND "),
