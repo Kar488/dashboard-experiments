@@ -25,7 +25,11 @@ const dashboardProvider = require("./data/dashboardStore");
 // server-side, so the API key never reaches the client. With no
 // ANTHROPIC_API_KEY the endpoint reports live:false and the client falls
 // back to its deterministic simulation, labeled SIMULATED in the UI.
-const T3_MODEL = process.env.T3_MODEL || "claude-haiku-4-5";
+// Provider: T3_PROVIDER=anthropic|openai, else auto-detected from which key
+// is present (Anthropic preferred when both are set).
+const T3_PROVIDER = process.env.T3_PROVIDER
+  || (process.env.ANTHROPIC_API_KEY ? "anthropic" : process.env.OPENAI_API_KEY ? "openai" : null);
+const T3_MODEL = process.env.T3_MODEL || (T3_PROVIDER === "openai" ? "gpt-5.4-mini" : "claude-haiku-4-5");
 let anthropicClient = null;
 let anthropicLoadError = null;
 function getAnthropic() {
@@ -40,11 +44,13 @@ function getAnthropic() {
 }
 
 function llmStatus() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { live: false, model: T3_MODEL, reason: "ANTHROPIC_API_KEY not set — tier-3 falls back to deterministic simulation" };
+  if (!T3_PROVIDER) {
+    return { live: false, provider: null, model: T3_MODEL, reason: "no ANTHROPIC_API_KEY or OPENAI_API_KEY set — tier-3 falls back to deterministic simulation" };
   }
-  if (!getAnthropic()) return { live: false, model: T3_MODEL, reason: anthropicLoadError };
-  return { live: true, model: T3_MODEL, reason: null };
+  if (T3_PROVIDER === "anthropic" && !process.env.ANTHROPIC_API_KEY) return { live: false, provider: T3_PROVIDER, model: T3_MODEL, reason: "T3_PROVIDER=anthropic but ANTHROPIC_API_KEY not set" };
+  if (T3_PROVIDER === "openai" && !process.env.OPENAI_API_KEY) return { live: false, provider: T3_PROVIDER, model: T3_MODEL, reason: "T3_PROVIDER=openai but OPENAI_API_KEY not set" };
+  if (T3_PROVIDER === "anthropic" && !getAnthropic()) return { live: false, provider: T3_PROVIDER, model: T3_MODEL, reason: anthropicLoadError };
+  return { live: true, provider: T3_PROVIDER, model: T3_MODEL, reason: null };
 }
 
 // Structured-output schema for the T3 decision. The model picks an
@@ -103,19 +109,50 @@ async function t3Resolve(body) {
       fewShot.map((f) => `Q: ${f.question}\n→ archetype: ${f.archetype}`).join("\n\n") + "\n\n"
     : "";
 
+  const userContent = examples + "Merchant question:\n" + question;
   const started = Date.now();
+
+  if (T3_PROVIDER === "openai") {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: T3_MODEL,
+        reasoning_effort: "none",
+        max_completion_tokens: 1024,
+        messages: [{ role: "system", content: system }, { role: "user", content: userContent }],
+        response_format: { type: "json_schema", json_schema: { name: "t3_decision", strict: true, schema: t3Schema(archetypeIds) } }
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${(data.error && data.error.message) || "request failed"}`);
+    const parsed = JSON.parse(data.choices[0].message.content);
+    return {
+      ...parsed,
+      _meta: {
+        provider: "openai",
+        model: data.model,
+        latency_ms: Date.now() - started,
+        input_tokens: data.usage.prompt_tokens,
+        output_tokens: data.usage.completion_tokens,
+        stop_reason: data.choices[0].finish_reason
+      }
+    };
+  }
+
   const response = await getAnthropic().messages.create({
     model: T3_MODEL,
     max_tokens: 1024,
     system,
     output_config: { format: { type: "json_schema", schema: t3Schema(archetypeIds) } },
-    messages: [{ role: "user", content: examples + "Merchant question:\n" + question }]
+    messages: [{ role: "user", content: userContent }]
   });
   const textBlock = response.content.find((b) => b.type === "text");
   const parsed = JSON.parse(textBlock ? textBlock.text : "{}");
   return {
     ...parsed,
     _meta: {
+      provider: "anthropic",
       model: response.model,
       latency_ms: Date.now() - started,
       input_tokens: response.usage.input_tokens,

@@ -2111,6 +2111,95 @@
     return out;
   }
 
+  // --------------------------------------------------------- NL2SQL hint
+  // Deterministic SQL skeleton generated from the contract's data_plan —
+  // no model involved. Tables/columns come from table_schema_1.json (the
+  // compiled registry), formulas from the metric dictionary. This is a
+  // HINT that pre-scopes the custom NL2SQL layer's table+join resolver
+  // (§22, 15 tables / 28 join definitions), which remains authoritative.
+  const SQL_ALIAS = {
+    sales_cost_allowances: "sca", item_hierarchy: "item", fiscal_calendar: "fc",
+    promo_calendar: "pc", master_promo_genie_discount_depth: "promo",
+    master_primary_promo_data: "ppromo", master_promo_redemption: "redeem",
+    master_ads: "ads", line7_nopa: "line7", allowance_promo_map: "apm",
+    master_bill_out_gross: "bog", competitor_price: "comp", market_share: "share",
+    store_hierarchy: "store", item_store_price: "price", item_price_group: "ipg",
+    master_promo_clip: "clip", loyalty_household_transactions: "hh"
+  };
+  const SQL_DATE_COL = {
+    sales_cost_allowances: "TRANSACTION_DT", master_bill_out_gross: "DATE",
+    master_promo_redemption: "TRANSACTION_DATE", master_promo_clip: "TRANSACTION_DATE",
+    master_ads: "AD_FIRST_EFFECTIVE_DT", competitor_price: "CHECK_DATE",
+    line7_nopa: "week_dt", market_share: "WEEK_DT",
+    master_primary_promo_data: "WEEK_START_DATE", master_promo_genie_discount_depth: "PROMO_START_DATE"
+  };
+  // Join predicates on shared keys verified against table_schema_1.json.
+  function sqlJoin(table, alias, factAlias, factTable) {
+    const dateCol = SQL_DATE_COL[factTable] || "TRANSACTION_DT";
+    if (table === "item_hierarchy") return `JOIN item_hierarchy ${alias} ON ${alias}.UPC_NBR = ${factAlias}.UPC_NBR AND ${alias}.ROG_ID = ${factAlias}.ROG_ID`;
+    if (table === "store_hierarchy") return `JOIN store_hierarchy ${alias} ON ${alias}.FACILITY_INTEGRATION_ID = ${factAlias}.FACILITY_INTEGRATION_ID`;
+    if (table === "fiscal_calendar") return `JOIN fiscal_calendar ${alias} ON ${alias}.calendarDate = ${factAlias}.${dateCol}`;
+    if (table === "promo_calendar") return `JOIN promo_calendar ${alias} ON ${alias}.calendarDate = ${factAlias}.${dateCol} AND ${alias}.DIVISION_ID = ${factAlias}.DIVISION_ID`;
+    if (table === "item_price_group") return `JOIN item_price_group ${alias} ON ${alias}.UPC_NBR = ${factAlias}.UPC_NBR AND ${alias}.DIVISION_ID = ${factAlias}.DIVISION_ID`;
+    return `JOIN ${table} ${alias} ON /* join keys per NL2SQL registry (28 join definitions) */`;
+  }
+  function sqlEsc(v) { return String(v).replace(/'/g, "''"); }
+  function sqlHint(match, e, inputText) {
+    const A = ARCHETYPES[match.arch];
+    if (!A || !A.lineage || !A.lineage.length) return null;
+    const real = A.lineage.filter((l) => SQL_ALIAS[l.table]);
+    if (!real.length) return null;
+    const untraceable = A.lineage.filter((l) => !SQL_ALIAS[l.table]);
+    const fact = real[0];
+    const fAlias = SQL_ALIAS[fact.table];
+    const joins = real.slice(1).map((l) => sqlJoin(l.table, SQL_ALIAS[l.table], fAlias, fact.table));
+    const hasItem = real.some((l) => l.table === "item_hierarchy");
+    const hasIpg = real.some((l) => l.table === "item_price_group");
+
+    const dims = [];
+    if (e.vendor && hasItem) dims.push("item.VENDOR_NM");
+    if (e.smic && hasItem) dims.push("item.CATEGORY_ID");
+    if (!dims.length) dims.push(`${fAlias}.DIVISION_NM`);
+
+    const metrics = [], gapsInline = [];
+    (A.derived || []).forEach((m) => {
+      const expr = String(m.formula).split(" — ")[0].trim();
+      if (m.status === "gap") gapsInline.push(`-- NOT TRACEABLE YET: ${m.name} — no known table/derived feature; requires new feed`);
+      else if (/^[A-Za-z0-9_.()\/*+\-, ]+$/.test(expr)) metrics.push(`  ${expr} AS ${m.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`);
+      else metrics.push(`  /* ${m.name}: ${expr} */`);
+    });
+
+    const where = [];
+    const kx = kxResolve(inputText, e);
+    if (kx.time_registry) {
+      const pred = kx.time_registry.split("→")[1];
+      if (pred && !/resolved via/.test(pred)) where.push(pred.trim().replace(/\(promo weeks.*\)$/, "").trim());
+      else where.push(`/* fiscal predicate from time registry: ${e.period || e.week || "period"} */`);
+    }
+    if (e.division) where.push(`${fAlias}.DIVISION_NM = '${sqlEsc(e.division)}'`);
+    if (e.vendor && hasItem) where.push(`item.VENDOR_NM LIKE '%${sqlEsc(String(e.vendor).toUpperCase())}%'`);
+    if (e.smic && hasItem) where.push(`item.CATEGORY_ID = '${sqlEsc(e.smic)}' /* SMIC */`);
+    if (e.ncrc) where.push(hasIpg ? `ipg.PRICE_GROUP_ID = '${sqlEsc(e.ncrc)}' /* NCRC */` : `/* NCRC ${sqlEsc(e.ncrc)} resolves via item_price_group.PRICE_GROUP_ID */`);
+    if (!where.length) where.push("/* period + entity predicates from NL2SQL enrichment */");
+
+    const lines = [
+      "-- SQL HINT v0 — generated deterministically from this contract's data_plan",
+      "-- (tables/columns: table_schema_1.json · formulas: metric dictionary · fiscal predicates: time registry).",
+      "-- The custom NL2SQL layer's table+join resolver (§22) remains authoritative — this pre-scopes it.",
+      ...gapsInline,
+      ...untraceable.map((l) => `-- NOT TRACEABLE YET: ${l.table} (${l.why || "hypothetical feed"}) — excluded from SQL`),
+      "SELECT",
+      ...dims.map((d) => `  ${d},`),
+      metrics.length ? metrics.join(",\n") : "  /* metrics per data_plan.derived_metrics */",
+      `FROM ${fact.table} ${fAlias}  -- grain: ${fact.grain || "see data_plan"}`,
+      ...joins,
+      "WHERE " + where.join("\n  AND "),
+      `GROUP BY ${dims.join(", ")}`
+    ];
+    if (A.style === "rank" || /rank|top|bottom/i.test(A.intent || "")) lines.push("ORDER BY 2 DESC  -- ranked archetype: primary metric descending");
+    return lines.join("\n");
+  }
+
   function buildContract(match, inputText) {
     const A = ARCHETYPES[match.arch];
     return {
@@ -2139,7 +2228,8 @@
       data_plan: {
         tables: A.lineage.map((l) => ({ table: l.table, grain: l.grain, columns: l.cols, purpose: l.why })),
         derived_metrics: A.derived.map((d) => ({ metric: d.name, formula: d.formula, status: d.status })),
-        recipe: A.recipe
+        recipe: A.recipe,
+        sql_hint: (() => { try { return sqlHint(match, match.e || {}, inputText); } catch { return null; } })()
       },
       gaps: A.gaps.map((g) => ({ severity: g.sev, gap: g.text })),
       constraints: { latency_budget_ms: 30000, this_layer_budget_ms: 2000, comparison_default: "same_period_prior_year", style_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only", "no closing summary (Rule 25)"] },
@@ -2359,6 +2449,13 @@
     const ol = el("ol", "dbg-recipe");
     A.recipe.forEach((s) => ol.appendChild(el("li", "", esc(s))));
     d.appendChild(ol);
+
+    sec("Generated NL2SQL hint (deterministic — table+join resolver stays authoritative)");
+    if (contract.data_plan && contract.data_plan.sql_hint) {
+      d.appendChild(el("pre", "dbg-json", esc(contract.data_plan.sql_hint)));
+    } else {
+      d.appendChild(el("div", "dbg-sub", "No SQL hint — this contract's data plan is not traceable to any known tables or derived features yet."));
+    }
 
     sec("Gaps to surface the best response");
     if (A.gaps.length) {
