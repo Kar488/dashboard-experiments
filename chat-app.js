@@ -2047,6 +2047,17 @@
       near: [], guarded: true };
   }
 
+  // Fuzzy/T2 matches carry the CANONICAL question's stored entities; when the
+  // user's text names an explicit period, that period wins over the stored one.
+  function periodOverride(input, e) {
+    const t = input.toLowerCase();
+    const q = t.match(/\bq([1-4])\s*(?:fy)?\s*(20\d\d|\d\d)?\b/);
+    if (q) return { ...e, period: `Q${q[1]} ${q[2] ? (q[2].length === 2 ? "20" + q[2] : q[2]) : ((e && e.period || "").match(/20\d\d/) || ["2025"])[0]}` };
+    const p = t.match(/\bp(\d{1,2})\s+(20\d\d)\b/);
+    if (p) return { ...e, period: `P${p[1]} ${p[2]}` };
+    return e;
+  }
+
   function matchQuestion(input) {
     const nIn = norm(input);
     const exact = QINDEX.find((q) => q.norm === nIn);
@@ -2059,8 +2070,8 @@
       const s = similarity(toks, q);
       if (s > bestScore) { bestScore = s; best = q; }
     }
-    if (bestScore >= 0.92) return { tier: 1, score: bestScore, q: best, arch: best.a, e: best.e, latency: 3 };
-    if (bestScore >= 0.40) return { tier: 2, score: bestScore, q: best, arch: best.a, e: best.e, latency: 140 + Math.floor(bestScore * 60) };
+    if (bestScore >= 0.92) return { tier: 1, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 3 };
+    if (bestScore >= 0.40) return { tier: 2, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 140 + Math.floor(bestScore * 60) };
     // Tier 3 — concept-coverage guard FIRST: if the question's core concepts
     // exist in no archetype, never force-fit the nearest pattern.
     const UNCOVERED = [
@@ -2161,12 +2172,16 @@
     if (e.smic && hasItem) dims.push("item.CATEGORY_ID");
     if (!dims.length) dims.push(`${fAlias}.DIVISION_NM`);
 
-    const metrics = [], gapsInline = [];
+    const metrics = [], gapsInline = [], usedAliases = new Set();
     (A.derived || []).forEach((m) => {
       const expr = String(m.formula).split(" — ")[0].trim();
       if (m.status === "gap") gapsInline.push(`-- NOT TRACEABLE YET: ${m.name} — no known table/derived feature; requires new feed`);
-      else if (/^[A-Za-z0-9_.()\/*+\-, ]+$/.test(expr)) metrics.push(`  ${expr} AS ${m.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`);
-      else metrics.push(`  /* ${m.name}: ${expr} */`);
+      else if (/^[A-Za-z0-9_.()\/*+\-, ]+$/.test(expr)) {
+        let alias = m.name.toLowerCase().replace(/%/g, " pct").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+        while (usedAliases.has(alias)) alias += "_2";
+        usedAliases.add(alias);
+        metrics.push(`  ${expr} AS ${alias}`);
+      } else metrics.push(`  /* ${m.name}: ${expr} */`);
     });
 
     const where = [];
