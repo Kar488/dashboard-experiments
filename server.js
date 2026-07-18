@@ -19,6 +19,149 @@ const promoPlanProvider = process.env.PROMO_PLAN_PROVIDER === "real"
   : require("./data/promoPlanStore");
 const dashboardProvider = require("./data/dashboardStore");
 
+// --- Tier-3 LLM contract inference ------------------------------------
+// The T1/T2 tiers are deterministic registry lookups and stay in the
+// browser. Tier-3 (no registry hit) is a real fast-model call made here,
+// server-side, so the API key never reaches the client. With no
+// ANTHROPIC_API_KEY the endpoint reports live:false and the client falls
+// back to its deterministic simulation, labeled SIMULATED in the UI.
+// Provider: T3_PROVIDER=anthropic|openai, else auto-detected from which key
+// is present (Anthropic preferred when both are set).
+const T3_PROVIDER = process.env.T3_PROVIDER
+  || (process.env.ANTHROPIC_API_KEY ? "anthropic" : process.env.OPENAI_API_KEY ? "openai" : null);
+const T3_MODEL = process.env.T3_MODEL || (T3_PROVIDER === "openai" ? "gpt-5.4-mini" : "claude-haiku-4-5");
+let anthropicClient = null;
+let anthropicLoadError = null;
+function getAnthropic() {
+  if (anthropicClient || anthropicLoadError) return anthropicClient;
+  try {
+    const Anthropic = require("@anthropic-ai/sdk");
+    anthropicClient = new Anthropic();
+  } catch (error) {
+    anthropicLoadError = "@anthropic-ai/sdk not installed — run `npm install` (" + error.message + ")";
+  }
+  return anthropicClient;
+}
+
+function llmStatus() {
+  if (!T3_PROVIDER) {
+    return { live: false, provider: null, model: T3_MODEL, reason: "no ANTHROPIC_API_KEY or OPENAI_API_KEY set — tier-3 falls back to deterministic simulation" };
+  }
+  if (T3_PROVIDER === "anthropic" && !process.env.ANTHROPIC_API_KEY) return { live: false, provider: T3_PROVIDER, model: T3_MODEL, reason: "T3_PROVIDER=anthropic but ANTHROPIC_API_KEY not set" };
+  if (T3_PROVIDER === "openai" && !process.env.OPENAI_API_KEY) return { live: false, provider: T3_PROVIDER, model: T3_MODEL, reason: "T3_PROVIDER=openai but OPENAI_API_KEY not set" };
+  if (T3_PROVIDER === "anthropic" && !getAnthropic()) return { live: false, provider: T3_PROVIDER, model: T3_MODEL, reason: anthropicLoadError };
+  return { live: true, provider: T3_PROVIDER, model: T3_MODEL, reason: null };
+}
+
+// Structured-output schema for the T3 decision. The model picks an
+// archetype from the registry catalog and emits entity HINTS — the
+// NL2SQL pipeline's trained NER remains the entity authority downstream.
+function t3Schema(archetypeIds) {
+  return {
+    type: "object",
+    properties: {
+      archetype: { type: "string", enum: archetypeIds, description: "Best-matching response archetype from the registry catalog" },
+      confidence: { type: "number", description: "0-1 confidence that the chosen archetype's response template answers the question's intent" },
+      entities: {
+        type: "object",
+        description: "Entity hints extracted from the question; null when absent",
+        properties: {
+          vendor: { type: ["string", "null"] },
+          smic: { type: ["string", "null"] },
+          division: { type: ["string", "null"] },
+          period: { type: ["string", "null"], description: "Fiscal period phrase as written, e.g. 'Q3 2025', 'P4 2026', 'Promo Week 12'" },
+          item: { type: ["string", "null"] },
+          ncrc: { type: ["string", "null"] }
+        },
+        required: ["vendor", "smic", "division", "period", "item", "ncrc"],
+        additionalProperties: false
+      },
+      needs_clarification: { type: "boolean", description: "True when a required slot cannot be resolved and guessing would risk a wrong filter" },
+      clarification_question: { type: ["string", "null"], description: "The one question to ask the merchant when needs_clarification is true" },
+      uncovered_concepts: {
+        type: "array", items: { type: "string" },
+        description: "Concepts in the question that NO archetype's data plan covers (e.g. household exclusivity, basket affinity) — these render with lineage marked not-traceable"
+      }
+    },
+    required: ["archetype", "confidence", "entities", "needs_clarification", "clarification_question", "uncovered_concepts"],
+    additionalProperties: false
+  };
+}
+
+async function t3Resolve(body) {
+  const question = String(body.question || "").slice(0, 2000);
+  const catalog = Array.isArray(body.archetype_catalog) ? body.archetype_catalog : [];
+  const fewShot = Array.isArray(body.few_shot) ? body.few_shot.slice(0, 3) : [];
+  if (!question || !catalog.length) throw new Error("question and archetype_catalog are required");
+  const archetypeIds = catalog.map((a) => String(a.id));
+
+  const system = [
+    "You are the tier-3 intent-inference stage of a merchant Q&A response-contract layer for a grocery merchandising intelligence platform (divisions, vendors, SMIC categories, fiscal periods, promotions, allowances, AGP profit).",
+    "The question missed the exact-match and nearest-neighbor registry tiers. Your job: pick the ONE archetype from the catalog whose response template best answers the question's intent, extract entity hints, and flag any concepts no archetype covers.",
+    "Rules: never force-fit — if core concepts (household/loyalty-level analysis, basket affinity, penetration, switching) are outside every archetype's data plan, list them in uncovered_concepts and pick the closest structural archetype anyway. If a required slot (e.g. which vendor, which period) is genuinely unresolvable and matters to the answer, set needs_clarification. Entities are HINTS only — a downstream NER pipeline is authoritative.",
+    "",
+    "Archetype catalog:",
+    ...catalog.map((a) => `- ${a.id}: ${a.intent || a.name || ""}`)
+  ].join("\n");
+
+  const examples = fewShot.length
+    ? "Nearest registry questions (few-shot context — these resolved to the archetypes shown):\n" +
+      fewShot.map((f) => `Q: ${f.question}\n→ archetype: ${f.archetype}`).join("\n\n") + "\n\n"
+    : "";
+
+  const userContent = examples + "Merchant question:\n" + question;
+  const started = Date.now();
+
+  if (T3_PROVIDER === "openai") {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: T3_MODEL,
+        reasoning_effort: "none",
+        max_completion_tokens: 1024,
+        messages: [{ role: "system", content: system }, { role: "user", content: userContent }],
+        response_format: { type: "json_schema", json_schema: { name: "t3_decision", strict: true, schema: t3Schema(archetypeIds) } }
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${(data.error && data.error.message) || "request failed"}`);
+    const parsed = JSON.parse(data.choices[0].message.content);
+    return {
+      ...parsed,
+      _meta: {
+        provider: "openai",
+        model: data.model,
+        latency_ms: Date.now() - started,
+        input_tokens: data.usage.prompt_tokens,
+        output_tokens: data.usage.completion_tokens,
+        stop_reason: data.choices[0].finish_reason
+      }
+    };
+  }
+
+  const response = await getAnthropic().messages.create({
+    model: T3_MODEL,
+    max_tokens: 1024,
+    system,
+    output_config: { format: { type: "json_schema", schema: t3Schema(archetypeIds) } },
+    messages: [{ role: "user", content: userContent }]
+  });
+  const textBlock = response.content.find((b) => b.type === "text");
+  const parsed = JSON.parse(textBlock ? textBlock.text : "{}");
+  return {
+    ...parsed,
+    _meta: {
+      provider: "anthropic",
+      model: response.model,
+      latency_ms: Date.now() - started,
+      input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
+      stop_reason: response.stop_reason
+    }
+  };
+}
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
@@ -53,6 +196,27 @@ function searchToObject(url) {
 
 const server = http.createServer((request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
+
+  if (url.pathname === "/api/llm/status" && request.method === "GET") {
+    sendJson(response, 200, llmStatus());
+    return;
+  }
+
+  if (url.pathname === "/api/llm/t3-resolve" && request.method === "POST") {
+    const status = llmStatus();
+    if (!status.live) {
+      sendJson(response, 503, { error: status.reason });
+      return;
+    }
+    readJsonBody(request).then(async (body) => {
+      try {
+        sendJson(response, 200, await t3Resolve(body));
+      } catch (error) {
+        sendJson(response, 502, { error: error.message });
+      }
+    });
+    return;
+  }
 
   if (url.pathname === "/dashboard-ui/api/get-categories" && request.method === "GET") {
     const fixture = loadFixture();
