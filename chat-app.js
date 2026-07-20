@@ -2371,6 +2371,7 @@
     // concept-coverage guard: if the question's core concepts exist in no
     // archetype, never force-fit the nearest pattern.
     const UNCOVERED = [
+      [/facings?|planogram|shelf[- ]?(width|space|productivity)|days of supply|out-of-stock|\boos\b|pack[- ]?out|spaced relative/i, "novel_analysis"],
       [/basket (affinity|analysis)|penetration|switching|loyalty segment|trip (mission|frequency)|share of wallet/i, "novel_analysis"],
       [/exclusiv|(household|hh\b).*(overlap|exclusiv)|overlap.*promo|promo.*overlap/i, "household_exclusivity"],
       [/household|hh\b/i, "novel_analysis"]
