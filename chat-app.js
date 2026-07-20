@@ -1758,12 +1758,8 @@
     if (isSpace) {
       const catNm = e.cat || (/cream cheese/i.test(ask) ? "CREAM CHEESE" : "the category");
       const items = (catInfo(catNm) ? catInfo(catNm).v : ["OWN BRANDS", "KRAFT HEINZ CO"]).slice(0, 4).map((v, i) => ncrcName(v, { ...e, cat: catNm }, rngFor(id, 60 + i)) + " " + ["8OZ", "12OZ", "8OZ WHIPPED", "16OZ"][i % 4]);
-      blocks.push(H(`I cannot determine which ${catNm.toLowerCase()} items are over- or under-spaced in ${e.div || "the division"} from the currently available data — the inputs below are not onboarded. Here is exactly what is missing, and the answer this will produce once it lands.`));
-      blocks.push(BU([
-        "Missing inputs (in plain terms): current facings and shelf width by item (planogram system) · item dimensions and case-pack · units per facing · store-item unit velocity · replenishment frequency and lead time · out-of-stock rate · minimum/maximum facings and presentation standards.",
-        "Already available: item-level sales, units and gross profit for " + (e.div || "the division") + " (transaction data) — these fund the productivity math the moment the space inputs arrive."
-      ]));
-      blocks.push(TB("Target output — per item, once planogram + velocity inputs are onboarded (ILLUSTRATIVE)",
+      blocks.push(H(`Illustrative read for ${e.div || "the division"} ${catNm.toLowerCase()}: 2 of 4 items are over-spaced (low profit per inch), 1 is under-spaced with frequent out-of-stocks — the facing moves below release ~8 inches for reallocation while holding assortment breadth. Values are illustrative until the space inputs land (listed below).`));
+      blocks.push(TB("Per-item space diagnostic and facing recommendation — ILLUSTRATIVE",
         ["Item", "Current facings", "Recommended facings", "Space status", "Primary reason", "Expected impact"], [
           [items[0], "4", "2", "OVER-SPACED", "Low velocity and low profit per inch of shelf", "Releases ~8 inches for reallocation"],
           [items[1], "1", "3", "UNDER-SPACED", "High velocity with frequent out-of-stocks", "Recovers lost sales; fewer OOS events"],
@@ -1771,6 +1767,10 @@
           [items[3], "3", "2", "OVER-SPACED", "Slow mover held for assortment breadth", "Keep 1 facing minimum; release the rest"]
         ]));
       blocks.push(NOTE("Recommendations stay within the existing shelf width, respect minimum presentation standards and pack-out, and preserve required assortment breadth — those constraints are part of the template, not afterthoughts."));
+      blocks.push(BU([
+        "To make these numbers real, the missing inputs are (in plain terms): current facings and shelf width by item (planogram system) · item dimensions and case-pack · units per facing · store-item unit velocity · replenishment frequency and lead time · out-of-stock rate · minimum/maximum facings and presentation standards.",
+        "Already available: item-level sales, units and gross profit for " + (e.div || "the division") + " (transaction data) — these fund the productivity math the moment the space inputs arrive."
+      ]));
     } else
     if (isPen) {
       const pen = rr(rng, 0.1, 0.3), penLY = pen - rr(rng, -0.02, 0.03);
@@ -2919,9 +2919,12 @@
       gaps: (spec.gaps || []).map((g) => ({ sev: g.severity, text: g.text }))
     };
     R[spec.id] = (id, e) => renderConstructed(spec, id, e);
-    if (spec.canonical_question) {
-      QINDEX.push({ id: 800 + QINDEX.length, a: spec.id, e: {}, text: spec.canonical_question, norm: norm(spec.canonical_question), toks: tokens(spec.canonical_question) });
-    }
+    // Anchor BOTH phrasings in the registry index: the model's canonical
+    // wording AND the original field question — T2 retrieval needs the
+    // real-world phrasing, not just the cleaned-up one.
+    [spec.canonical_question, spec.original_question].filter(Boolean).forEach((q) => {
+      QINDEX.push({ id: 800 + QINDEX.length, a: spec.id, e: {}, text: q, norm: norm(q), toks: tokens(q) });
+    });
     return true;
   }
 
@@ -2946,26 +2949,28 @@
     return `ROW ${i + 1}`;
   }
   function renderConstructed(spec, id, e) {
+    // MERCHANT-CLEAN rendering: the merchant sees example content (finished
+    // sentences, coherent rows) and ONE concise data-quality line. The
+    // itemized NOT-TRACEABLE detail and section purposes live in the
+    // lineage/debug panel via the registered spec — that is what it is for.
     const blocks = [];
     const untraceable = (spec.lineage || []).filter((l) => l.table === "NOT_TRACEABLE");
-    blocks.push(NOTE(`No registered template covered this question — a new contract “${spec.id}” was constructed, rendered below in full target shape (ILLUSTRATIVE values), and REGISTERED: future questions in this family resolve to it directly instead of re-constructing.`));
     (spec.sections || []).forEach((s, si) => {
       const r = rngFor(id, 50 + si);
-      if (s.type === "headline") blocks.push(H(`${s.purpose} — illustrative read for ${scope(e)}, ${per(e)}.`));
+      if (s.type === "headline") blocks.push(H(s.example || `${spec.name} — illustrative read for ${scope(e)}, ${per(e)}.`));
       else if (s.type === "table" && (s.columns || []).length) {
-        const rows = Array.from({ length: 5 }, (_, i) => {
+        const good = Array.isArray(s.example_rows) && s.example_rows.length && s.example_rows.every((row) => Array.isArray(row) && row.length === s.columns.length);
+        const rows = good ? s.example_rows.slice(0, 6) : Array.from({ length: 5 }, (_, i) => {
           const rr2 = rngFor(id, 100 + si * 10 + i);
-          return [rowEntity(s.row_entity, i, rr2, e)].concat(s.columns.slice(1).map((c) => cellFor(c, rr2)));
+          return [rowEntity(s.row_entity, i, rr2, e) + " " + ["8OZ", "12OZ", "16OZ", "24OZ", "32OZ"][i % 5]].concat(s.columns.slice(1).map((c) => cellFor(c, rr2)));
         });
         blocks.push(TB(s.title + " — ILLUSTRATIVE", s.columns, rows));
       }
-      else if (s.type === "bullets") blocks.push(BU([s.purpose]));
-      else blocks.push(NOTE(s.purpose));
+      else if (s.type === "bullets") { if (s.example) blocks.push(BU([s.example])); }
+      else if (s.example) blocks.push(NOTE(s.example));
     });
-    if ((spec.gaps || []).length || untraceable.length) blocks.push(GAPBOX(
-      (spec.gaps || []).map((g) => g.text).concat(untraceable.map((l) => `NOT TRACEABLE YET: ${l.needed_for} — requires ${l.missing_feed || "a feed not yet onboarded"}.`))
-    ));
-    blocks.push(FU(["Adjust the constructed template's sections or columns before it hardens into the registry?", "Which piece should run on real data first?"]));
+    blocks.push(NOTE(`Illustrative values — ${untraceable.length ? "key inputs for this analysis aren't onboarded yet (flip “Data lineage” for the exact feeds and status of every figure)" : "pending validation against live data"}. This response shape was constructed for this question and registered — similar questions now answer instantly.`));
+    blocks.push(FU(["Adjust this template's sections or columns before it hardens into the registry?", "Which piece should run on real data first?"]));
     return blocks;
   }
 
@@ -2977,6 +2982,7 @@
     });
     if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
     const spec = await resp.json();
+    spec.original_question = text;
     registerConstructed(spec);
     fetch("/api/registry/constructed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }).catch(() => {});
     return { ...match, arch: spec.id, live: true, constructed: true, model: spec._meta.model,
@@ -3060,25 +3066,38 @@
 
   async function answer(text) {
     let match = matchQuestion(text);
-    // Generic tier-3 misses go through the live fast-model call when a key
-    // is configured. Deterministic guards (compound decomposition, concept-
-    // coverage, clarification hold) are policy checks and stay code-side.
-    if (match.tier === 3 && !match.guarded && LLM.live) match = await t3Live(text, match);
-    // A key-less guard routed this to the canned proposal — but when the
-    // model IS live, uncovered concepts must go to the real constructor.
-    else if (match.tier === 3 && match.guarded && match.arch === "novel_analysis" && LLM.live) {
-      try { match = await constructAndRegister(text, { ...match, e: { ...(match.e || {}), rawAsk: text } }); } catch { /* keep canned fallback */ }
-    }
-    const contract = buildContract(match, text);
+    // Render the bubble BEFORE any live model call so the user watches a
+    // labeled stage instead of a frozen screen during inference/construction.
     const m = el("div", "msg bot");
     const bubble = el("div", "bubble");
     m.appendChild(bubble);
     thread().appendChild(m);
-
-    // staged pipeline
     const stages = el("div", "stages");
     bubble.appendChild(stages);
     scrollDown();
+    const willConstruct = match.tier === 3 && match.guarded && match.arch === "novel_analysis" && LLM.live;
+    const willInfer = match.tier === 3 && !match.guarded && LLM.live;
+    let liveRow = null;
+    if (willConstruct || willInfer) {
+      liveRow = el("div", "stage running", `<span class="dot"></span>${esc(willConstruct
+        ? `No registered template covers this — constructing a NEW response contract via ${LLM.model} (one-time for this question family; registered for instant reuse afterwards)…`
+        : `No direct hit — inferring contract via ${LLM.model} (live)…`)}`);
+      stages.appendChild(liveRow);
+      scrollDown();
+    }
+    // Generic tier-3 misses go through the live fast-model call when a key
+    // is configured. Deterministic guards (compound decomposition, concept-
+    // coverage, clarification hold) are policy checks and stay code-side.
+    if (willInfer) match = await t3Live(text, match);
+    // Guarded uncovered concepts also go through the RESOLVER first — it
+    // sees the full catalog (incl. previously constructed templates) and
+    // only falls to construction when nothing covers the question. Going
+    // straight to the constructor would mint duplicates of known templates.
+    else if (willConstruct) {
+      try { match = await t3Live(text, { ...match, e: { ...(match.e || {}), rawAsk: text }, guarded: false }); } catch { /* keep canned fallback */ }
+    }
+    if (liveRow) liveRow.remove();
+    const contract = buildContract(match, text);
     const stageDefs = [
       match.tier === 1 ? { label: `Intent matched — registry exact hit`, ms: 240 }
         : match.tier === 2 ? { label: `Intent matched — nearest neighbor (${match.score.toFixed(2)})`, ms: 380 }
@@ -3124,7 +3143,8 @@
     const jPass = judge.filter((c) => c.pass).length;
     // Never let "judge N/N ✓" imply a data-gap response answered the business
     // question — structure passing and the question being answerable differ.
-    const hasGap = blocks.some((b) => b.t === "gap" && (b.items || []).some((x) => /not traceable|not onboarded|blocked/i.test(x)));
+    const hasGap = blocks.some((b) => (b.t === "gap" && (b.items || []).some((x) => /not traceable|not onboarded|blocked/i.test(x)))
+      || (b.t === "note" && /aren't onboarded yet/i.test(b.text || "")));
     bubble.appendChild(el("div", "mock-tag", `mock data · ${match.live ? `intent via ${match.model} (live)` : "answered"} in ${(elapsed / 1000).toFixed(1)}s ${match.live ? "" : "simulated "}(budget 30s) · judge ${jPass}/${judge.length} structure checks ${jPass === judge.length ? "✓" : "⚠"}${hasGap ? " · DATA GAP — the business question is not yet answerable from onboarded data; shape shown, values illustrative" : ""}`));
     bubble.appendChild(debugPanel(match, contract, judge));
     scrollDown();
