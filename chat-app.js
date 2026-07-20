@@ -2001,8 +2001,16 @@
   };
 
   R.advisory_scope = (id, e) => [
-    H("This is a strategy-and-optimization program, not a single analytical question — and answering it with one table would be meaningless, so the layer won't."),
-    P(`The ask spans ${e.domainCount || "many"} decision domains, for every SKU in every store over ${e.horizon || "a 52-week horizon"}, optimizing many objectives simultaneously. That is the job of planning and optimization systems working together over months — pricing optimization, promo planning, replenishment — each of which this Q&A layer can feed with inputs, but none of which it can replace with a response.`),
+    H("Here is the target shape of the integrated answer — every figure illustrative — followed by exactly which pieces run today and which are blocked."),
+    TB("ILLUSTRATIVE integrated plan summary — what the full program's output looks like when the systems are wired together", ["Lever", "Recommended move (illustrative)", "Projected sales", "Projected AGP", "Owning system", "Input status"], [
+      ["Price", "Close the 14 CPI gaps > 5% vs primary competitor; hold KVIs", "+$2.1M", "+$940K", "Pricing optimization", "Inputs answerable today (competitor_price)"],
+      ["Promo calendar", "Move 6 overlapping Q2 events into trough weeks; cap depth at 22%", "+$1.4M", "+$380K", "Promotion-forecast optimizer", "Inputs answerable today (promo + redemption)"],
+      ["Vendor funding", "Recover $1.4M unpassed list-cost across 3 vendors; shift OI → scan on 2 programs", "—", "+$1.1M", "Negotiation workflow", "Inputs answerable today (allowances, Line 7)"],
+      ["Assortment", "Exit bottom-decile 42 SKUs; expand zero-sugar / mini-can distribution gaps", "+$800K", "+$310K", "Category review", "Partial (attributes; formal optimization pending)"],
+      ["Inventory / replenishment / procurement", "—", "—", "—", "Replenishment system", "BLOCKED — no inventory/PO feeds onboarded"],
+      ["CLV / basket / behavior drift", "—", "—", "—", "Loyalty analytics", "BLOCKED — household data not onboarded"]
+    ]),
+    P(`That table is the answer's shape — and it is honest about being illustrative, because the ask spans ${e.domainCount || "many"} decision domains for every SKU in every store over ${e.horizon || "a 52-week horizon"} with many simultaneous objectives. Producing those numbers for real is the job of planning and optimization systems working together — pricing optimization, promo planning, replenishment — each of which this layer feeds with the registered decompositions below.`),
     TB("Where each piece of the ask stands today", ["Decision domain", "Status", "What exists"], [
       ["Selling price vs competition", "Answerable", "Competitive price / CPI templates (competitor_price)"],
       ["Promotional calendar & effectiveness", "Answerable", "Promo effectiveness, frequency, quad review templates; the promotion-forecast optimizer owns forward planning"],
@@ -2014,17 +2022,35 @@
       ["Customer lifetime value / basket / behavior drift", "Blocked", "Requires household-level data — not onboarded"]
     ]),
     BU([
-      "The honest path is decomposition: pick ONE category, ONE lever, ONE period, and the registered templates answer it with lineage — e.g. “which promo tactic maximizes incremental AGP for Cheese Shreds in Q3?” runs today.",
-      "Long-horizon multi-objective optimization under uncertainty is a modeling program with governance, not a chat answer — any response claiming otherwise would be invented."
+      "The executable path is decomposition: pick ONE category, ONE lever, ONE period, and the registered templates answer it with real lineage — e.g. “which promo tactic maximizes incremental AGP for Cheese Shreds in Q3?” runs today.",
+      "The plan-summary figures above become real when the owning systems run them — this layer's role is feeding each system its decompositions and scoring the answers."
     ]),
-    NOTE("Contract status: SCOPE_DISCLOSURE — no data was force-fitted; nothing in the answer above is fabricated."),
+    GAPBOX(["Every figure in the plan summary is ILLUSTRATIVE — the target output shape, not a computed plan. Lineage: price/promo/funding rows draw on onboarded tables; inventory and CLV rows are not traceable to any known tables or feeds yet."]),
     FU(["Which single decision do you want to start with — category, lever, and period?"])
   ];
 
-  R.methodology = (id, e) => [
-    H("This is a measurement-design question. The data can bound the answer, but no query separates those two effects by itself — here is what can and cannot be known, and how to decide anyway."),
-    P("The identification problem: after a price cut, the observed lift is the joint result of (a) customers valuing the lower price (own-price elasticity) and (b) competitors holding their prices (competitive gap widening). Both push the same direction in the same weeks, so transaction data alone cannot split them — any answer that claims to would be fabricating precision."),
-    TB("What the current data CAN and CANNOT separate", ["Question", "Status", "How"], [
+  R.methodology = (id, e) => {
+    const rng = rngFor(id);
+    const lift = rr(rng, 0.05, 0.08), compShare = lift * rr(rng, 0.3, 0.45), ownShare = lift - compShare;
+    const agpInc = rr(rng, 0.3, 0.6);
+    return [
+    H(`Illustrative worked answer first: of a ${fmt.spct(lift)} unit lift after a cut, the division natural-experiment bounds ~${fmt.spct(ownShare)} as genuine price response and ~${fmt.spct(compShare)} as competitor non-response — and at deadnet, the cut earns $${agpInc.toFixed(2)} AGP per incremental unit net of funding, so it clears the bar under EITHER split. Below: how each piece is knowable.`),
+    TB("ILLUSTRATIVE — competitor response check (CPI pre/post the change window)", ["Priority competitor", "CPI before", "CPI after", "Did they respond?"], [
+      ["Competitor A (primary)", "103.1", "98.4", "NO — held price; our gap widened"],
+      ["Competitor B", "101.7", "100.9", "NO — token moves on 2 of 14 items"],
+      ["Competitor C (value)", "96.2", "96.0", "Already below us; unchanged"]
+    ]),
+    TB("ILLUSTRATIVE — division natural experiment (divisions price independently)", ["Division group", "Competitive gap change", "Unit lift", "Read"], [
+      ["Divisions where gap WIDENED (they held)", "+4.7 pts", fmt.spct(lift), "Joint effect: price + competitor non-response"],
+      ["Divisions where gap was UNCHANGED (they matched fast)", "≈ 0", fmt.spct(ownShare), "Bounds the pure price response"],
+      ["Difference", "—", fmt.spct(compShare), "Bounds the competitor-non-response share of the lift"]
+    ]),
+    TB("ILLUSTRATIVE — decision economics (does not require separating the effects)", ["Measure", "Value", "Verdict"], [
+      ["Deadnet AGP per incremental unit (net of funding)", `$${agpInc.toFixed(2)}`, "Positive → right decision under either explanation"],
+      ["If competitors later match", "share gain decays, margin cost stays", "Track CPI weekly post-change as the early-warning signal"]
+    ]),
+    P("Why it needs this design: after a price cut, the observed lift is the joint result of (a) customers valuing the lower price and (b) competitors holding theirs. Both push the same direction in the same weeks, so transaction data alone cannot split them — the tables above show the two honest instruments: check whether competitors actually moved, and exploit divisions as natural experiments."),
+    TB("How each input is knowable", ["Question", "Status", "How"], [
       ["Did competitors respond?", "Answerable", "competitor_price: CPI pre/post the change window, by priority competitor"],
       ["Did the market move or just us?", "Answerable", "Circana share: our lift vs category movement (≈1-week lag)"],
       ["Natural experiment across divisions", "Answerable", "Divisions price independently — compare lift where the competitive gap changed vs where it did not; the difference bounds the competitor effect"],
@@ -2033,13 +2059,13 @@
       ["Which households switched from competitors", "Blocked", "Household-level data not onboarded"]
     ]),
     BU([
-      "Judging “was it the right decision” does not require separating the effects: score it on deadnet AGP per incremental unit net of vendor funding. If incremental margin is negative, it was the wrong move under EITHER explanation.",
-      "If competitors later match the price, the share gain decays while the margin cost stays — track CPI weekly post-change as the early-warning signal.",
+      "Judging “was it the right decision” does not require separating the effects: score it on deadnet AGP per incremental unit net of vendor funding — negative incremental margin means wrong move under EITHER explanation.",
       "Forward-looking: the only clean separation is a designed test — matched stores or divisions holding price, with CPI monitored, before rolling wide."
     ]),
-    NOTE("Lineage: competitor_price, sales_cost_allowances and market_share are onboarded and drive the answerable rows; the two blocked rows are marked as not knowable from current data — stated, not approximated."),
+    GAPBOX(["All figures above are ILLUSTRATIVE — the target answer shape for a real price change (name the category + date and the answerable tables run on actual data). Lineage: competitor_price, sales_cost_allowances and market_share drive the answerable rows; clean own-price elasticity and household switching are not traceable to any known tables or feeds yet — stated, not approximated."]),
     FU(["Run the CPI pre/post check for a specific price change (category + date)?", "Set up the division-level natural-experiment cut for a change you already made?"])
   ];
+  };
 
   R.clarify = (id, e) => e.llmClarify ? [
     H("One value needs confirming before this can run."),
