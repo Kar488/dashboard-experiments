@@ -4,6 +4,23 @@ const path = require("node:path");
 
 const port = Number(process.env.PORT || 5173);
 const root = __dirname;
+
+// --- .env config file (gitignored) --------------------------------------
+// Put API keys in a `.env` file next to server.js — one KEY=value per line:
+//   OPENAI_API_KEY=sk-proj-...
+//   ANTHROPIC_API_KEY=sk-ant-...
+//   T3_MODEL=gpt-5.4-mini        (optional)
+// Loaded at startup; real environment variables take precedence. The file
+// is gitignored on purpose — never commit keys (GitHub secret scanning
+// auto-reports pushed OpenAI keys for revocation).
+try {
+  const envFile = fs.readFileSync(path.join(root, ".env"), "utf8");
+  envFile.split("\n").forEach((line) => {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.+?)\s*$/);
+    if (m && !m[1].startsWith("#") && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  });
+  console.log("Loaded .env config");
+} catch { /* no .env file — env vars only */ }
 const types = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",

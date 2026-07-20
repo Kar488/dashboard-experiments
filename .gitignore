@@ -9,3 +9,4 @@ _pdfx.js
 .DS_Store
 node_modules/
 data/constructed-templates.json
+.env

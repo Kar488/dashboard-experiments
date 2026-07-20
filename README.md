@@ -13,9 +13,14 @@ questions (few-shot), and the archetype catalog go to Claude with a structured-o
 JSON schema; the model returns the archetype choice, entity hints, uncovered concepts,
 and clarification holds.
 
-- Enable it (either provider — keys stay server-side, never in the browser):
-  - `ANTHROPIC_API_KEY=sk-ant-... npm start` → `claude-haiku-4-5`
-  - `OPENAI_API_KEY=sk-proj-... npm start` → `gpt-5.4-mini` (reasoning_effort none)
+- Enable it (either provider — keys stay server-side, never in the browser).
+  **Easiest: create a `.env` file next to `server.js`** (one-time; copy
+  `.env.example` and paste your key) — the server auto-loads it on `npm start`:
+  - `OPENAI_API_KEY=sk-proj-...` → `gpt-5.4-mini` (reasoning_effort none)
+  - `ANTHROPIC_API_KEY=sk-ant-...` → `claude-haiku-4-5`
+  - `.env` is gitignored — NEVER commit keys (GitHub secret scanning
+    auto-reports pushed OpenAI keys for revocation). Environment variables
+    still work and take precedence over `.env`.
 - Override with `T3_MODEL=...` and/or `T3_PROVIDER=anthropic|openai` (Anthropic
   wins when both keys are set)
 - Without a key the tier falls back to a deterministic simulation, labeled
