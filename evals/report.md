@@ -1,4 +1,4 @@
-# Pressure-test report — 156 questions
+# Pressure-test report — 157 questions
 
 | Class | Pass | Total |
 |---|---|---|
@@ -6,6 +6,7 @@
 | focal | 1 | 1 |
 | mega | 1 | 1 |
 | scope | 2 | 2 |
+| exclusion | 1 | 1 |
 | paraphrase | 10 | 10 |
 | compound | 3 | 3 |
 | premise | 2 | 2 |
