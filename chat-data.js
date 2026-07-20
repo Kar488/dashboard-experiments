@@ -647,6 +647,47 @@ window.ChatData = (() => {
       ]
     },
 
+    advisory_scope: {
+      name: "Strategy / optimization program — beyond a single analytical answer",
+      style: "gap",
+      intent: "The question spans many decision domains (pricing, promo, inventory, assortment, funding, labor...) for every SKU/store over a long horizon with many simultaneous objectives. That is an optimization PROGRAM, not an analytical question — no honest single response exists. The template maps which pieces the registry answers today, which are blocked, and which are out of scope entirely, then asks for the first concrete decision.",
+      lineage: [],
+      derived: [],
+      recipe: [
+        "Breadth guard: count distinct decision domains + universal quantifiers ('every SKU', 'every store', long horizons, many simultaneous objectives).",
+        "Above the breadth bar, DO NOT route to the nearest data template — a share table or P&L card would be a meaningless answer.",
+        "Map each named domain to: a registered template (answerable), a blocked feed, or out-of-scope (belongs to planning/optimization systems, not Q&A).",
+        "Ask for the first concrete decision (one category, one lever, one period) to start from."
+      ],
+      gaps: [{ sev: "high", text: "Multi-objective SKU/store/week optimization is a planning-system capability (price optimization, promo optimizer, replenishment), not a query. The Q&A layer can feed those systems inputs, not replace them." }]
+    },
+    methodology: {
+      name: "Measurement design / causal question",
+      style: "gap",
+      intent: "The question asks HOW TO KNOW something (separating causal effects, judging whether a decision was right) — a measurement-design problem, not a data pull. The template states the identification problem, maps what the registered data can and cannot separate, and gives the decision framework including forward test design.",
+      lineage: [
+        { table: "competitor_price", grain: "UPC x competitor x check date", cols: ["COMP_PRICE_AMT", "OWN_PRICE_AMT", "CHECK_DATE", "COMP_PRIORITY_ID"], why: "Did competitors move after our change? (CPI pre/post)" },
+        { table: "sales_cost_allowances", grain: "UPC x store x day", cols: ["NET_AMT", "ITEM_QTY", "AGP_AMT"], why: "Own outcome series: units, sales, deadnet AGP" },
+        { table: "market_share", grain: "dept x category x week", cols: ["SHARE_PCT", "FISCAL_WEEK_NBR"], why: "Demand transfer vs market movement (Circana, ~1 week lag)" }
+      ],
+      derived: [
+        { name: "Competitive price index (pre/post)", formula: "own price / competitor price, before vs after the change window", status: "computed" },
+        { name: "Deadnet AGP per incremental unit", formula: "Δ AGP (deadnet basis) / Δ units vs baseline", status: "computed" },
+        { name: "Own-price elasticity (clean)", formula: "requires variation where competitors did NOT move — natural experiment or designed holdout", status: "gap" },
+        { name: "Household switching share", formula: "share of lift from competitor-switching households", status: "gap" }
+      ],
+      recipe: [
+        "State the identification problem plainly: post-change lift confounds own-price elasticity with the competitive (non-)response.",
+        "Check what actually happened to competitor prices in the window (competitor_price CPI pre/post).",
+        "Exploit natural experiments: divisions price independently — compare divisions where the competitive gap changed vs where it did not.",
+        "Judge 'right decision' on deadnet AGP per incremental unit net of funding — never on sales lift alone.",
+        "Forward: a designed test (matched store/division holdout with CPI monitoring) is the only clean separation."
+      ],
+      gaps: [
+        { sev: "high", text: "True switching attribution needs household-level data — not onboarded. Elasticity separation without competitor variation is not identifiable from transactions alone." },
+        { sev: "med", text: "Competitor coverage is priority-competitor checks, not census; CPI conclusions carry coverage caveats." }
+      ]
+    },
     novel_analysis: {
       name: "Novel analysis — no existing contract",
       style: "clarify",
