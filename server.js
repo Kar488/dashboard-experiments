@@ -375,11 +375,15 @@ const server = http.createServer((request, response) => {
     readJsonBody(request).then((body) => {
       try {
         if (!body || !body.id || !body.name || !Array.isArray(body.sections)) throw new Error("invalid template shape");
+        // UPSERT by id: first registration appends; a re-post with the same id
+        // replaces the stored spec (schema-evolution upgrades re-construct old
+        // specs under their original id — the registry must accept the newer
+        // version, keeping the original registration timestamp).
         const list = readConstructed();
-        if (!list.some((t) => t.id === body.id)) {
-          list.push({ ...body, registered_at: new Date().toISOString() });
-          writeConstructed(list);
-        }
+        const at = list.findIndex((t) => t.id === body.id);
+        if (at >= 0) list[at] = { ...body, registered_at: list[at].registered_at, upgraded_at: new Date().toISOString() };
+        else list.push({ ...body, registered_at: new Date().toISOString() });
+        writeConstructed(list);
         sendJson(response, 200, { registered: true, count: list.length });
       } catch (error) {
         sendJson(response, 400, { error: error.message });
