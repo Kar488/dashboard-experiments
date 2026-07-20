@@ -2602,7 +2602,10 @@
           : A.style === "diagnostic" ? ["metrics_table", "headline", "driver_bullets", "follow_ups"]
           : A.style === "clarify" ? ["clarification_request", "resolved_entities", "options"]
           : A.style === "gap" ? ["gap_disclosure", "answerable_subset", "follow_ups"]
-          : ["headline", "ranked_table", "insight_bullets", "follow_ups"]
+          : ["headline", "ranked_table", "insight_bullets", "follow_ups"],
+        // narrow lookups are projected onto the metrics the user named —
+        // the template supplies the shape, the ask decides how much shows
+        ask_scope: (narrowAskScope(inputText) || []).map((m) => m.name)
       },
       data_plan: {
         tables: A.lineage.map((l) => ({ table: l.table, grain: l.grain, columns: l.cols, purpose: l.why })),
@@ -2614,6 +2617,61 @@
       constraints: { latency_budget_ms: 30000, this_layer_budget_ms: 2000, comparison_default: "same_period_prior_year", style_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only", "no closing summary (Rule 25)"] },
       downstream: { next: "existing enrichment / phrase-extraction → custom NL2SQL pipeline (§22)", note: "ADDITIVE to the current pipeline: the NL2SQL phrase-extraction NER and schema-linking stages stay authoritative for entities and grounding; data_plan pre-scopes the table+join resolver to the intent's subset of the 15 tables / 28 joins; response_template is the contract the planner-first reasoning layer binds its synthesized answer to; the judge adds structure checks to the existing LLM-judge + numeric-diff evaluation.", input_question: inputText }
     };
+  }
+
+  // ------------------------------------------------- ask-scope projection
+  // GENERAL rule, no per-question code: a narrow lookup that names 1–3
+  // specific metrics gets an answer scoped to those metrics. The archetype
+  // defines the response's SHAPE — it is not an obligation to show every
+  // section when the merchant asked about one or two measures. Lexicon-
+  // driven (ask-term → row-label matcher), applied to any archetype's
+  // rendered blocks; broad asks (why/drivers/review/rankings) are untouched.
+  const METRIC_LEX = [
+    ["COGS", /cogs|cost of goods/i, /cogs|cost of goods/i],
+    ["allowances", /allowance/i, /allowance/i],
+    ["markdown", /markdown/i, /markdown/i],
+    ["deadnet", /dead[- ]?net/i, /deadnet/i],
+    ["AGP", /\bagp\b|gross profit|\bmargin\b/i, /agp|margin|gross profit/i],
+    ["sales", /\bsales\b|revenue/i, /sales|revenue/i],
+    ["units", /\bunits?\b|\bvolume\b/i, /\bunits?\b|volume/i],
+    ["AIV", /\baiv\b|average item value/i, /\baiv\b/i],
+    ["market share", /market share|\bshare\b/i, /share/i],
+    ["vendor funding", /funding/i, /funding/i]
+  ];
+  function narrowAskScope(text) {
+    // lookup phrasing required…
+    if (!/\bwere there\b|\bwas there\b|\bany change\b|\bchanges? (in|to)\b|\bwhat (is|was|were|are)\b|\bhow much\b|\bdid .{0,40}\bchange\b/i.test(text)) return null;
+    // …and no diagnostic / ranking / review ask — those earn the full card
+    if (/\bwhy\b|driver|decompos|diagnos|review|reconcil|rank|top\s*\d|\bwhich\b|\bwho\b|break\s?down|analy[sz]e|explain|deteriorat|impact/i.test(text)) return null;
+    const hits = METRIC_LEX.filter(([, ask]) => ask.test(text));
+    return hits.length >= 1 && hits.length <= 3 ? hits.map(([name, , row]) => ({ name, row })) : null;
+  }
+  function projectToAsk(blocks, scope) {
+    const inScope = (s) => scope.some((m) => m.row.test(s || ""));
+    // anchor: only responses carrying a metric-style card get projected —
+    // entity rankings and constructed layouts are left whole.
+    if (!blocks.some((b) => b.t === "table" && /metric|measure/i.test(String((b.cols || [])[0])))) return blocks;
+    let trimmed = false;
+    const out = [];
+    for (const b of blocks) {
+      if (b.t === "table" && /metric|measure/i.test(String((b.cols || [])[0]))) {
+        const rows = (b.rows || []).filter((r) => inScope(String(r[0])));
+        if (rows.length && rows.length < (b.rows || []).length) { out.push({ ...b, rows }); trimmed = true; }
+        else out.push(b);
+      } else if (b.t === "table") {
+        if (inScope(b.title) || inScope((b.cols || []).join(" "))) out.push(b);
+        else trimmed = true;
+      } else if (b.t === "bullets") {
+        const items = (b.items || []).filter((x) => inScope(x));
+        if (items.length) out.push({ ...b, items });
+        else trimmed = true;
+      } else out.push(b);
+    }
+    if (!trimmed) return blocks;
+    const note = NOTE(`Scoped to what you asked (${scope.map((m) => m.name).join(", ")}) — ask for the full review card to see every measure and the change bridge.`);
+    const fuAt = out.findIndex((b) => b.t === "fu");
+    if (fuAt >= 0) out.splice(fuAt, 0, note); else out.push(note);
+    return out;
   }
 
   // ------------------------------------------------------------- judge
@@ -3200,6 +3258,9 @@
     let blocks;
     try { blocks = R[match.arch](qid, match.e || {}); }
     catch (err) { blocks = [H("Could not render this archetype — " + err.message)]; }
+    // narrow lookups get an answer scoped to the metrics they named
+    const askScope = narrowAskScope(text);
+    if (askScope) blocks = projectToAsk(blocks, askScope);
     const body = el("div", "answer-body");
     bubble.appendChild(body);
     for (const b of blocks) {
