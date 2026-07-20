@@ -20,6 +20,10 @@ const fs = require("fs");
 const path = require("path");
 
 const VARIATIONS = [
+  // -- focal-vendor contribution with abbreviation + trailing window
+  //    (field miss 2026-07-20: generic decliner rank omitted P&G, used food
+  //    vendors in LAUNDRY DETERGENT, replaced "last 12wks" with Q3 2025)
+  { cls: "focal", q: "how much is P&G makes up the decline in Laundry Detergent in the last 12wks?" },
   // -- paraphrases of canonical questions (should hit Tier 1/2, right archetype)
   { cls: "paraphrase", q: "which vendors are dragging down cheese shreds profit this quarter in jewel?" },
   { cls: "paraphrase", q: "top decliners in sour cream margin rate for jewel q3 2025, give me five vendors" },

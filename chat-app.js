@@ -145,7 +145,20 @@
     "SKIN CARE": { v: ["PROCTER & GAMBLE", "UNILEVER", "LOREAL USA", "JOHNSON & JOHNSON", "BEIERSDORF INC"], noun: "SKIN CARE", sz: ["LOTION 16.9OZ", "FACIAL 1.7OZ"] },
     "REFRIGERATED DRINKS SINGLES": { v: ["COCA COLA CO", "GRP DANONE S A", "KITU LIFE INC", "OWN BRANDS"], noun: "RTD SINGLE", sz: ["12OZ", "13.7OZ"] },
     "REFRIGERATED JUICE BLENDS": { v: ["TROPICANA BRANDS GRP", "COCA COLA CO", "GRP DANONE S A", "OWN BRANDS"], noun: "JUICE BLEND", sz: ["52OZ", "89OZ"] },
-    "REFRIGERATED ORANGE JUICE": { v: ["TROPICANA BRANDS GRP", "COCA COLA CO", "FLORIDAS NATURAL", "OWN BRANDS"], noun: "ORANGE JUICE", sz: ["52OZ", "89OZ"] }
+    "REFRIGERATED ORANGE JUICE": { v: ["TROPICANA BRANDS GRP", "COCA COLA CO", "FLORIDAS NATURAL", "OWN BRANDS"], noun: "ORANGE JUICE", sz: ["52OZ", "89OZ"] },
+    "LAUNDRY DETERGENT": { v: ["PROCTER & GAMBLE", "CHURCH & DWIGHT CO", "HENKEL CORP", "UNILEVER", "THE CLOROX CO", "OWN BRANDS"], noun: "LAUNDRY DETERGENT", sz: ["46OZ", "92OZ", "PODS 42CT"] },
+    "BATH TISSUE": { v: ["PROCTER & GAMBLE", "KIMBERLY CLARK CORP", "GEORGIA PACIFIC", "OWN BRANDS"], noun: "BATH TISSUE", sz: ["6 MEGA", "12 MEGA", "18 ROLL"] },
+    "PAPER TOWELS": { v: ["PROCTER & GAMBLE", "KIMBERLY CLARK CORP", "GEORGIA PACIFIC", "OWN BRANDS"], noun: "PAPER TOWELS", sz: ["2 HUGE", "6 ROLL", "8 ROLL"] }
+  };
+  // Common vendor abbreviations → canonical vendor names (used in entity
+  // extraction AND in the judge's named-vendor ask, so "P&G" is one vendor).
+  const VENDOR_SYN = {
+    "p&g": "PROCTER & GAMBLE", "procter": "PROCTER & GAMBLE", "pg tide": "PROCTER & GAMBLE",
+    "kdp": "KEURIG DR PEPPER", "j&j": "JOHNSON & JOHNSON",
+    "church & dwight": "CHURCH & DWIGHT CO", "church and dwight": "CHURCH & DWIGHT CO",
+    "kimberly": "KIMBERLY CLARK CORP", "clorox": "THE CLOROX CO", "henkel": "HENKEL CORP",
+    "smucker": "THE J M SMUCKER CO", "coca-cola": "COCA COLA CO", "coke": "COCA COLA CO",
+    "general mills": "GENERAL MILLS INC", "kraft": "KRAFT HEINZ CO", "pepsi": "PEPSICO INC"
   };
   const DAIRY_SMICS = ["CHEESE SHREDS", "REFRIGERATED YOGURT", "CREAM CHEESE", "SOUR CREAM", "EGGS SHELL", "BUTTER/MARGARINE & SPREADS", "CREAMERS & CREAM", "CHEESE SLICES", "CHEESE CHUNKS", "REFRIGERATED DIPS"];
   function catInfo(name) {
@@ -376,6 +389,11 @@
       const uniq = [...new Set(pool)];
       names = pickN(rng, uniq, n).map((x) => ({ parent: null, name: x }));
     }
+    // Focal-contribution ask ("how much does X make up of the decline") —
+    // the named vendor MUST be in the ranking.
+    if (e.focal && e.vendor && leaf === "vendor" && !names.some((x) => x.name === e.vendor)) {
+      names[names.length - 1] = { parent: null, name: e.vendor };
+    }
 
     const base = mf.kind === "rate" ? 0.28 : mf.kind === "perunit" ? 0.9
       : mf.kind === "units" ? rr(rng, 1.5e5, 6e5)
@@ -391,7 +409,7 @@
     cols.push(cap(leaf));
     if (perQuarter) cols.push("Q3 Change", "Q4 Change", "Total Change");
     else {
-      cols.push(`${e.metric || "Metric"} TY`, "LY", "Change");
+      cols.push(`${e.metric || "Sales $"} TY`, "LY", "Change");
       if (mf.kind === "money") cols.push("% Change");
     }
     const rows = rank.rows.map((r) => {
@@ -410,13 +428,21 @@
     });
 
     const blocks = [];
-    const declWord = e.metric || (isGrowth ? "growth" : "decline");
-    blocks.push(H(isGrowth
-      ? `${rank.top.nm} leads ${declWord} in ${scope(e)} for ${per(e)} at ${mf.d(rank.top.chg)} — the top ${rows.length} together added ${mf.kind === "money" ? fmt.k(Math.abs(rank.total)) : mf.d(rank.total)} versus last year.`
+    // metricPhrase avoids "the decline decline" when no metric is named.
+    const metricPhrase = e.metric && !/declin|drop|loss/i.test(e.metric) ? e.metric + " " : "";
+    const declWord = e.metric && !/declin|drop|loss/i.test(e.metric) ? e.metric : "Sales $";
+    const focalRow = e.focal && e.vendor ? rank.rows.find((r) => r.nm === e.vendor) : null;
+    if (focalRow) {
+      const share = Math.abs(focalRow.chg) / Math.abs(rank.total);
+      const pos = rank.rows.indexOf(focalRow) + 1;
+      blocks.push(H(`${e.vendor} makes up ${mf.d(focalRow.chg)} of the ${fmt.k(Math.abs(rank.total))} ${metricPhrase}decline in ${scope({ ...e, vendor: undefined })} for ${per(e)} — ${fmt.pct(share, 0)} of the total across the ${rows.length} decliners shown, ranking #${pos} by decline size.`));
+    } else blocks.push(H(isGrowth
+      ? `${rank.top.nm} leads ${e.metric || "growth"} in ${scope(e)} for ${per(e)} at ${mf.d(rank.top.chg)} — the top ${rows.length} together added ${mf.kind === "money" ? fmt.k(Math.abs(rank.total)) : mf.d(rank.total)} versus last year.`
       : mf.kind === "money"
-        ? `${rows.length} ${leaf}s account for ${fmt.k(Math.abs(rank.total))} of the ${declWord} decline in ${scope(e)} for ${per(e)} — ${rank.top.nm} is the largest at ${mf.d(rank.top.chg)}, and the top two are ${fmt.pct(rank.topShare, 0)} of the total. Sorted by decline, largest first.`
-        : `${rank.top.nm} shows the largest ${declWord} decline in ${scope(e)} for ${per(e)} at ${mf.d(rank.top.chg)}. Sorted by decline, largest first.`));
+        ? `${rows.length} ${leaf}s account for ${fmt.k(Math.abs(rank.total))} of the ${metricPhrase}decline in ${scope(e)} for ${per(e)} — ${rank.top.nm} is the largest at ${mf.d(rank.top.chg)}, and the top two are ${fmt.pct(rank.topShare, 0)} of the total. Sorted by decline, largest first.`
+        : `${rank.top.nm} shows the largest ${metricPhrase}decline in ${scope(e)} for ${per(e)} at ${mf.d(rank.top.chg)}. Sorted by decline, largest first.`));
     blocks.push(TB(`${declWord} — ${per(e)} vs prior year, sorted ${isGrowth ? "largest gain" : "largest decline"} first`, cols, rows));
+    if (focalRow) blocks.push(NOTE(`Share is computed against the ${rows.length} declining vendors shown; the category-wide decline including flat/growing vendors is in the export. ${/last \d+ weeks/i.test(e.period || "") ? "Trailing window resolves per division via promo_calendar latest-week flags." : ""}`));
     const listN = e.listGiven || e.vendorList || e.smicList || e.ncrcList;
     if (listN && listN > rows.length) blocks.push(NOTE(`Screened all ${listN} listed entities; the ${rows.length} shown are the decliners, ranked. The rest were flat or improving — full grid in export.`));
     if (e.byWeek) {
@@ -1945,14 +1971,21 @@
     const q = t.match(/q([1-4])\s*(fy)?\s*(20\d\d|\d\d)?/); if (q) e.period = `Q${q[1]} ${q[3] ? (q[3].length === 2 ? "20" + q[3] : q[3]) : "2025"}`;
     const p = t.match(/p(\d{1,2})\s*(20\d\d)?/); if (!e.period && p) e.period = `P${p[1]} ${p[2] || "2025"}`;
     const fy = t.match(/fy\s?(20)?(\d\d)/); if (!e.period && fy) e.period = `FY 20${fy[2]}`;
+    const lw = t.match(/last\s*(\d{1,2})\s*w(?:ee)?ks?/); if (!e.period && lw) e.period = `last ${lw[1]} weeks`;
     if (!e.period) e.period = "Q3 2025";
     for (const [dom, smics] of Object.entries(POOLS.smics)) {
       if (smics.some((s) => t.includes(s.toLowerCase().slice(0, 8)))) { e.domain = dom; e.cat = smics.find((s) => t.includes(s.toLowerCase().slice(0, 8))); break; }
     }
-    for (const list of Object.values(POOLS.vendors)) {
+    for (const [abbr, canonical] of Object.entries(VENDOR_SYN)) {
+      if (t.includes(abbr)) { e.vendor = canonical; break; }
+    }
+    if (!e.vendor) for (const list of Object.values(POOLS.vendors)) {
       const v = list.find((v) => t.includes(v.toLowerCase().split(" ")[0]) && v.split(" ")[0].length > 3);
       if (v) { e.vendor = v; break; }
     }
+    // "how much does X make up / contribute / account for" → focal-vendor
+    // contribution question, not a generic decliner ranking.
+    if (e.vendor && /how much|makes? up|contribut|account for|share of the/.test(t)) { e.focal = true; e.entity = e.entity || "vendor"; }
     const asm = text.match(/ASM\s+([A-Z][a-zA-Z]+\s+[A-Z][a-zA-Z]+)/); if (asm) e.asm = asm[1];
     return e;
   }
@@ -2055,6 +2088,8 @@
     if (q) return { ...e, period: `Q${q[1]} ${q[2] ? (q[2].length === 2 ? "20" + q[2] : q[2]) : ((e && e.period || "").match(/20\d\d/) || ["2025"])[0]}` };
     const p = t.match(/\bp(\d{1,2})\s+(20\d\d)\b/);
     if (p) return { ...e, period: `P${p[1]} ${p[2]}` };
+    const lw = t.match(/last\s*(\d{1,2})\s*w(?:ee)?ks?/);
+    if (lw) return { ...e, period: `last ${lw[1]} weeks` };
     return e;
   }
 
@@ -2110,7 +2145,10 @@
     const out = { time_registry: null, metric_registry: [], policy_rules: ["POL_014 markdown sign", "POL_007/008 bps for share only"], note: "Synonym folding in tier-1/2 matching is derived from the metric registry's synonym map; table/join resolution stays with the custom NL2SQL layer's schema-linking registries (15 tables, 28 join definitions) — not duplicated here." };
     const per2 = (e && (e.period || e.week)) || "";
     let m;
-    if ((m = per2.match(/Q([1-4])\s*(?:FY)?\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_QTR = ${m[1]} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
+    if ((m = per2.match(/last (\d{1,2}) weeks?/i))) out.time_registry = [4, 12, 26, 52].includes(parseInt(m[1], 10))
+      ? `phrase “${per2}” → pc.LATEST_${m[1]}_PROMO_WEEK_FLAG = TRUE (trailing window; resolves per division)`
+      : `phrase “${per2}” → trailing ${m[1]} fiscal weeks ending current week via fiscal_calendar`;
+    else if ((m = per2.match(/Q([1-4])\s*(?:FY)?\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_QTR = ${m[1]} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
     else if ((m = per2.match(/P(\d{1,2})\s*(\d{4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_PERIOD_NBR = ${parseInt(m[1], 10)} AND fc.FISCAL_YEAR_NBR = ${m[2]}`;
     else if ((m = per2.match(/FY\s?(\d{2,4})/i))) out.time_registry = `phrase “${per2}” → fc.FISCAL_YEAR_NBR = ${m[1].length === 2 ? "20" + m[1] : m[1]}`;
     else if ((m = per2.match(/(Promo|Fiscal) Week (\d{1,2})/i))) out.time_registry = `phrase “${per2}” → ${m[1].toLowerCase() === "promo" ? "pc.PROMOTION_WEEK_NBR" : "fc.FISCAL_WEEK_NBR"} = ${parseInt(m[2], 10)} (promo weeks resolve per division)`;
@@ -2306,6 +2344,18 @@
     // period tokens must be echoed (digits loosely matched in response)
     const perM = qText.match(/fiscal period \d{6}|promo week \d{1,2}(?:\s*(?:fy)?\s*\d{4})?|fiscal week \d{1,2}|q[1-4]\s*(?:fy)?\s*'?\d{2,4}|p\d{1,2}\s+\d{4}|fy\s?\d{2,4}/gi);
     if (perM) asks.push({ ask: "period: " + perM[0], test: (t) => (perM[0].match(/\d+/g) || []).every((d) => t.includes(String(parseInt(d, 10))) || t.includes(d)) });
+    // trailing windows ("last 12wks") must be echoed, not silently replaced
+    const lwM = qText.match(/last\s*(\d{1,2})\s*w(?:ee)?ks?/i);
+    if (lwM) asks.push({ ask: `period: last ${lwM[1]} weeks`, test: (t) => new RegExp(`last\\s*${lwM[1]}\\s*w(ee)?ks?|${lwM[1]}[- ]week`, "i").test(t) });
+    // a vendor NAMED in the question (incl. abbreviations like P&G) must
+    // appear in the response — catches generic rankings that omit the vendor.
+    // Only for single-vendor asks: enumerated lists ("for each vendor ...")
+    // legitimately show a subset, so no single echo is required there.
+    const namedVendors = [...new Set(Object.entries(VENDOR_SYN).filter(([abbr]) => q.includes(abbr)).map(([, c]) => c))];
+    if (namedVendors.length === 1 && !/for each|each vendor|\+ ?\d+ more|following vendors/.test(q)) {
+      const canonical = namedVendors[0];
+      asks.push({ ask: "named vendor: " + canonical, test: (t) => t.toUpperCase().includes(canonical.split(" ")[0]) });
+    }
     if (/market share|mulo/.test(q)) asks.push({ ask: "market share", test: (t) => /share/i.test(t) });
     if (/by division|each division|division level|across divisions/.test(q)) asks.push({ ask: "by division", test: (t) => ["SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN"].filter((d) => t.includes(d)).length >= 2 || /by division|division roll.?up|per division|division level/i.test(t) });
     if (/by (fiscal )?week|weekly|by-week|side-by-side/.test(q)) asks.push({ ask: "weekly view", test: (t) => /W\d|week/i.test(t) });
