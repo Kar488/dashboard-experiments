@@ -1749,10 +1749,29 @@
     // to any known table or derived feature.
     const rng = rngFor(id + (e.rawAsk || "").length);
     const concept = (e.concepts && e.concepts[0]) || "this analysis";
+    const ask = e.rawAsk || "";
     const isPen = /penetration/i.test(concept), isBasket = /basket/i.test(concept);
+    const isSpace = /facing|planogram|shelf|spaced|days of supply|pack[- ]?out/i.test(concept + " " + ask);
     const blocks = [];
-    blocks.push(NOTE(`No stored contract covers ${concept} — this is the CONSTRUCTED target response. Every figure below is illustrative: the lineage panel marks this analysis as not traceable to any known table or derived feature yet.`));
-    blocks.push(NOTE(`Captured request (verbatim, so nothing is silently dropped): “${(e.rawAsk || "").slice(0, 200)}${(e.rawAsk || "").length > 200 ? "…" : ""}”`));
+    blocks.push(NOTE(`No stored contract covers ${isSpace ? "shelf-space optimization" : concept} — this is the CONSTRUCTED target response. Every figure below is illustrative: the lineage panel marks this analysis as not traceable to any known table or derived feature yet.`));
+    blocks.push(NOTE(`Captured request (verbatim, so nothing is silently dropped): “${ask.slice(0, 200)}${ask.length > 200 ? "…" : ""}”`));
+    if (isSpace) {
+      const catNm = e.cat || (/cream cheese/i.test(ask) ? "CREAM CHEESE" : "the category");
+      const items = (catInfo(catNm) ? catInfo(catNm).v : ["OWN BRANDS", "KRAFT HEINZ CO"]).slice(0, 4).map((v, i) => ncrcName(v, { ...e, cat: catNm }, rngFor(id, 60 + i)) + " " + ["8OZ", "12OZ", "8OZ WHIPPED", "16OZ"][i % 4]);
+      blocks.push(H(`I cannot determine which ${catNm.toLowerCase()} items are over- or under-spaced in ${e.div || "the division"} from the currently available data — the inputs below are not onboarded. Here is exactly what is missing, and the answer this will produce once it lands.`));
+      blocks.push(BU([
+        "Missing inputs (in plain terms): current facings and shelf width by item (planogram system) · item dimensions and case-pack · units per facing · store-item unit velocity · replenishment frequency and lead time · out-of-stock rate · minimum/maximum facings and presentation standards.",
+        "Already available: item-level sales, units and gross profit for " + (e.div || "the division") + " (transaction data) — these fund the productivity math the moment the space inputs arrive."
+      ]));
+      blocks.push(TB("Target output — per item, once planogram + velocity inputs are onboarded (ILLUSTRATIVE)",
+        ["Item", "Current facings", "Recommended facings", "Space status", "Primary reason", "Expected impact"], [
+          [items[0], "4", "2", "OVER-SPACED", "Low velocity and low profit per inch of shelf", "Releases ~8 inches for reallocation"],
+          [items[1], "1", "3", "UNDER-SPACED", "High velocity with frequent out-of-stocks", "Recovers lost sales; fewer OOS events"],
+          [items[2], "2", "2", "RIGHT-SIZED", "Velocity and profit in line with space share", "No change"],
+          [items[3], "3", "2", "OVER-SPACED", "Slow mover held for assortment breadth", "Keep 1 facing minimum; release the rest"]
+        ]));
+      blocks.push(NOTE("Recommendations stay within the existing shelf width, respect minimum presentation standards and pack-out, and preserve required assortment breadth — those constraints are part of the template, not afterthoughts."));
+    } else
     if (isPen) {
       const pen = rr(rng, 0.1, 0.3), penLY = pen - rr(rng, -0.02, 0.03);
       blocks.push(H(`Illustrative shape: household penetration for the asked scope would read ${fmt.pct(pen)} of active households, ${pen >= penLY ? "up" : "down"} ${fmt.pts(pen - penLY).replace("+", "")} versus last year.`));
@@ -1771,10 +1790,12 @@
         Array.from({ length: 3 }, (_, i) => { const r = rngFor(id, 5 + i); const ly = rr(r, 1e5, 6e5); const chg = rr(r, -0.15, 0.15); return [["Scope A", "Scope B", "Scope C"][i], fmt.k(ly * (1 + chg)), fmt.k(ly), fmt.spct(chg)]; })));
     }
     blocks.push(GAPBOX([
-      "Not traceable yet: none of the figures above map to a known table or derived feature in the current scope. The definition (formula, denominator, grain) is proposed in the contract for correction before anything runs for real.",
-      "On confirmation, the constructed contract joins the archetype library and the data requirement joins the gap backlog — the next similar question is a known intent."
+      "Not traceable yet: the figures above do not map to any known table or derived feature in the current scope — they show the answer's shape, not its values.",
+      "This request has been logged against the gap backlog; when the missing feeds land, the same question returns real numbers with no other change."
     ]));
-    blocks.push(FU(["Correct the proposed definition (formula / denominator / grain) so the contract can be finalized?"]));
+    blocks.push(FU(isSpace
+      ? ["Want the sales / profit / velocity portion (the data we DO have) for these items now, as a partial read?", "Should this request be added to the planogram-feed business case?"]
+      : ["Want the parts of this that current data can answer, as a partial read?", "Should this analysis be added to the data-onboarding backlog?"]));
     return blocks;
   };
 
@@ -2181,7 +2202,13 @@
     const fy = t.match(/fy\s?(20)?(\d\d)/); if (!e.period && fy) e.period = `FY 20${fy[2]}`;
     const lw = t.match(/last\s*(\d{1,2})\s*w(?:ee)?ks?/); if (!e.period && lw) e.period = `last ${lw[1]} weeks`;
     if (!e.period) e.period = "Q3 2025";
+    // full-name category match first (longest wins), 8-char prefix as fallback
+    let bestCat = null, bestDom = null;
     for (const [dom, smics] of Object.entries(POOLS.smics)) {
+      for (const s of smics) if (t.includes(s.toLowerCase()) && (!bestCat || s.length > bestCat.length)) { bestCat = s; bestDom = dom; }
+    }
+    if (bestCat) { e.domain = bestDom; e.cat = bestCat; }
+    else for (const [dom, smics] of Object.entries(POOLS.smics)) {
       if (smics.some((s) => t.includes(s.toLowerCase().slice(0, 8)))) { e.domain = dom; e.cat = smics.find((s) => t.includes(s.toLowerCase().slice(0, 8))); break; }
     }
     for (const [abbr, canonical] of Object.entries(VENDOR_SYN)) {
@@ -2963,7 +2990,9 @@
   // path below runs only when no ANTHROPIC_API_KEY is configured, and is
   // labeled SIMULATED everywhere it surfaces.
   let LLM = { live: false, model: "claude-haiku-4-5", reason: "status not fetched yet" };
-  fetch("/api/llm/status").then((r) => r.json()).then((s) => { LLM = s; }).catch(() => {});
+  const FORCE_SIM = new URLSearchParams(location.search).has("simulate");
+  if (!FORCE_SIM) fetch("/api/llm/status").then((r) => r.json()).then((s) => { LLM = s; }).catch(() => {});
+  else LLM = { live: false, model: "simulated", reason: "?simulate=1 — deterministic eval mode" };
   // load previously constructed templates — the registry grows at runtime
   fetch("/api/registry/constructed").then((r) => r.json()).then((list) => (list || []).forEach(registerConstructed)).catch(() => {});
 
@@ -3035,6 +3064,11 @@
     // is configured. Deterministic guards (compound decomposition, concept-
     // coverage, clarification hold) are policy checks and stay code-side.
     if (match.tier === 3 && !match.guarded && LLM.live) match = await t3Live(text, match);
+    // A key-less guard routed this to the canned proposal — but when the
+    // model IS live, uncovered concepts must go to the real constructor.
+    else if (match.tier === 3 && match.guarded && match.arch === "novel_analysis" && LLM.live) {
+      try { match = await constructAndRegister(text, { ...match, e: { ...(match.e || {}), rawAsk: text } }); } catch { /* keep canned fallback */ }
+    }
     const contract = buildContract(match, text);
     const m = el("div", "msg bot");
     const bubble = el("div", "bubble");
@@ -3088,7 +3122,10 @@
     }
     const judge = runJudge(blocks, match, match.e || {}, text);
     const jPass = judge.filter((c) => c.pass).length;
-    bubble.appendChild(el("div", "mock-tag", `mock data · ${match.live ? `intent via ${match.model} (live)` : "answered"} in ${(elapsed / 1000).toFixed(1)}s ${match.live ? "" : "simulated "}(budget 30s) · judge ${jPass}/${judge.length} checks ${jPass === judge.length ? "✓" : "⚠"}`));
+    // Never let "judge N/N ✓" imply a data-gap response answered the business
+    // question — structure passing and the question being answerable differ.
+    const hasGap = blocks.some((b) => b.t === "gap" && (b.items || []).some((x) => /not traceable|not onboarded|blocked/i.test(x)));
+    bubble.appendChild(el("div", "mock-tag", `mock data · ${match.live ? `intent via ${match.model} (live)` : "answered"} in ${(elapsed / 1000).toFixed(1)}s ${match.live ? "" : "simulated "}(budget 30s) · judge ${jPass}/${judge.length} structure checks ${jPass === judge.length ? "✓" : "⚠"}${hasGap ? " · DATA GAP — the business question is not yet answerable from onboarded data; shape shown, values illustrative" : ""}`));
     bubble.appendChild(debugPanel(match, contract, judge));
     scrollDown();
   }

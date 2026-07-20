@@ -61,7 +61,9 @@ const VARIATIONS = [
   { cls: "clarify", q: "For Jewel store, list all stores, their district, and store name along with sales for fiscal week 34 in the year 2025 in a table. Sort by the largest revenue to the smallest and only provides stores with over  in revenue for the fiscal week. In text below the prompt, tell me how many stores meet this criteria." }
 ];
 
-const BASE = process.env.EVAL_URL || "http://localhost:5173/chat.html";
+// ?simulate=1 forces the deterministic tier-3 fallback even when an API key
+// is configured — evals must be reproducible and cost-free.
+const BASE = process.env.EVAL_URL || "http://localhost:5173/chat.html?simulate=1";
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || "/opt/pw-browsers/chromium" });
