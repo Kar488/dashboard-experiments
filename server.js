@@ -534,7 +534,10 @@ const server = http.createServer((request, response) => {
       return;
     }
 
-    response.writeHead(200, { "Content-Type": types[path.extname(filePath)] || "application/octet-stream" });
+    // no-cache: browsers must revalidate on every load — otherwise a user
+    // who pulls an update still runs week-old cached JS and reports fixed
+    // behavior as "still the same".
+    response.writeHead(200, { "Content-Type": types[path.extname(filePath)] || "application/octet-stream", "Cache-Control": "no-cache" });
     response.end(content);
   });
 });
