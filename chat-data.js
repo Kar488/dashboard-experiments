@@ -647,6 +647,34 @@ window.ChatData = (() => {
       ]
     },
 
+    promo_exclusion: {
+      name: "Promo exclusion set (what must NOT be co-promoted)",
+      style: "list",
+      intent: "Given an NCRC (or item/CIG) being promoted, list the NCRCs that must be excluded from the same promotion in the named division — each with the exclusion rule that fires: shared UPC membership, same promotion group, class-level substitute, or an overlapping funded offer.",
+      lineage: [
+        { table: "item_price_group", grain: "UPC x price group (NCRC)", cols: ["PRICE_GROUP_ID", "UPC_NBR", "DIVISION_ID", "PRICE_GROUP_START_DT", "PRICE_GROUP_END_DT"], why: "NCRC membership — shared-UPC overlap between groups is the hardest exclusion rule" },
+        { table: "item_promo_group", grain: "UPC x promo group", cols: ["PROMOTION_GROUP_ID", "UPC_NBR", "PROMO_GROUP_START_DT", "PROMO_GROUP_END_DT"], why: "Same promotion group ⇒ must move together, not separately" },
+        { table: "item_hierarchy", grain: "UPC x division", cols: ["CLASS_ID", "SUB_CLASS_ID", "NATIONAL_COMMON_RETAIL_CD", "VENDOR_NM"], why: "Class/sub-class adjacency — substitute candidates for cannibalization risk" },
+        { table: "master_promo_genie_discount_depth", grain: "offer x UPC x store", cols: ["PROMOTION_ID", "PROMO_START_DATE", "PROMO_END_DATE", "PROMO_TACTIC"], why: "Offers already live/planned in the window — conflicting-offer detection" },
+        { table: "allowance_promo_map", grain: "NOPA x UPC x promo", cols: ["NOPA_ID", "PROMOTION_ID", "VENDOR_NM"], why: "Funding attached to competing offers — duplicate-discount and funding-conflict check" }
+      ],
+      derived: [
+        { name: "Shared-UPC overlap", formula: "COUNT(UPCs in both NCRCs) via item_price_group self-join", status: "computed" },
+        { name: "Same-promo-group conflict", formula: "NCRCs whose UPCs share a PROMOTION_GROUP_ID with the promoted NCRC", status: "computed" },
+        { name: "Substitute adjacency", formula: "same CLASS_ID/SUB_CLASS_ID, different NCRC — descriptor-level substitute flag", status: "computed" },
+        { name: "Overlapping funded offer", formula: "live/planned PROMOTION_IDs on member UPCs within the promo window", status: "computed" },
+        { name: "Historical negative interaction (cannibalization-confirmed)", formula: "co-promotion weeks where combined lift < solo baselines — requires promo baseline model", status: "gap" }
+      ],
+      recipe: [
+        "Resolve the promoted NCRC: members, division scope, active window.",
+        "Rule 1 — shared UPC membership: any NCRC sharing a member UPC is excluded (duplicate discounting).",
+        "Rule 2 — same promotion group: NCRCs bound to the same PROMOTION_GROUP_ID must move together or not at all.",
+        "Rule 3 — substitute adjacency: same class/sub-class NCRCs flagged as cannibalization risk (exclude or co-plan deliberately).",
+        "Rule 4 — conflicting offers: NCRCs with live/planned funded offers overlapping the window.",
+        "Rank exclusions by rule severity; historical-interaction confirmation marked blocked."
+      ],
+      gaps: [{ sev: "med", text: "Rules 1–4 are structural and computable from onboarded tables. Confirming ACTUAL historical cannibalization (rule 5) needs the promo baseline model — flagged, not asserted." }]
+    },
     advisory_scope: {
       name: "Strategy / optimization program — beyond a single analytical answer",
       style: "gap",

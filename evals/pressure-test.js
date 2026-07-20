@@ -32,6 +32,9 @@ const VARIATIONS = [
   //    to a share table; methodology question force-fit to a P&L card)
   { cls: "scope", q: "How should a national retailer dynamically determine the optimal selling price, promotional calendar, inventory allocation, vendor funding strategy, assortment, replenishment, and procurement timing for every SKU in every store over the next 52 weeks, while maximizing long-term enterprise value under uncertainty? Subject to simultaneously optimizing: Sales Gross Margin AGP Cash Flow Inventory Turns Working Capital Vendor Funding Market Share Customer Lifetime Value Basket Size Category Roles Supply Constraints Labor Capacity Shelf Space Digital Fulfillment Competitive Pricing Inflation Tariffs Weather Cannibalization Halo Effects Stock-outs Elasticity Changes Consumer Behavior Drift while ensuring every business rule is respected." },
   { cls: "scope", q: "If we decide to lower prices, how do we know whether the resulting increase in sales is because customers truly value the lower price, or because competitors didn't respond—and if we can't separate those effects, how can we know whether lowering prices was actually the right decision?" },
+  // -- promo-exclusion + named division/id resolution (field miss 2026-07-20:
+  //    NorCal answered as Jewel, NCRC id dropped, member-UPC list force-fit)
+  { cls: "exclusion", q: "When promoting NCRC 1000088190067, which NCRCs should not be included in the promotion for the Northern California Division?" },
   // -- paraphrases of canonical questions (should hit Tier 1/2, right archetype)
   { cls: "paraphrase", q: "which vendors are dragging down cheese shreds profit this quarter in jewel?" },
   { cls: "paraphrase", q: "top decliners in sour cream margin rate for jewel q3 2025, give me five vendors" },

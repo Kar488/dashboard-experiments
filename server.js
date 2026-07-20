@@ -64,7 +64,7 @@ function t3Schema(archetypeIds) {
       question_class: {
         type: "string",
         enum: ["data_lookup", "diagnostic", "compound", "strategy_program", "methodology", "novel_concept"],
-        description: "The NATURE of the question, judged before template choice: data_lookup = a concrete retrieval/ranking; diagnostic = asks WHY a metric moved; compound = several distinct asks; strategy_program = broad multi-domain optimization/planning ask (every SKU/store, long horizon, many objectives) that NO single analytical answer can honestly cover; methodology = asks HOW TO KNOW something (causal separation, whether a decision was right) rather than for data; novel_concept = a concrete data ask whose core concept no template covers"
+        description: "The NATURE of the question, judged before template choice: data_lookup = a concrete retrieval/ranking; diagnostic = asks WHY a metric moved; compound = several distinct asks; strategy_program = ONLY for enterprise-wide asks spanning MANY UNRELATED decision domains at once (pricing AND inventory AND labor AND assortment..., every SKU/store, many simultaneous objectives) — a big complex question within ONE domain is NOT a strategy_program; methodology = asks HOW TO KNOW something (causal separation, whether a decision was right) rather than for data; novel_concept = a concrete analytical ask (even a complex, constraint-laden single-domain optimization) whose core concept NO catalog template covers — the catalog includes runtime-constructed templates, so if ANY entry (e.g. a previously constructed shelf-space template) covers the concept, choose that archetype and classify by its nature (data_lookup or diagnostic), NOT novel_concept. Prefer novel_concept over strategy_program for single-domain asks"
       },
       confidence: { type: "number", description: "0-1 confidence that the chosen archetype's response template answers the question's intent" },
       entities: {
@@ -91,6 +91,129 @@ function t3Schema(archetypeIds) {
     required: ["archetype", "question_class", "confidence", "entities", "needs_clarification", "clarification_question", "uncovered_concepts"],
     additionalProperties: false
   };
+}
+
+// --- Runtime template construction -------------------------------------
+// When a question falls outside every registered template, the model
+// CONSTRUCTS a new one (mapped to the known tables, untraceable parts
+// marked) and it is REGISTERED so subsequent similar questions resolve
+// via T1/T2 instead of re-constructing. Registry grows at runtime.
+const CONSTRUCTED_PATH = path.join(root, "data", "constructed-templates.json");
+function readConstructed() {
+  try { return JSON.parse(fs.readFileSync(CONSTRUCTED_PATH, "utf8")); } catch { return []; }
+}
+function writeConstructed(list) {
+  fs.writeFileSync(CONSTRUCTED_PATH, JSON.stringify(list, null, 2));
+}
+
+function constructSchema(knownTables) {
+  return {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "snake_case slug for the new template, e.g. shelf_space_optimization" },
+      name: { type: "string", description: "Human-readable template name" },
+      style: { type: "string", enum: ["list", "diagnostic", "report"] },
+      intent: { type: "string", description: "One-paragraph statement of the intent family this template answers" },
+      canonical_question: { type: "string", description: "A clean canonical phrasing of this question for future registry matching" },
+      sections: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string", enum: ["headline", "table", "bullets", "note"] },
+            title: { type: "string" },
+            columns: { type: "array", items: { type: "string" }, description: "Table sections only: 3-7 column headers; first column is the row entity" },
+            row_entity: { type: ["string", "null"], enum: ["item", "vendor", "store", "division", "ncrc", "category", null], description: "Table sections: what each row represents" },
+            purpose: { type: "string", description: "What this section must convey" }
+          },
+          required: ["type", "title", "columns", "row_entity", "purpose"],
+          additionalProperties: false
+        }
+      },
+      lineage: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            table: { type: "string", enum: knownTables.concat(["NOT_TRACEABLE"]), description: "One of the onboarded tables, or NOT_TRACEABLE when no onboarded table carries the concept" },
+            needed_for: { type: "string" },
+            columns: { type: "array", items: { type: "string" } },
+            missing_feed: { type: ["string", "null"], description: "When NOT_TRACEABLE: name the feed/system that would carry this (e.g. planogram system, inventory positions)" }
+          },
+          required: ["table", "needed_for", "columns", "missing_feed"],
+          additionalProperties: false
+        }
+      },
+      derived: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            formula: { type: "string" },
+            status: { type: "string", enum: ["registry", "computed", "gap"], description: "gap = not derivable from onboarded tables" }
+          },
+          required: ["name", "formula", "status"],
+          additionalProperties: false
+        }
+      },
+      gaps: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { severity: { type: "string", enum: ["low", "med", "high"] }, text: { type: "string" } },
+          required: ["severity", "text"], additionalProperties: false
+        }
+      }
+    },
+    required: ["id", "name", "style", "intent", "canonical_question", "sections", "lineage", "derived", "gaps"],
+    additionalProperties: false
+  };
+}
+
+async function constructTemplate(body) {
+  const question = String(body.question || "").slice(0, 3000);
+  const knownTables = Array.isArray(body.known_tables) ? body.known_tables : [];
+  const existing = Array.isArray(body.existing_templates) ? body.existing_templates : [];
+  if (!question || !knownTables.length) throw new Error("question and known_tables are required");
+
+  const system = [
+    "You are the template CONSTRUCTOR for a merchant Q&A response-contract layer (grocery merchandising: divisions, vendors, SMIC categories, NCRCs, fiscal periods, promotions, allowances, AGP).",
+    "A question has fallen outside every registered response template. Construct a NEW template for its intent family — not a one-off answer: the template will be REGISTERED and reused for future questions of this kind.",
+    "Rules: sections define the target answer shape (headline first; 2-4 tables max; concrete column headers a merchant would act on). Lineage maps ONLY to the onboarded tables listed below — any concept they don't carry (planograms, inventory positions, labor, household data...) must be a NOT_TRACEABLE lineage row naming the missing feed, and its derived metrics must have status 'gap'. Never invent tables. The template must still render a full target-shape answer; honesty lives in the status marks.",
+    "",
+    "Onboarded tables: " + knownTables.join(", "),
+    "Existing template ids (do not duplicate their intents): " + existing.join(", ")
+  ].join("\n");
+
+  const started = Date.now();
+  if (T3_PROVIDER === "openai") {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: T3_MODEL,
+        reasoning_effort: "low",
+        max_completion_tokens: 3000,
+        messages: [{ role: "system", content: system }, { role: "user", content: "Construct the template for:\n" + question }],
+        response_format: { type: "json_schema", json_schema: { name: "constructed_template", strict: true, schema: constructSchema(knownTables) } }
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${(data.error && data.error.message) || "request failed"}`);
+    const parsed = JSON.parse(data.choices[0].message.content);
+    return { ...parsed, _meta: { provider: "openai", model: data.model, latency_ms: Date.now() - started, input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } };
+  }
+  const response = await getAnthropic().messages.create({
+    model: T3_MODEL,
+    max_tokens: 3000,
+    system,
+    output_config: { format: { type: "json_schema", schema: constructSchema(knownTables) } },
+    messages: [{ role: "user", content: "Construct the template for:\n" + question }]
+  });
+  const textBlock = response.content.find((b) => b.type === "text");
+  const parsed = JSON.parse(textBlock ? textBlock.text : "{}");
+  return { ...parsed, _meta: { provider: "anthropic", model: response.model, latency_ms: Date.now() - started, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
 }
 
 async function t3Resolve(body) {
@@ -216,6 +339,44 @@ const server = http.createServer((request, response) => {
     readJsonBody(request).then(async (body) => {
       try {
         sendJson(response, 200, await t3Resolve(body));
+      } catch (error) {
+        sendJson(response, 502, { error: error.message });
+      }
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/registry/constructed" && request.method === "GET") {
+    sendJson(response, 200, readConstructed());
+    return;
+  }
+
+  if (url.pathname === "/api/registry/constructed" && request.method === "POST") {
+    readJsonBody(request).then((body) => {
+      try {
+        if (!body || !body.id || !body.name || !Array.isArray(body.sections)) throw new Error("invalid template shape");
+        const list = readConstructed();
+        if (!list.some((t) => t.id === body.id)) {
+          list.push({ ...body, registered_at: new Date().toISOString() });
+          writeConstructed(list);
+        }
+        sendJson(response, 200, { registered: true, count: list.length });
+      } catch (error) {
+        sendJson(response, 400, { error: error.message });
+      }
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/llm/construct-template" && request.method === "POST") {
+    const status = llmStatus();
+    if (!status.live) {
+      sendJson(response, 503, { error: status.reason });
+      return;
+    }
+    readJsonBody(request).then(async (body) => {
+      try {
+        sendJson(response, 200, await constructTemplate(body));
       } catch (error) {
         sendJson(response, 502, { error: error.message });
       }

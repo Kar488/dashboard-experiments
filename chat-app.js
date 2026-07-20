@@ -150,6 +150,17 @@
     "BATH TISSUE": { v: ["PROCTER & GAMBLE", "KIMBERLY CLARK CORP", "GEORGIA PACIFIC", "OWN BRANDS"], noun: "BATH TISSUE", sz: ["6 MEGA", "12 MEGA", "18 ROLL"] },
     "PAPER TOWELS": { v: ["PROCTER & GAMBLE", "KIMBERLY CLARK CORP", "GEORGIA PACIFIC", "OWN BRANDS"], noun: "PAPER TOWELS", sz: ["2 HUGE", "6 ROLL", "8 ROLL"] }
   };
+  // Division names/synonyms → canonical division labels (entity extraction
+  // AND the judge's named-division ask — a question naming a division must
+  // never be silently answered for a different one).
+  const DIVISION_SYN = [
+    [/northern california|norcal|nor cal/i, "NorCal"],
+    [/so(uthern)? california|socal|so cal/i, "So California"],
+    [/seattle/i, "Seattle"],
+    [/denver/i, "Denver"],
+    [/jewel/i, "Jewel"],
+    [/\bsouthern\b(?! california)/i, "Southern"]
+  ];
   // Common vendor abbreviations → canonical vendor names (used in entity
   // extraction AND in the judge's named-vendor ask, so "P&G" is one vendor).
   const VENDOR_SYN = {
@@ -2000,6 +2011,26 @@
     return blocks;
   };
 
+  R.promo_exclusion = (id, e) => {
+    const rng = rngFor(id);
+    const baseId = e.ncrc || String(Math.floor(rr(rng, 1.0e12, 1.1e12)));
+    const nm = ncrcName(e.vendor || "OWN BRANDS", e, rng);
+    const near = (o) => String(BigInt(baseId) + BigInt(o));
+    const rows = [
+      [near(5), nm.replace(/TUB|BAG|PACK|$/, "BRICK").trim(), "Rule 1 — shared UPC membership", "3 member UPCs sit in BOTH groups — promoting separately double-discounts them"],
+      [near(12), nm + " LIGHT", "Rule 2 — same promotion group", "bound to the same PROMOTION_GROUP_ID; must move together, not on separate offers"],
+      [near(-8), nm.replace(/^[A-Z]+/, "SIGNATURE SELECT"), "Rule 3 — substitute (same sub-class)", "own-brand substitute in the same sub-class — co-promotion shifts demand, adds no units"],
+      [near(31), nm + " FAMILY SIZE", "Rule 4 — conflicting funded offer", `live offer overlaps the window in ${e.div}; two funded discounts on adjacent sizes conflict`]
+    ];
+    return [
+      H(`Exclude ${rows.length} NCRCs when promoting NCRC ${baseId} (${nm}) in ${e.div} — each with the structural rule that fires. Sales history is NOT the basis; group structure and offer conflicts are.`),
+      TB(`NCRCs to EXCLUDE from the promotion — ${e.div}`, ["Excluded NCRC", "Name", "Rule", "Why"], rows),
+      NOTE("Rules applied, in severity order: (1) shared UPC membership (item_price_group self-join), (2) same promotion group (item_promo_group), (3) substitute adjacency (item_hierarchy class/sub-class), (4) overlapping funded offers (promo + allowance map). Rule 5 — historical negative interaction (confirmed cannibalization) — needs the promo baseline model and is flagged as blocked, not asserted."),
+      GAPBOX([`Structural exclusions above are computable from onboarded tables. Confirming which exclusions ACTUALLY cannibalized in past co-promotions is not traceable yet (promo baseline model); until then rule-3 substitutes are risk flags, not proven interactions.`]),
+      FU([`Show the shared-UPC detail behind the Rule 1 exclusion?`, `Check whether the ${e.div} conflicting offer can be re-timed instead of excluded?`])
+    ];
+  };
+
   R.advisory_scope = (id, e) => [
     H("Here is the target shape of the integrated answer — every figure illustrative — followed by exactly which pieces run today and which are blocked."),
     TB("ILLUSTRATIVE integrated plan summary — what the full program's output looks like when the systems are wired together", ["Lever", "Recommended move (illustrative)", "Projected sales", "Projected AGP", "Owning system", "Input status"], [
@@ -2121,6 +2152,7 @@
     [/markdown/, "markdown_by_cat"],
     [/store.*(sales|list|district)|district/, "store_perf"],
     [/upc|top \d+|highest selling|kvi/, "upc_rank"],
+    [/should not be included|exclude.*promot|promot.*exclud|not.*be.*promoted together|conflict.*promot|co.?promot/, "promo_exclusion"],
     [/ncrc|price group|deadnet/, "ncrc_detail"],
     [/margin rate compression|like.?tactic/, "margin_compression"],
     [/aiv/, "aiv_erosion"],
@@ -2139,7 +2171,11 @@
   function t3Entities(text) {
     const e = { domain: "grocery" };
     const t = text.toLowerCase();
-    if (/southern/.test(t)) e.div = "Southern"; else e.div = "Jewel";
+    e.div = (DIVISION_SYN.find(([re]) => re.test(text)) || [null, "Jewel"])[1];
+    const ncrcId = text.match(/(?:ncrc|price group)\s*#?\s*(\d{6,13})/i);
+    if (ncrcId) e.ncrc = ncrcId[1];
+    const cigId = text.match(/\bcig\s*#?\s*(\d{3,13})/i);
+    if (cigId) e.cig = cigId[1];
     const q = t.match(/q([1-4])\s*(fy)?\s*(20\d\d|\d\d)?/); if (q) e.period = `Q${q[1]} ${q[3] ? (q[3].length === 2 ? "20" + q[3] : q[3]) : "2025"}`;
     const p = t.match(/p(\d{1,2})\s*(20\d\d)?/); if (!e.period && p) e.period = `P${p[1]} ${p[2] || "2025"}`;
     const fy = t.match(/fy\s?(20)?(\d\d)/); if (!e.period && fy) e.period = `FY 20${fy[2]}`;
@@ -2576,6 +2612,15 @@
     // appear in the response — catches generic rankings that omit the vendor.
     // Only for single-vendor asks: enumerated lists ("for each vendor ...")
     // legitimately show a subset, so no single echo is required there.
+    // a division NAMED in the question must be echoed — never silently
+    // answered for a different division (field miss: NorCal answered as Jewel)
+    const namedDiv = DIVISION_SYN.find(([re]) => re.test(qText));
+    if (namedDiv) asks.push({ ask: "division: " + namedDiv[1], test: (t, tables, ents) =>
+      new RegExp(namedDiv[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(t)
+      || (ents && String(ents.div || "").toLowerCase().includes(namedDiv[1].toLowerCase())) });
+    // an entity ID named in the question (NCRC/CIG) must appear in the response
+    const idM = qText.match(/(?:ncrc|cig|price group)\s*#?\s*(\d{6,13})/i);
+    if (idM) asks.push({ ask: "entity id: " + idM[1], test: (t) => t.includes(idM[1]) });
     const namedVendors = [...new Set(Object.entries(VENDOR_SYN).filter(([abbr]) => q.includes(abbr)).map(([, c]) => c))];
     if (namedVendors.length === 1 && !/for each|each vendor|\+ ?\d+ more|following vendors/.test(q)) {
       const canonical = namedVendors[0];
@@ -2827,6 +2872,90 @@
   }
   function rowEls(tag, cells) { const tr = el("tr"); cells.forEach((c) => tr.appendChild(el(tag, "", esc(c)))); return tr; }
 
+  // --------------------------------------------- runtime-constructed templates
+  // Design-time templates cover the known question families. Anything outside
+  // them is CONSTRUCTED once by the model (mapped to onboarded tables,
+  // untraceable parts marked), rendered in full target shape, and REGISTERED —
+  // so subsequent questions in the family resolve via T1/T2, never re-construct.
+  function registerConstructed(spec) {
+    if (!spec || !spec.id || ARCHETYPES[spec.id]) return false;
+    ARCHETYPES[spec.id] = {
+      name: spec.name + " · constructed at runtime",
+      style: spec.style || "report",
+      intent: spec.intent,
+      lineage: (spec.lineage || []).map((l) => l.table === "NOT_TRACEABLE"
+        ? { table: "NOT TRACEABLE — needs: " + (l.missing_feed || "unidentified feed"), grain: "—", cols: l.columns, why: l.needed_for }
+        : { table: l.table, grain: "see schema", cols: l.columns, why: l.needed_for }),
+      derived: (spec.derived || []).map((d) => ({ name: d.name, formula: d.formula, status: d.status })),
+      recipe: (spec.sections || []).map((s) => s.purpose),
+      gaps: (spec.gaps || []).map((g) => ({ sev: g.severity, text: g.text }))
+    };
+    R[spec.id] = (id, e) => renderConstructed(spec, id, e);
+    if (spec.canonical_question) {
+      QINDEX.push({ id: 800 + QINDEX.length, a: spec.id, e: {}, text: spec.canonical_question, norm: norm(spec.canonical_question), toks: tokens(spec.canonical_question) });
+    }
+    return true;
+  }
+
+  // Illustrative cell generation by column-name heuristics — the template
+  // defines shape; values are seeded mock until real data populates them.
+  function cellFor(col, r) {
+    if (/vs|change|delta|impact/i.test(col) && /\$|sales|profit|agp/i.test(col)) return fmt.sk(rr(r, -8e4, 9e4));
+    if (/\$|sales|agp|cost|funding|revenue|profit/i.test(col)) return fmt.k(rr(r, 4e4, 6e5));
+    if (/%|rate|share|margin|productivity/i.test(col)) return fmt.pct(rr(r, 0.04, 0.42), 1);
+    if (/facing|days|count|weeks|stores|units\b/i.test(col)) return String(Math.floor(rr(r, 2, 48)));
+    if (/velocity/i.test(col)) return rr(r, 0.8, 9.5).toFixed(1) + "/store/wk";
+    if (/risk|status|flag/i.test(col)) return ["HIGH", "MEDIUM", "LOW"][Math.floor(rr(r, 0, 3))];
+    if (/recommend|action/i.test(col)) return ["increase", "hold", "reduce"][Math.floor(rr(r, 0, 3))];
+    return "—";
+  }
+  function rowEntity(kind, i, r, e) {
+    if (kind === "vendor") return vendorsForCat(e)[i % vendorsForCat(e).length];
+    if (kind === "division") return ["JEWEL", "SO CALIFORNIA", "SEATTLE", "DENVER", "SOUTHERN"][i % 5];
+    if (kind === "store") return `STORE ${Math.floor(rr(r, 1000, 4999))}`;
+    if (kind === "category") return smicsOf(e)[i % smicsOf(e).length];
+    if (kind === "ncrc" || kind === "item") return ncrcName(vendorsForCat(e)[i % 4], e, r) + (kind === "item" ? ` ${["8OZ", "12OZ", "16OZ", "24OZ"][i % 4]}` : "");
+    return `ROW ${i + 1}`;
+  }
+  function renderConstructed(spec, id, e) {
+    const blocks = [];
+    const untraceable = (spec.lineage || []).filter((l) => l.table === "NOT_TRACEABLE");
+    blocks.push(NOTE(`No registered template covered this question — a new contract “${spec.id}” was constructed, rendered below in full target shape (ILLUSTRATIVE values), and REGISTERED: future questions in this family resolve to it directly instead of re-constructing.`));
+    (spec.sections || []).forEach((s, si) => {
+      const r = rngFor(id, 50 + si);
+      if (s.type === "headline") blocks.push(H(`${s.purpose} — illustrative read for ${scope(e)}, ${per(e)}.`));
+      else if (s.type === "table" && (s.columns || []).length) {
+        const rows = Array.from({ length: 5 }, (_, i) => {
+          const rr2 = rngFor(id, 100 + si * 10 + i);
+          return [rowEntity(s.row_entity, i, rr2, e)].concat(s.columns.slice(1).map((c) => cellFor(c, rr2)));
+        });
+        blocks.push(TB(s.title + " — ILLUSTRATIVE", s.columns, rows));
+      }
+      else if (s.type === "bullets") blocks.push(BU([s.purpose]));
+      else blocks.push(NOTE(s.purpose));
+    });
+    if ((spec.gaps || []).length || untraceable.length) blocks.push(GAPBOX(
+      (spec.gaps || []).map((g) => g.text).concat(untraceable.map((l) => `NOT TRACEABLE YET: ${l.needed_for} — requires ${l.missing_feed || "a feed not yet onboarded"}.`))
+    ));
+    blocks.push(FU(["Adjust the constructed template's sections or columns before it hardens into the registry?", "Which piece should run on real data first?"]));
+    return blocks;
+  }
+
+  async function constructAndRegister(text, match) {
+    const resp = await fetch("/api/llm/construct-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: text, known_tables: Object.keys(SQL_ALIAS).filter((t) => t !== "loyalty_household_transactions"), existing_templates: Object.keys(ARCHETYPES) })
+    });
+    if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+    const spec = await resp.json();
+    registerConstructed(spec);
+    fetch("/api/registry/constructed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }).catch(() => {});
+    return { ...match, arch: spec.id, live: true, constructed: true, model: spec._meta.model,
+      latency: (match.latency || 0) + spec._meta.latency_ms,
+      llm: { confidence: null, usage: { input_tokens: spec._meta.input_tokens, output_tokens: spec._meta.output_tokens } } };
+  }
+
   // ------------------------------------------------------------- live T3
   // Tier-3 is a REAL fast-model call, made server-side (/api/llm/t3-resolve
   // → claude-haiku-4-5 with a structured-output schema). The deterministic
@@ -2834,8 +2963,12 @@
   // labeled SIMULATED everywhere it surfaces.
   let LLM = { live: false, model: "claude-haiku-4-5", reason: "status not fetched yet" };
   fetch("/api/llm/status").then((r) => r.json()).then((s) => { LLM = s; }).catch(() => {});
+  // load previously constructed templates — the registry grows at runtime
+  fetch("/api/registry/constructed").then((r) => r.json()).then((list) => (list || []).forEach(registerConstructed)).catch(() => {});
 
-  const ARCH_CATALOG = Object.entries(ARCHETYPES).map(([id, a]) => ({ id, name: a.name, intent: a.intent }));
+  // Built at CALL time — runtime-constructed templates must appear in the
+  // catalog immediately, or the resolver re-constructs duplicates of them.
+  const archCatalog = () => Object.entries(ARCHETYPES).map(([id, a]) => ({ id, name: a.name, intent: a.intent }));
 
   async function t3Live(text, match) {
     const started = Date.now();
@@ -2845,7 +2978,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: text,
-          archetype_catalog: ARCH_CATALOG,
+          archetype_catalog: archCatalog(),
           few_shot: (match.near || []).map((n) => ({ question: n.q.text, archetype: n.q.a }))
         })
       });
@@ -2860,10 +2993,18 @@
       // honest landing template for each class.
       if (out.question_class === "strategy_program") { arch = "advisory_scope"; e.rawAsk = text; }
       else if (out.question_class === "methodology") { arch = "methodology"; e.rawAsk = text; }
-      else if (out.question_class === "novel_concept" || ((out.uncovered_concepts || []).length && !["novel_analysis", "household_exclusivity"].includes(arch))) {
-        arch = "novel_analysis";
-        e.concepts = (out.uncovered_concepts || []).length ? out.uncovered_concepts : ["this analysis"];
-        e.rawAsk = text;
+      else if ((out.question_class === "novel_concept" && !(out.confidence >= 0.6 && ARCHETYPES[out.archetype] && /constructed at runtime/.test(ARCHETYPES[out.archetype].name || "")))
+        || ((out.uncovered_concepts || []).length && !["novel_analysis", "household_exclusivity"].includes(arch) && out.question_class !== "data_lookup" && out.question_class !== "diagnostic")) {
+        // outside every registered template → CONSTRUCT one and register it.
+        // (A confident pick of an already-constructed template short-circuits
+        // construction — the registry must never grow duplicates.)
+        try {
+          return await constructAndRegister(text, { ...match, e });
+        } catch {
+          arch = "novel_analysis";
+          e.concepts = (out.uncovered_concepts || []).length ? out.uncovered_concepts : ["this analysis"];
+          e.rawAsk = text;
+        }
       }
       if (out.needs_clarification && out.clarification_question) {
         arch = "clarify";
@@ -2907,6 +3048,7 @@
       match.tier === 1 ? { label: `Intent matched — registry exact hit`, ms: 240 }
         : match.tier === 2 ? { label: `Intent matched — nearest neighbor (${match.score.toFixed(2)})`, ms: 380 }
           : match.guarded ? { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one`, ms: 950 }
+          : match.constructed ? { label: `Outside every registered template — NEW contract constructed via ${match.model} and registered for reuse`, ms: 160 }
           : match.live ? { label: `No direct hit — contract inferred via ${match.model} (live call, 3 nearest archetypes injected)`, ms: 120 }
           : { label: `No direct hit — inferring contract via fast-LLM (SIMULATED — no API key configured)`, ms: 900 },
       { label: `Answer contract built — ${ARCHETYPES[match.arch].name}`, ms: 320 },
