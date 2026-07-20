@@ -2350,9 +2350,14 @@
   }
 
   // Fuzzy/T2 matches carry the CANONICAL question's stored entities; when the
-  // user's text names an explicit period, that period wins over the stored one.
+  // user's text names an explicit period, division, or category, the USER'S
+  // value wins over the stored one (never silently answer for a different
+  // scope — and runtime-constructed entries store no entities at all, so
+  // this pass is what fills them).
   function periodOverride(input, e) {
     const t = input.toLowerCase();
+    const dv = DIVISION_SYN.find(([re]) => re.test(input));
+    if (dv && String(e && e.div || "") !== dv[1]) e = { ...e, div: dv[1] };
     const q = t.match(/\bq([1-4])\s*(?:fy)?\s*(20\d\d|\d\d)?\b/);
     if (q) return { ...e, period: `Q${q[1]} ${q[2] ? (q[2].length === 2 ? "20" + q[2] : q[2]) : ((e && e.period || "").match(/20\d\d/) || ["2025"])[0]}` };
     const p = t.match(/\bp(\d{1,2})\s+(20\d\d)\b/);
@@ -2371,7 +2376,8 @@
   function matchQuestion(input) {
     const nIn = norm(input);
     const exact = QINDEX.find((q) => q.norm === nIn);
-    if (exact) return { tier: 1, score: 1, q: exact, arch: exact.a, e: exact.e, latency: 2 };
+    // constructed entries store no entities — extract them from the text
+    if (exact) return { tier: 1, score: 1, q: exact, arch: exact.a, e: Object.keys(exact.e || {}).length ? exact.e : periodOverride(input, {}), latency: 2 };
     const complex = detectComplex(input);
     if (complex) return complex;
     const toks = tokens(input);
@@ -2644,7 +2650,8 @@
     // answered for a different division (field miss: NorCal answered as Jewel)
     const namedDiv = DIVISION_SYN.find(([re]) => re.test(qText));
     if (namedDiv) asks.push({ ask: "division: " + namedDiv[1], test: (t, tables, ents) =>
-      new RegExp(namedDiv[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(t)
+      namedDiv[0].test(t) // any known synonym of the SAME division counts as the echo
+      || new RegExp(namedDiv[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(t)
       || (ents && String(ents.div || "").toLowerCase().includes(namedDiv[1].toLowerCase())) });
     // an entity ID named in the question (NCRC/CIG) must appear in the response
     const idM = qText.match(/(?:ncrc|cig|price group)\s*#?\s*(\d{6,13})/i);
@@ -2905,8 +2912,18 @@
   // them is CONSTRUCTED once by the model (mapped to onboarded tables,
   // untraceable parts marked), rendered in full target shape, and REGISTERED —
   // so subsequent questions in the family resolve via T1/T2, never re-construct.
+  const CONSTRUCTED = {}; // id → full spec, for schema-evolution checks
+  // A spec written before the merchant-content schema carries no example /
+  // example_rows — it can only render via generic heuristics. That is the
+  // GENERAL staleness signal (any template, any question family).
+  const specHasMerchantContent = (spec) => (spec.sections || []).some((s) => s.example || (Array.isArray(s.example_rows) && s.example_rows.length));
   function registerConstructed(spec) {
-    if (!spec || !spec.id || ARCHETYPES[spec.id]) return false;
+    if (!spec || !spec.id) return false;
+    // Upsert rule: an id already registered may only be REPLACED when the
+    // incoming spec adds merchant content the stored one lacks (an upgrade).
+    // Design-time archetypes and current-schema specs are never overwritten.
+    if (ARCHETYPES[spec.id] && !(CONSTRUCTED[spec.id] && !specHasMerchantContent(CONSTRUCTED[spec.id]) && specHasMerchantContent(spec))) return false;
+    CONSTRUCTED[spec.id] = spec;
     ARCHETYPES[spec.id] = {
       name: spec.name + " · constructed at runtime",
       style: spec.style || "report",
@@ -2923,21 +2940,48 @@
     // wording AND the original field question — T2 retrieval needs the
     // real-world phrasing, not just the cleaned-up one.
     [spec.canonical_question, spec.original_question].filter(Boolean).forEach((q) => {
-      QINDEX.push({ id: 800 + QINDEX.length, a: spec.id, e: {}, text: q, norm: norm(q), toks: tokens(q) });
+      if (!QINDEX.some((x) => x.a === spec.id && x.norm === norm(q)))
+        QINDEX.push({ id: 800 + QINDEX.length, a: spec.id, e: {}, text: q, norm: norm(q), toks: tokens(q) });
     });
     return true;
   }
 
   // Illustrative cell generation by column-name heuristics — the template
   // defines shape; values are seeded mock until real data populates them.
-  function cellFor(col, r) {
-    if (/vs|change|delta|impact/i.test(col) && /\$|sales|profit|agp/i.test(col)) return fmt.sk(rr(r, -8e4, 9e4));
+  // `row` is a per-row driver so related columns stay COHERENT within the
+  // row: the action, its rationale, the risk level, and the impact label all
+  // derive from one stance instead of independent random draws.
+  function cellFor(col, r, row = {}) {
+    const a = row.action;
+    if (/\brank\b/i.test(col)) return String((row.i || 0) + 1);
+    if (/rationale|reason|why|driver/i.test(col) && a) {
+      return { increase: "velocity outpaces current position — lost-sales exposure",
+        reduce: "days of supply well above velocity — overstock and waste exposure",
+        hold: "supply and facings aligned with velocity" }[a];
+    }
+    if (/risk.*type|\btype\b/i.test(col) && a) return { increase: "stockout", reduce: "overstock", hold: "balanced" }[a];
+    if (/demand|supply|forecast/i.test(col) && a) {
+      const d = Math.floor(rr(r, 400, 1400)), gap = Math.floor(rr(r, 60, 260));
+      const n = (x) => x.toLocaleString("en-US");
+      return a === "increase" ? `demand ${n(d)} vs supply ${n(d - gap)}` : a === "reduce" ? `demand ${n(d)} vs supply ${n(d + gap)}` : `demand ${n(d)} vs supply ${n(d)}`;
+    }
+    if (/impact|effect|vs|change|delta/i.test(col) && (a || /\$|sales|profit|agp/i.test(col))) {
+      const v = fmt.k(rr(r, 2e4, 9e4));
+      if (/service/i.test(col)) return { increase: "+1.5 pts", hold: "stable", reduce: "-0.3 pts" }[a] || "stable";
+      if (/waste|spoil|shrink/i.test(col)) return a === "reduce" ? "waste avoided: " + v : "minimal";
+      if (/working capital|cash|inventory \$/i.test(col)) return { increase: "invested: " + v, reduce: "released: " + v, hold: "unchanged" }[a] || "unchanged";
+      if (a) return { increase: "lost sales avoided: " + v, reduce: "waste avoided: " + v, hold: "no change expected" }[a];
+      return fmt.sk(rr(r, -8e4, 9e4));
+    }
     if (/\$|sales|agp|cost|funding|revenue|profit/i.test(col)) return fmt.k(rr(r, 4e4, 6e5));
     if (/%|rate|share|margin|productivity/i.test(col)) return fmt.pct(rr(r, 0.04, 0.42), 1);
     if (/facing|days|count|weeks|stores|units\b/i.test(col)) return String(Math.floor(rr(r, 2, 48)));
     if (/velocity/i.test(col)) return rr(r, 0.8, 9.5).toFixed(1) + "/store/wk";
-    if (/risk|status|flag/i.test(col)) return ["HIGH", "MEDIUM", "LOW"][Math.floor(rr(r, 0, 3))];
-    if (/recommend|action/i.test(col)) return ["increase", "hold", "reduce"][Math.floor(rr(r, 0, 3))];
+    if (/risk|status|flag|severity/i.test(col)) {
+      if (a) return { increase: "HIGH — lost sales", reduce: "MEDIUM — overstock", hold: "LOW" }[a];
+      return ["HIGH", "MEDIUM", "LOW"][Math.floor(rr(r, 0, 3))];
+    }
+    if (/recommend|action/i.test(col)) return a || ["increase", "hold", "reduce"][Math.floor(rr(r, 0, 3))];
     return "—";
   }
   function rowEntity(kind, i, r, e) {
@@ -2960,9 +3004,16 @@
       if (s.type === "headline") blocks.push(H(s.example || `${spec.name} — illustrative read for ${scope(e)}, ${per(e)}.`));
       else if (s.type === "table" && (s.columns || []).length) {
         const good = Array.isArray(s.example_rows) && s.example_rows.length && s.example_rows.every((row) => Array.isArray(row) && row.length === s.columns.length);
+        // The entity belongs under the column that NAMES it (Item, Vendor…),
+        // not blindly in column 0 — a leading Rank column must stay a rank.
+        const entIdx = Math.max(0, s.columns.findIndex((c) => /item|ncrc|vendor|division|store|category|name|group|upc/i.test(c)));
         const rows = good ? s.example_rows.slice(0, 6) : Array.from({ length: 5 }, (_, i) => {
           const rr2 = rngFor(id, 100 + si * 10 + i);
-          return [rowEntity(s.row_entity, i, rr2, e) + " " + ["8OZ", "12OZ", "16OZ", "24OZ", "32OZ"][i % 5]].concat(s.columns.slice(1).map((c) => cellFor(c, rr2)));
+          // one stance per row keeps action/rationale/risk/impact coherent;
+          // rowEntity already carries the size when the entity is an item —
+          // never append another.
+          const row = { i, action: ["increase", "hold", "reduce"][i % 3] };
+          return s.columns.map((c, ci) => ci === entIdx ? rowEntity(s.row_entity, i, rr2, e) : cellFor(c, rr2, row));
         });
         blocks.push(TB(s.title + " — ILLUSTRATIVE", s.columns, rows));
       }
@@ -2974,15 +3025,18 @@
     return blocks;
   }
 
-  async function constructAndRegister(text, match) {
+  async function constructAndRegister(text, match, forcedId) {
+    // forcedId = schema-evolution upgrade: re-construct an existing stale
+    // spec under its ORIGINAL id so the registry upserts instead of forking.
     const resp = await fetch("/api/llm/construct-template", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: text, known_tables: Object.keys(SQL_ALIAS).filter((t) => t !== "loyalty_household_transactions"), existing_templates: Object.keys(ARCHETYPES) })
+      body: JSON.stringify({ question: text, known_tables: Object.keys(SQL_ALIAS).filter((t) => t !== "loyalty_household_transactions"), existing_templates: Object.keys(ARCHETYPES).filter((t) => t !== forcedId) })
     });
     if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
     const spec = await resp.json();
-    spec.original_question = text;
+    if (forcedId) spec.id = forcedId;
+    spec.original_question = (forcedId && CONSTRUCTED[forcedId] && CONSTRUCTED[forcedId].original_question) || text;
     registerConstructed(spec);
     fetch("/api/registry/constructed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }).catch(() => {});
     return { ...match, arch: spec.id, live: true, constructed: true, model: spec._meta.model,
@@ -3097,11 +3151,28 @@
       try { match = await t3Live(text, { ...match, e: { ...(match.e || {}), rawAsk: text }, guarded: false }); } catch { /* keep canned fallback */ }
     }
     if (liveRow) liveRow.remove();
+    // SCHEMA EVOLUTION (general, not per-question): if the matched template is
+    // a runtime-constructed spec registered before the current spec schema
+    // (no merchant example content — it would render via generic heuristics),
+    // re-construct it ONCE under the same id and upsert. Every stale spec in
+    // any user's registry self-heals on first use; reuse stays instant after.
+    const matchedSpec = CONSTRUCTED[match.arch];
+    if (matchedSpec && !specHasMerchantContent(matchedSpec) && LLM.live) {
+      const upRow = el("div", "stage running", `<span class="dot"></span>${esc(`This registered template pre-dates the current response-spec schema — upgrading it via ${LLM.model} (one-time; upserted under the same id)…`)}`);
+      stages.appendChild(upRow);
+      scrollDown();
+      try {
+        match = { ...(await constructAndRegister(matchedSpec.original_question || matchedSpec.canonical_question || text, match, match.arch)), upgraded: true };
+        upRow.classList.remove("running"); upRow.classList.add("done");
+        upRow.innerHTML = `<span class="dot"></span>${esc(`Registered template pre-dated the current spec schema — upgraded via ${match.model}, upserted under the same id (one-time)`)} <span class="stage-ms">${match.latency} ms</span>`;
+      } catch { upRow.remove(); /* keep the stale spec — heuristic fallback still renders */ }
+    }
     const contract = buildContract(match, text);
     const stageDefs = [
       match.tier === 1 ? { label: `Intent matched — registry exact hit`, ms: 240 }
         : match.tier === 2 ? { label: `Intent matched — nearest neighbor (${match.score.toFixed(2)})`, ms: 380 }
           : match.guarded ? { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one`, ms: 950 }
+          : match.upgraded ? { label: `Registered template upgraded to the current spec schema via ${match.model} — upserted under the same id`, ms: 160 }
           : match.constructed ? { label: `Outside every registered template — NEW contract constructed via ${match.model} and registered for reuse`, ms: 160 }
           : match.live ? { label: `No direct hit — contract inferred via ${match.model} (live call, 3 nearest archetypes injected)`, ms: 120 }
           : { label: `No direct hit — inferring contract via fast-LLM (SIMULATED — no API key configured)`, ms: 900 },
