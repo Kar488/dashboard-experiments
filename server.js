@@ -141,9 +141,11 @@ function constructSchema(knownTables) {
             title: { type: "string" },
             columns: { type: "array", items: { type: "string" }, description: "Table sections only: 3-7 column headers; first column is the row entity" },
             row_entity: { type: ["string", "null"], enum: ["item", "vendor", "store", "division", "ncrc", "category", null], description: "Table sections: what each row represents" },
-            purpose: { type: "string", description: "What this section must convey" }
+            purpose: { type: "string", description: "What this section must convey (used by the narration stage and the lineage panel — never shown to the merchant)" },
+            example: { type: ["string", "null"], description: "headline/bullets/note sections: the ACTUAL merchant-facing text, written as the final answer with illustrative values (e.g. 'NorCal refrigerated dairy shows 3 items at elevated out-of-stock risk...') — NEVER instructions like 'State the division...'" },
+            example_rows: { type: ["array", "null"], items: { type: "array", items: { type: "string" } }, description: "table sections: 3-5 illustrative rows matching columns EXACTLY. Each row internally consistent (a recommended action must match its rationale: 'Expedite' pairs with 'projected stockout before next receipt'); impact values labeled with direction ('lost sales avoided: $73K', 'waste reduced: $12K') never bare signed numbers; entities distinct (disambiguate with pack size / flavor / UPC); no placeholder dashes" }
           },
-          required: ["type", "title", "columns", "row_entity", "purpose"],
+          required: ["type", "title", "columns", "row_entity", "purpose", "example", "example_rows"],
           additionalProperties: false
         }
       },
@@ -198,6 +200,7 @@ async function constructTemplate(body) {
     "You are the template CONSTRUCTOR for a merchant Q&A response-contract layer (grocery merchandising: divisions, vendors, SMIC categories, NCRCs, fiscal periods, promotions, allowances, AGP).",
     "A question has fallen outside every registered response template. Construct a NEW template for its intent family — not a one-off answer: the template will be REGISTERED and reused for future questions of this kind.",
     "Rules: sections define the target answer shape (headline first; 2-4 tables max; concrete column headers a merchant would act on). Lineage maps ONLY to the onboarded tables listed below — any concept they don't carry (planograms, inventory positions, labor, household data...) must be a NOT_TRACEABLE lineage row naming the missing feed, and its derived metrics must have status 'gap'. Never invent tables. The template must still render a full target-shape answer; honesty lives in the status marks.",
+    "CRITICAL — the merchant sees example/example_rows, not purpose: every headline/bullets/note section MUST carry `example` written as the finished merchant answer with illustrative values (a real sentence like 'NorCal refrigerated dairy shows 3 items at elevated out-of-stock risk and 2 at overstock risk over the next 4 weeks'), never writing instructions. Every table section MUST carry `example_rows` that are internally coherent: actions match their rationales, risk tables actually rank (include rank/severity/risk-type columns when the ask is a risk ranking), impacts carry explicit direction labels, entities are distinct. purpose is for the pipeline; example is for the merchant.",
     "",
     "Onboarded tables: " + knownTables.join(", "),
     "Existing template ids (do not duplicate their intents): " + existing.join(", ")
@@ -211,7 +214,7 @@ async function constructTemplate(body) {
       body: JSON.stringify({
         model: T3_MODEL,
         reasoning_effort: "low",
-        max_completion_tokens: 3000,
+        max_completion_tokens: 4500,
         messages: [{ role: "system", content: system }, { role: "user", content: "Construct the template for:\n" + question }],
         response_format: { type: "json_schema", json_schema: { name: "constructed_template", strict: true, schema: constructSchema(knownTables) } }
       })

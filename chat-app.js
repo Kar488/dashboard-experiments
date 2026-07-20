@@ -2949,26 +2949,28 @@
     return `ROW ${i + 1}`;
   }
   function renderConstructed(spec, id, e) {
+    // MERCHANT-CLEAN rendering: the merchant sees example content (finished
+    // sentences, coherent rows) and ONE concise data-quality line. The
+    // itemized NOT-TRACEABLE detail and section purposes live in the
+    // lineage/debug panel via the registered spec — that is what it is for.
     const blocks = [];
     const untraceable = (spec.lineage || []).filter((l) => l.table === "NOT_TRACEABLE");
-    blocks.push(NOTE(`No registered template covered this question — a new contract “${spec.id}” was constructed, rendered below in full target shape (ILLUSTRATIVE values), and REGISTERED: future questions in this family resolve to it directly instead of re-constructing.`));
     (spec.sections || []).forEach((s, si) => {
       const r = rngFor(id, 50 + si);
-      if (s.type === "headline") blocks.push(H(`${s.purpose} — illustrative read for ${scope(e)}, ${per(e)}.`));
+      if (s.type === "headline") blocks.push(H(s.example || `${spec.name} — illustrative read for ${scope(e)}, ${per(e)}.`));
       else if (s.type === "table" && (s.columns || []).length) {
-        const rows = Array.from({ length: 5 }, (_, i) => {
+        const good = Array.isArray(s.example_rows) && s.example_rows.length && s.example_rows.every((row) => Array.isArray(row) && row.length === s.columns.length);
+        const rows = good ? s.example_rows.slice(0, 6) : Array.from({ length: 5 }, (_, i) => {
           const rr2 = rngFor(id, 100 + si * 10 + i);
-          return [rowEntity(s.row_entity, i, rr2, e)].concat(s.columns.slice(1).map((c) => cellFor(c, rr2)));
+          return [rowEntity(s.row_entity, i, rr2, e) + " " + ["8OZ", "12OZ", "16OZ", "24OZ", "32OZ"][i % 5]].concat(s.columns.slice(1).map((c) => cellFor(c, rr2)));
         });
         blocks.push(TB(s.title + " — ILLUSTRATIVE", s.columns, rows));
       }
-      else if (s.type === "bullets") blocks.push(BU([s.purpose]));
-      else blocks.push(NOTE(s.purpose));
+      else if (s.type === "bullets") { if (s.example) blocks.push(BU([s.example])); }
+      else if (s.example) blocks.push(NOTE(s.example));
     });
-    if ((spec.gaps || []).length || untraceable.length) blocks.push(GAPBOX(
-      (spec.gaps || []).map((g) => g.text).concat(untraceable.map((l) => `NOT TRACEABLE YET: ${l.needed_for} — requires ${l.missing_feed || "a feed not yet onboarded"}.`))
-    ));
-    blocks.push(FU(["Adjust the constructed template's sections or columns before it hardens into the registry?", "Which piece should run on real data first?"]));
+    blocks.push(NOTE(`Illustrative values — ${untraceable.length ? "key inputs for this analysis aren't onboarded yet (flip “Data lineage” for the exact feeds and status of every figure)" : "pending validation against live data"}. This response shape was constructed for this question and registered — similar questions now answer instantly.`));
+    blocks.push(FU(["Adjust this template's sections or columns before it hardens into the registry?", "Which piece should run on real data first?"]));
     return blocks;
   }
 
@@ -3141,7 +3143,8 @@
     const jPass = judge.filter((c) => c.pass).length;
     // Never let "judge N/N ✓" imply a data-gap response answered the business
     // question — structure passing and the question being answerable differ.
-    const hasGap = blocks.some((b) => b.t === "gap" && (b.items || []).some((x) => /not traceable|not onboarded|blocked/i.test(x)));
+    const hasGap = blocks.some((b) => (b.t === "gap" && (b.items || []).some((x) => /not traceable|not onboarded|blocked/i.test(x)))
+      || (b.t === "note" && /aren't onboarded yet/i.test(b.text || "")));
     bubble.appendChild(el("div", "mock-tag", `mock data · ${match.live ? `intent via ${match.model} (live)` : "answered"} in ${(elapsed / 1000).toFixed(1)}s ${match.live ? "" : "simulated "}(budget 30s) · judge ${jPass}/${judge.length} structure checks ${jPass === judge.length ? "✓" : "⚠"}${hasGap ? " · DATA GAP — the business question is not yet answerable from onboarded data; shape shown, values illustrative" : ""}`));
     bubble.appendChild(debugPanel(match, contract, judge));
     scrollDown();
