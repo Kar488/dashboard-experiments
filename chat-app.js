@@ -281,7 +281,7 @@
       ["AIV", fmt.moneyC(m.aivTY), fmt.moneyC(m.aivLY), fmt.spct(m.aivTY / m.aivLY - 1)],
       ["AGP $", fmt.k(m.agpTY), fmt.k(m.agpLY), fmt.sk(m.agpTY - m.agpLY)],
       ["AGP %", fmt.pct(m.agpTY / m.sTY), fmt.pct(m.agpLY / m.sLY), fmt.pts(m.agpTY / m.sTY - m.agpLY / m.sLY)],
-      ["AGP per Unit", fmt.moneyC(m.agpuTY), fmt.moneyC(m.agpuLY), (m.agpuTY >= m.agpuLY ? "+$" : "-$") + Math.abs(m.agpuTY - m.agpuLY).toFixed(2)],
+      ["AGP per Unit", fmt.moneyC(m.agpuTY), fmt.moneyC(m.agpuLY), Math.abs(m.agpuTY - m.agpuLY) < 0.005 ? "flat" : (m.agpuTY >= m.agpuLY ? "+$" : "-$") + Math.abs(m.agpuTY - m.agpuLY).toFixed(2)],
       ["COGS per Unit", fmt.moneyC(m.cogsuTY), fmt.moneyC(m.cogsuLY), fmt.spct(m.cogsuTY / m.cogsuLY - 1)],
       ["Deadnet per Unit", fmt.moneyC(m.dnuTY), fmt.moneyC(m.dnuLY), fmt.spct(m.dnuTY / m.dnuLY - 1)],
       ["Total Allowances", fmt.k(m.allowTY), fmt.k(m.allowLY), fmt.spct(m.allowTY / m.allowLY - 1)],
@@ -306,13 +306,23 @@
     const rateChg = m.agpTY / m.sTY - m.agpLY / m.sLY;
     const aivChg = m.aivTY / m.aivLY - 1, cogsChg = m.cogsuTY / m.cogsuLY - 1;
     const allowUChg = (m.allowTY / m.uTY) / (m.allowLY / m.uLY) - 1;
+    // Never render ">100% / <0%" splits — when one component overshoots the
+    // total, say so in dollars instead of nonsense percentages.
+    const splitPhrase = (b) => {
+      const vs = b.vol / b.total, rs = b.rate / b.total;
+      if (vs >= 0 && vs <= 1 && rs >= 0 && rs <= 1) return `splits ${fmt.pct(vs, 0)} volume / ${fmt.pct(rs, 0)} rate`;
+      const lead = Math.abs(b.vol) >= Math.abs(b.rate) ? "volume" : "rate";
+      const leadV = lead === "volume" ? b.vol : b.rate, otherV = lead === "volume" ? b.rate : b.vol;
+      return `is ${lead}-led (${fmt.sk(leadV)}), ${otherV * leadV < 0 ? "partially offset" : "compounded"} by ${lead === "volume" ? "rate" : "volume"} at ${fmt.sk(otherV)}`;
+    };
+    const perUnitEro = Math.abs(m.agpuTY - m.agpuLY) < 0.005 ? "an essentially flat AGP/unit (the decline is volume, not rate)" : `about ${(m.agpuTY - m.agpuLY >= 0 ? "+$" : "-$") + Math.abs(m.agpuTY - m.agpuLY).toFixed(2)} of AGP ${m.agpuTY >= m.agpuLY ? "gain" : "erosion"} per unit`;
     const blocks = [pnlTable(m, e)];
     if (e.flavor === "cost") {
       blocks.push(H(`Yes — both moved in ${per(e)}: COGS per unit is up ${fmt.spct(cogsChg)} versus last year, while total allowances are ${m.allowTY < m.allowLY ? "down " + fmt.spct(m.allowTY / m.allowLY - 1) : "up " + fmt.spct(m.allowTY / m.allowLY - 1)} (allowances per unit ${fmt.spct(allowUChg)}).`));
     } else if (m.allowanceSide) {
-      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline splits ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate. The rate side is consistent with funding pressure: COGS per unit moved ${fmt.spct(cogsChg)} while Deadnet per unit rose ${fmt.spct(m.dnuTY / m.dnuLY - 1)} — vendor and program-level confirmation is the next check before treating this as proven.`));
+      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline ${splitPhrase(b)}. The rate side is consistent with funding pressure: COGS per unit moved ${fmt.spct(cogsChg)} while Deadnet per unit rose ${fmt.spct(m.dnuTY / m.dnuLY - 1)} — vendor and program-level confirmation is the next check before treating this as proven.`));
     } else {
-      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline splits ${fmt.pct(Math.abs(b.vol / b.total), 0)} volume / ${fmt.pct(Math.abs(b.rate / b.total), 0)} rate. The rate side traces to COGS per unit rising ${fmt.spct(cogsChg)} while AIV moved only ${fmt.spct(aivChg)} — retail did not recover the cost increase.`));
+      blocks.push(H(`${e.metric || "AGP rate"} is down ${fmt.pts(rateChg).replace("+", "")} in ${per(e)}, and the AGP $ decline ${splitPhrase(b)}. The rate side traces to COGS per unit rising ${fmt.spct(cogsChg)} while AIV moved only ${fmt.spct(aivChg)} — retail did not recover the cost increase.`));
     }
     blocks.push(b.tbl);
     blocks.push(BU(m.allowanceSide ? [
@@ -320,7 +330,7 @@
       `Deadnet per unit rose ${fmt.spct(m.dnuTY / m.dnuLY - 1)} while COGS per unit rose only ${fmt.spct(cogsChg)} — the classic allowance-side pattern.`,
       `Markdown spend increased ${fmt.spct(m.mdTY / m.mdLY - 1)}, deepening rate pressure in promoted weeks.`
     ] : [
-      `COGS per unit up ${fmt.spct(cogsChg)} vs AIV up only ${fmt.spct(aivChg)} — about ${(m.agpuLY - m.agpuTY >= 0 ? "-$" : "+$") + Math.abs(m.agpuTY - m.agpuLY).toFixed(2)} of AGP erosion per unit. Allowances per unit moved ${fmt.spct(allowUChg)}, so item-level funding checks are needed before ruling funding out.`,
+      `COGS per unit up ${fmt.spct(cogsChg)} vs AIV up only ${fmt.spct(aivChg)} — ${perUnitEro}. Allowances per unit moved ${fmt.spct(allowUChg)}, so item-level funding checks are needed before ruling funding out.`,
       `Volume contributed ${fmt.sk(b.vol)}: ${fmt.units(Math.abs(m.uTY - m.uLY))} fewer units at LY margin.`,
       `Markdown spend up ${fmt.spct(m.mdTY / m.mdLY - 1)} — whether from deeper depth or more promoted weeks needs the promo-week cut.`
     ]));
@@ -1990,6 +2000,47 @@
     return blocks;
   };
 
+  R.advisory_scope = (id, e) => [
+    H("This is a strategy-and-optimization program, not a single analytical question — and answering it with one table would be meaningless, so the layer won't."),
+    P(`The ask spans ${e.domainCount || "many"} decision domains, for every SKU in every store over ${e.horizon || "a 52-week horizon"}, optimizing many objectives simultaneously. That is the job of planning and optimization systems working together over months — pricing optimization, promo planning, replenishment — each of which this Q&A layer can feed with inputs, but none of which it can replace with a response.`),
+    TB("Where each piece of the ask stands today", ["Decision domain", "Status", "What exists"], [
+      ["Selling price vs competition", "Answerable", "Competitive price / CPI templates (competitor_price)"],
+      ["Promotional calendar & effectiveness", "Answerable", "Promo effectiveness, frequency, quad review templates; the promotion-forecast optimizer owns forward planning"],
+      ["Vendor funding strategy", "Answerable", "Allowance, Line 7, slotting and spend-rate templates"],
+      ["Market share", "Answerable", "Circana share templates (~1 week lag)"],
+      ["Assortment (item level)", "Partial", "Item ranking + attribute templates; formal assortment optimization out of scope"],
+      ["Inventory allocation / replenishment / procurement timing", "Blocked", "No inventory, PO or supply feeds in the current 15-table scope"],
+      ["Labor, shelf space, digital fulfillment", "Out of scope", "Not merchandising-intelligence data; owned by other systems"],
+      ["Customer lifetime value / basket / behavior drift", "Blocked", "Requires household-level data — not onboarded"]
+    ]),
+    BU([
+      "The honest path is decomposition: pick ONE category, ONE lever, ONE period, and the registered templates answer it with lineage — e.g. “which promo tactic maximizes incremental AGP for Cheese Shreds in Q3?” runs today.",
+      "Long-horizon multi-objective optimization under uncertainty is a modeling program with governance, not a chat answer — any response claiming otherwise would be invented."
+    ]),
+    NOTE("Contract status: SCOPE_DISCLOSURE — no data was force-fitted; nothing in the answer above is fabricated."),
+    FU(["Which single decision do you want to start with — category, lever, and period?"])
+  ];
+
+  R.methodology = (id, e) => [
+    H("This is a measurement-design question. The data can bound the answer, but no query separates those two effects by itself — here is what can and cannot be known, and how to decide anyway."),
+    P("The identification problem: after a price cut, the observed lift is the joint result of (a) customers valuing the lower price (own-price elasticity) and (b) competitors holding their prices (competitive gap widening). Both push the same direction in the same weeks, so transaction data alone cannot split them — any answer that claims to would be fabricating precision."),
+    TB("What the current data CAN and CANNOT separate", ["Question", "Status", "How"], [
+      ["Did competitors respond?", "Answerable", "competitor_price: CPI pre/post the change window, by priority competitor"],
+      ["Did the market move or just us?", "Answerable", "Circana share: our lift vs category movement (≈1-week lag)"],
+      ["Natural experiment across divisions", "Answerable", "Divisions price independently — compare lift where the competitive gap changed vs where it did not; the difference bounds the competitor effect"],
+      ["Promo vs base-week response", "Answerable", "Separate promoted and non-promoted weeks so promo mechanics don't masquerade as elasticity"],
+      ["Clean own-price elasticity", "Blocked", "Needs variation where competitors did NOT move — designed holdout or natural experiment only"],
+      ["Which households switched from competitors", "Blocked", "Household-level data not onboarded"]
+    ]),
+    BU([
+      "Judging “was it the right decision” does not require separating the effects: score it on deadnet AGP per incremental unit net of vendor funding. If incremental margin is negative, it was the wrong move under EITHER explanation.",
+      "If competitors later match the price, the share gain decays while the margin cost stays — track CPI weekly post-change as the early-warning signal.",
+      "Forward-looking: the only clean separation is a designed test — matched stores or divisions holding price, with CPI monitored, before rolling wide."
+    ]),
+    NOTE("Lineage: competitor_price, sales_cost_allowances and market_share are onboarded and drive the answerable rows; the two blocked rows are marked as not knowable from current data — stated, not approximated."),
+    FU(["Run the CPI pre/post check for a specific price change (category + date)?", "Set up the division-level natural-experiment cut for a change you already made?"])
+  ];
+
   R.clarify = (id, e) => e.llmClarify ? [
     H("One value needs confirming before this can run."),
     P(e.llmClarify),
@@ -2218,7 +2269,13 @@
     const p = t.match(/\bp(\d{1,2})\s+(20\d\d)\b/);
     if (p) return { ...e, period: `P${p[1]} ${p[2]}` };
     const lw = t.match(/last\s*(\d{1,2})\s*w(?:ee)?ks?/);
-    if (lw) return { ...e, period: `last ${lw[1]} weeks` };
+    if (lw) e = { ...e, period: `last ${lw[1]} weeks` };
+    // category named in the input overrides the matched canonical's stored one
+    for (const list of Object.values(POOLS.smics)) {
+      const hit = list.find((sm) => input.toUpperCase().includes(sm));
+      if (hit && String(e.cat || e.smic || "").toUpperCase() !== hit) return { ...e, cat: hit, smic: hit };
+      if (hit) break;
+    }
     return e;
   }
 
@@ -2236,8 +2293,21 @@
     }
     if (bestScore >= 0.92) return { tier: 1, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 3 };
     if (bestScore >= 0.40) return { tier: 2, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 140 + Math.floor(bestScore * 60) };
-    // Tier 3 — concept-coverage guard FIRST: if the question's core concepts
-    // exist in no archetype, never force-fit the nearest pattern.
+    // Tier 3 — scope guards FIRST. These regex guards are the KEY-LESS
+    // FALLBACK only; with a live tier-3 model the question_class field is the
+    // general mechanism that classifies any unseen phrasing.
+    const domainWords = [...new Set((input.match(/selling price|promotional calendar|inventory allocation|assortment|replenishment|procurement|labor|shelf space|fulfillment|working capital|cash flow|lifetime value|vendor funding|market share|tariff|elasticity/gi) || []).map((w) => w.toLowerCase()))];
+    if (domainWords.length >= 5 || (domainWords.length >= 3 && /every (sku|store|item)/i.test(input))) {
+      const e = t3Entities(input);
+      e.domainCount = domainWords.length;
+      const hz = input.match(/(\d{2,3})\s*weeks/i); if (hz) e.horizon = `a ${hz[1]}-week horizon`;
+      return { tier: 3, score: bestScore, q: null, arch: "advisory_scope", e, latency: 1400, near: [], guarded: true };
+    }
+    if (/how (do|can|would) we know|how can we know|was .{0,50}the right (decision|call)|separate (those|these|the) effects/i.test(input)) {
+      return { tier: 3, score: bestScore, q: null, arch: "methodology", e: t3Entities(input), latency: 1400, near: [], guarded: true };
+    }
+    // concept-coverage guard: if the question's core concepts exist in no
+    // archetype, never force-fit the nearest pattern.
     const UNCOVERED = [
       [/basket (affinity|analysis)|penetration|switching|loyalty segment|trip (mission|frequency)|share of wallet/i, "novel_analysis"],
       [/exclusiv|(household|hh\b).*(overlap|exclusiv)|overlap.*promo|promo.*overlap/i, "household_exclusivity"],
@@ -2759,9 +2829,14 @@
       // LLM entities fill hint slots the lexical pass missed; non-null only.
       Object.entries(out.entities || {}).forEach(([k, v]) => { if (v && !e[k]) e[k] = v; });
       let arch = ARCHETYPES[out.archetype] ? out.archetype : match.arch;
-      if ((out.uncovered_concepts || []).length && !["novel_analysis", "household_exclusivity"].includes(arch)) {
+      // question_class is the GENERAL routing signal — the model judges the
+      // question's nature for any unseen phrasing; the registry supplies the
+      // honest landing template for each class.
+      if (out.question_class === "strategy_program") { arch = "advisory_scope"; e.rawAsk = text; }
+      else if (out.question_class === "methodology") { arch = "methodology"; e.rawAsk = text; }
+      else if (out.question_class === "novel_concept" || ((out.uncovered_concepts || []).length && !["novel_analysis", "household_exclusivity"].includes(arch))) {
         arch = "novel_analysis";
-        e.concepts = out.uncovered_concepts;
+        e.concepts = (out.uncovered_concepts || []).length ? out.uncovered_concepts : ["this analysis"];
         e.rawAsk = text;
       }
       if (out.needs_clarification && out.clarification_question) {

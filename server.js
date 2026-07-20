@@ -61,6 +61,11 @@ function t3Schema(archetypeIds) {
     type: "object",
     properties: {
       archetype: { type: "string", enum: archetypeIds, description: "Best-matching response archetype from the registry catalog" },
+      question_class: {
+        type: "string",
+        enum: ["data_lookup", "diagnostic", "compound", "strategy_program", "methodology", "novel_concept"],
+        description: "The NATURE of the question, judged before template choice: data_lookup = a concrete retrieval/ranking; diagnostic = asks WHY a metric moved; compound = several distinct asks; strategy_program = broad multi-domain optimization/planning ask (every SKU/store, long horizon, many objectives) that NO single analytical answer can honestly cover; methodology = asks HOW TO KNOW something (causal separation, whether a decision was right) rather than for data; novel_concept = a concrete data ask whose core concept no template covers"
+      },
       confidence: { type: "number", description: "0-1 confidence that the chosen archetype's response template answers the question's intent" },
       entities: {
         type: "object",
@@ -83,7 +88,7 @@ function t3Schema(archetypeIds) {
         description: "Concepts in the question that NO archetype's data plan covers (e.g. household exclusivity, basket affinity) — these render with lineage marked not-traceable"
       }
     },
-    required: ["archetype", "confidence", "entities", "needs_clarification", "clarification_question", "uncovered_concepts"],
+    required: ["archetype", "question_class", "confidence", "entities", "needs_clarification", "clarification_question", "uncovered_concepts"],
     additionalProperties: false
   };
 }
@@ -98,7 +103,7 @@ async function t3Resolve(body) {
   const system = [
     "You are the tier-3 intent-inference stage of a merchant Q&A response-contract layer for a grocery merchandising intelligence platform (divisions, vendors, SMIC categories, fiscal periods, promotions, allowances, AGP profit).",
     "The question missed the exact-match and nearest-neighbor registry tiers. Your job: pick the ONE archetype from the catalog whose response template best answers the question's intent, extract entity hints, and flag any concepts no archetype covers.",
-    "Rules: never force-fit — if core concepts (household/loyalty-level analysis, basket affinity, penetration, switching) are outside every archetype's data plan, list them in uncovered_concepts and pick the closest structural archetype anyway. If a required slot (e.g. which vendor, which period) is genuinely unresolvable and matters to the answer, set needs_clarification. Entities are HINTS only — a downstream NER pipeline is authoritative.",
+    "Rules: never force-fit — classify question_class FIRST. A strategy_program (broad multi-domain optimization: 'every SKU in every store', many simultaneous objectives, long horizons) or a methodology question ('how do we know…', 'was it the right decision', separating causal effects) must NOT be mapped onto a data template as if it were a lookup — the router will send those to honest scope/measurement-design templates. If core concepts (household/loyalty analysis, basket affinity, penetration, switching) are outside every archetype's data plan, list them in uncovered_concepts. If a required slot (e.g. which vendor, which period) is genuinely unresolvable and matters, set needs_clarification. Entities are HINTS only — a downstream NER pipeline is authoritative.",
     "",
     "Archetype catalog:",
     ...catalog.map((a) => `- ${a.id}: ${a.intent || a.name || ""}`)
