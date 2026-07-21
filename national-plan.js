@@ -549,6 +549,7 @@
     { n: 2, title: "Constraints" },
     { n: 3, title: "Deal inputs" },
     { n: 4, title: "Promotional Calendar" },
+    { n: 5, title: "Week by week view" },
     { n: 6, title: "Why it beats LY" }
   ];
   const state = {
@@ -664,8 +665,12 @@
         '<span class="np-step-circ">' + (locked ? "🔒" : done ? "✓" : (i + 1)) + '</span><span class="np-step-name">' + s.title + "</span></button>";
     }).join('<span class="np-step-line" aria-hidden="true"></span>');
     const obj = objMeta();
+    // The Promotional Calendar (n:4) and Week-by-week (n:5) screens already show the plan
+    // context in their own header bar, so the stepper's Division/Category/Optimizing summary
+    // is redundant there — hide it on those steps.
+    const showObj = state.step !== 4 && state.step !== 5;
     host.innerHTML = '<div class="np-stepper-inner">' + tabs + "</div>" +
-      '<div class="np-stepper-obj">' + (state.generated ? '<span>Division</span><b>' + divMeta().short + '</b><span class="np-obj-sep"></span><span>' + (state.categoryIds.length > 1 ? "Categories" : "Category") + "</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimizing for</span><b class=\"np-obj-pill\">" + obj.fmtName + '</b><span class="np-obj-sep"></span><span>Showing</span><b>' + periodsLabel() + "</b>" : '<span class="np-stepper-hint">Pick a division, categories, objective &amp; periods to begin</span>') + "</div>";
+      '<div class="np-stepper-obj"' + (showObj ? "" : " hidden") + ">" + (state.generated ? '<span>Division</span><b>' + divMeta().short + '</b><span class="np-obj-sep"></span><span>' + (state.categoryIds.length > 1 ? "Categories" : "Category") + "</span><b>" + cat().name.split(" — ")[0] + "</b><span class=\"np-obj-sep\"></span><span>Optimizing for</span><b class=\"np-obj-pill\">" + obj.fmtName + '</b><span class="np-obj-sep"></span><span>Showing</span><b>' + periodsLabel() + "</b>" : '<span class="np-stepper-hint">Pick a division, categories, objective &amp; periods to begin</span>') + "</div>";
     host.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => { const n = +b.dataset.step; if (n === 1 || state.generated) goStep(n); });
   }
   function goStep(n) { if (state.v2 && !state.v2plan && n === 3) n = 4; state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -907,6 +912,14 @@
     if (state.v2 && window.NPV2 && state.generated && (state.step === 4 || (state.step === 3 && !state.v2plan))) {
       for (let i = 1; i <= 6; i++) { const el = document.getElementById("npStep" + i); if (el) el.toggleAttribute("hidden", true); }
       NPV2.mount();
+      syncTopbar();
+      return;
+    }
+    // Week-by-week view (step 5) — same V2 shell, but the worklist + per-price-area
+    // recommendation screen for a single selected week instead of the 52-week ribbon.
+    if (state.v2 && window.NPV2 && NPV2.mountWeek && state.generated && state.step === 5) {
+      for (let i = 1; i <= 6; i++) { const el = document.getElementById("npStep" + i); if (el) el.toggleAttribute("hidden", true); }
+      NPV2.mountWeek();
       syncTopbar();
       return;
     }

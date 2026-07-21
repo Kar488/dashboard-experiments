@@ -21,6 +21,9 @@
 
   let flip = { open: false, m: 0, animating: false };
   const ff = { cat: "all", vendor: "all", rog: "all", cls: "all", sub: "all", sortBy: null, bin: "all" };   // front-grid filters + sort
+  // Week-by-week view (step 5) — which NCRC + which of the 52 weeks is open. uid resolves
+  // to the first filtered worklist item when null (or when the current pick is filtered out).
+  const WEEKSEL = { uid: null, week: NP.CURRENT_WEEK };   // first plannable week (locked actuals are excluded)
   // sub-class — a finer split under class, derived from the item's demand form
   const SUBCLASS_LABEL = { bar: "Core / everyday", bag: "Multipack", tub: "Club & seasonal" };
   const mfilter = { vendor: "all", cls: "all" };           // month-detail filters
@@ -147,7 +150,8 @@
     return items;
   }
   // subtle Sort-by-velocity-bin pills (Sales/Units/AGP × 1..5 quintiles)
-  function sortControlsHTML() {
+  function sortControlsHTML(includePlan) {
+    if (includePlan === undefined) includePlan = true;   // the week-by-week view drops the swipe-up 52-week toggle
     const pill = (label, active, attr) => '<button type="button" class="npv2-sort-pill' + (active ? " is-active" : "") + '" ' + attr + ">" + label + "</button>";
     const sortPills = [["sales", "Sales"], ["units", "Units"], ["agp", "AGP"]].map(([m, l]) => pill(l, ff.sortBy === m, 'data-sortby="' + m + '"')).join("");
     const binPills = ["all", "1", "2", "3", "4", "5"].map((b) => pill(b === "all" ? "All" : b, (ff.bin || "all") === b, 'data-bin="' + b + '"')).join("");
@@ -156,8 +160,8 @@
     return '<span class="npv2-sort"><span class="npv2-sort-l">Sort by</span><span class="npv2-pillgroup">' + sortPills + "</span></span>" +
       '<span class="npv2-divider"></span>' +
       '<span class="npv2-sort"><span class="npv2-sort-l">Velocity</span><span class="npv2-pillgroup">' + binPills + "</span></span>" +
-      '<span class="npv2-divider"></span>' +
-      '<span class="npv2-sort"><span class="npv2-sort-l">52-week</span><span class="npv2-pillgroup">' + planPills + "</span></span>";
+      (includePlan ? '<span class="npv2-divider"></span>' +
+        '<span class="npv2-sort"><span class="npv2-sort-l">52-week</span><span class="npv2-pillgroup">' + planPills + "</span></span>" : "");
   }
   // skinny whole-table total: Sales / Units / AGP with LY value + % and $ deltas
   function totalsStripHTML(items, map) {
@@ -570,7 +574,7 @@
     const items = frontItems();
     front.innerHTML =
       '<div class="npv2-fg-tools">' +
-        stratCardsHTML() +
+        stratCardsHTML() +   // step 3 keeps its full strategy cards (bigger, condense-on-scroll, hide/show others)
         // row 2 — scenario (left) · interactions (right)
         '<div class="npv2-fg-trow">' +
           '<div class="npv2-fg-gl">' +
@@ -914,6 +918,688 @@
     }));
   }
 
+  /* ============================================ WEEK-BY-WEEK VIEW (step 5)
+     The my-desk "Promo recommendations" screen, folded into the national plan:
+     the SAME header + filter toolbar as the 52-week grid, plus a week selector,
+     a worklist rail of NCRCs for the active velocity bin, and the per-price-area
+     recommendation table for the selected NCRC/week. Reached from the Promotional
+     Calendar step (openWeekView) or by advancing the stepper. Price areas are
+     derived deterministically from each NCRC's week plan (same basis as the
+     single-week drawer), so the numbers are stable and tie back to the drawer. */
+  const round = NP.util.round, clampN = NP.util.clamp;
+  const FIRST_PLAN_WEEK = NP.CURRENT_WEEK;   // weeks before this are locked actuals — not plannable / not navigable
+  const RLBL = { scan: "Scan", shipToStore: "Ship to store", newItem: "New item" };
+  function wkNoise(o, seed, k) { return ((NP.util.hashStr(o.uid) + seed * 13 + k * 101) % 1000) / 1000; }
+  function weekEvent(w) { return NP.RETAIL_EVENTS.find((e) => e.wk === w - 1) || null; }
+  function weekLabel(w) { const ev = weekEvent(w); return "Week " + w + (ev ? " · " + ev.label : ""); }
+  const wkU = (v) => Math.round(v).toLocaleString() + "K";
+  const wkM = (v) => "$" + Math.round(v * 1000).toLocaleString() + "K";
+  function scoreTone(s) { return s >= 80 ? "np-pos" : s >= 62 ? "" : "np-neg"; }
+
+  // step-5 interaction state (kept in-session, like the original promo builder)
+  const WKST = { expanded: {}, chosen: {}, custom: {}, selPa: null, tab: "cost", override: false, oform: null, manualEditPa: null, manualEditForm: null, review: false, reviewExpanded: {}, finalized: null };
+  const WKCART = {};                                 // key `${uid}:${week}` -> committed NCRC plan
+  function paKey(o, week, pa) { return o.uid + ":" + week + ":" + pa; }
+  function cartKey(o, week) { return o.uid + ":" + week; }
+  function isLocked(week) { return week < FIRST_PLAN_WEEK; }
+
+  // week-level metrics + LY/NP baselines, shared by every PA of this NCRC
+  function weekBaseMetrics(o, week) {
+    const map = NP.displayMap(), wk = NP.weekPlan(o, map, false), c = wk[week - 1];
+    const promoted = !!(c && c.promoted), curve = NP.CURVE[o.form] || NP.CURVE.bar;
+    const psum = wk.filter((x) => x.promoted).reduce((s, x) => s + curve[x.week - 1], 0) || 1;
+    const share = promoted ? curve[week - 1] / psum : 1 / 52;
+    const res = NP.resultFor(o, map), lyR = NP.lyResult(o), npR = NP.noPromoResult(o);
+    return {
+      c: c, promoted: promoted, share: share,
+      recDepth: promoted ? c.depth : 0.18, recOfferId: promoted && c.offer ? c.offer.id : "id-doff",
+      wkUnits: res.units * share, wkSales: res.revenueM * share, wkAgp: res.agpM * share,
+      lyUnits: lyR.units * share, lySales: lyR.revenueM * share, lyAgp: lyR.agpM * share,
+      npUnits: npR.units * share, npSales: npR.revenueM * share, npAgp: npR.agpM * share
+    };
+  }
+  function paFractions(o, week, n) {
+    const w = []; let s = 0;
+    for (let i = 0; i < n; i++) { const wi = 0.72 + wkNoise(o, week, i + 1) * 0.56; w.push(wi); s += wi; }
+    return w.map((x) => x / s);
+  }
+  // one offer's metrics for a PA. depth vs the recommended depth drives the units/sales/AGP spread.
+  function buildOffer(o, week, paIdx, frac, bm, offer, rank, isRec) {
+    const e = NP.effective(o, NP.displayMap()), l = e.ladder;
+    const nz = (k) => wkNoise(o, week * 7 + paIdx, k) - 0.5;
+    const depth = NP.snapDepth(offer.depth);
+    const paVlc = round(e.vlc * (1 + nz(1) * 0.06), 2);
+    const paBase = round(o.basePrice * (1 + nz(3) * 0.03), 2);
+    const paPromo = round(paBase * (1 - depth), 2);
+    const dnc = round(NP.deadNetOf(o) * (1 + nz(2) * 0.08), 2);
+    const funding = round((l.offInvoice + (l.scan || 0)) * paVlc * (0.85 + nz(5) * 0.35), 2);
+    const dd = depth - bm.recDepth;
+    const um = clampN(1 + dd * 1.4, 0.55, 1.85), sm = clampN(um * (1 - dd * 0.35), 0.5, 1.9), am = clampN(um * (1 - dd * 1.05), 0.35, 1.8);
+    const R = Math.round(clampN(74 + wkNoise(o, week * 11 + paIdx, rank + 2) * 18 - rank * 3, 40, 97));
+    const G = Math.round(clampN(66 + wkNoise(o, week * 13 + paIdx, rank + 5) * 24 - rank * 4, 40, 96));
+    const digName = offer.digital ? NP.DIGITAL_NAMES[offer.digital] : null;
+    return {
+      id: offer.id, label: offer.label, rank: rank, isRec: isRec, isCustom: !!offer.isCustom,
+      storeName: NP.STORE_TACTICS[offer.store].name, storeCode: offer.store, digName: digName,
+      depth: depth, vlc: paVlc, dnc: dnc, base: paBase, promo: paPromo, save: Math.max(0, paBase - paPromo),
+      digPromo: digName ? round(paPromo * 0.985, 2) : null,
+      mb: offer.store === "BXGX" ? "2 / 8" : "1 / 6", ad: "Y / Y", funding: funding,
+      units: bm.wkUnits * frac * um, sales: bm.wkSales * frac * sm, agp: bm.wkAgp * frac * am,
+      R: R, G: G, total: Math.round((R + G) / 2) + (isRec ? 3 : 0)
+    };
+  }
+  function paOffers(o, week, paIdx, frac, bm) {
+    const rec = NP.OFFERS.find((x) => x.id === bm.recOfferId) || NP.OFFERS[0];
+    const others = NP.OFFERS.filter((x) => x.id !== rec.id).slice(0, 4);
+    const list = [buildOffer(o, week, paIdx, frac, bm, rec, 1, true)];
+    others.forEach((of, i) => list.push(buildOffer(o, week, paIdx, frac, bm, of, i + 2, false)));
+    const cust = WKST.custom[paKey(o, week, "PA0" + (paIdx + 1))];
+    if (cust) list.unshift(cust);
+    return list;
+  }
+  function paData(o, week) {
+    const bm = weekBaseMetrics(o, week), fr = paFractions(o, week, 4);
+    return fr.map((frac, i) => ({
+      pa: "PA0" + (i + 1), frac: frac, offers: paOffers(o, week, i, frac, bm),
+      ly: { promo: round(o.basePrice * 0.62, 2), label: "Buy 5 Get 3", units: bm.lyUnits * frac, sales: bm.lySales * frac, agp: bm.lyAgp * frac },
+      np: { base: round(o.basePrice, 2), units: bm.npUnits * frac, sales: bm.npSales * frac, agp: bm.npAgp * frac, R: 85, G: 70, total: 60 }
+    }));
+  }
+  function chosenFor(o, week, pd) {
+    const id = WKST.chosen[paKey(o, week, pd.pa)];
+    return pd.offers.find((x) => x.id === id) || pd.offers.find((x) => x.isRec) || pd.offers[0];
+  }
+
+  // --- table cell groups ---
+  function offerCells(of) {
+    const digCell = of.digName ? '<div class="npv2-wk-tac"><b>' + esc(of.digName) + '</b><small>$' + of.digPromo.toFixed(2) + "</small></div>" : '<span class="npv2-wk-mut">No digital</span>';
+    return '<td class="r">$' + of.vlc.toFixed(2) + '</td><td class="r">$' + of.dnc.toFixed(2) + '</td><td class="r">$' + of.base.toFixed(2) + "</td>" +
+      '<td class="r npv2-wk-promo">$' + of.promo.toFixed(2) + "</td>" +
+      '<td class="l"><div class="npv2-wk-tac"><b>' + esc(of.storeName) + "</b><small>" + (of.storeCode === "BXGX" ? esc(of.label) : "Save $" + of.save.toFixed(2)) + "</small></div></td>" +
+      '<td class="l">' + digCell + "</td>" +
+      '<td class="c">' + of.mb + '</td><td class="c">' + of.ad + "</td>" +
+      '<td class="r">$' + of.funding.toFixed(2) + "</td>" +
+      '<td class="r"><b>' + wkM(of.sales) + "</b></td>" +
+      '<td class="r"><b>' + wkU(of.units) + "</b></td>" +
+      '<td class="r"><b>' + wkM(of.agp) + "</b></td>" +
+      '<td class="r npv2-wk-score">' + (of.isCustom || of.total == null ? '<b class="npv2-wk-mut">—</b><small>custom</small>' : '<b class="' + scoreTone(of.total) + '">' + of.total + "</b><small>R " + of.R + " · G " + of.G + "</small>") + "</td>";
+  }
+  function dashCells(n) { let s = ""; for (let i = 0; i < n; i++) s += '<td class="c npv2-wk-mut">–</td>'; return s; }
+  function paBlockHTML(o, week, pd, selPa) {
+    const chosen = chosenFor(o, week, pd), expanded = !!WKST.expanded[pd.pa], alts = pd.offers.length;
+    let h = '<tr class="npv2-wk-parow' + (selPa === pd.pa ? " is-sel" : "") + (expanded ? " is-exp" : "") + '" data-pa="' + pd.pa + '">' +
+      '<td class="l npv2-wk-pa">' + pd.pa + (chosen.isCustom ? ' <span class="npv2-wk-pl">CUSTOM</span>' : "") + "</td>" +
+      offerCells(chosen) +
+      '<td class="c npv2-wk-altc"><button type="button" class="npv2-wk-toggle' + (expanded ? " is-open" : "") + '" data-toggle="' + pd.pa + '">' + (expanded ? "Hide" : "+" + (alts - 1)) + " ▾</button></td></tr>";
+    if (!expanded) return h;
+    h += '<tr class="npv2-wk-exphead npv2-wk-nest"><td colspan="15" class="l"><span class="npv2-wk-nestcap">Options for ' + pd.pa + "</span> — alternates · LY actual · no-promo baseline</td></tr>";
+    pd.offers.forEach((of) => {
+      const isC = chosen.id === of.id;
+      h += '<tr class="npv2-wk-altrow npv2-wk-nest' + (isC ? " is-chosen" : "") + '" data-pick="' + pd.pa + "|" + esc(of.id) + '">' +
+        '<td class="l npv2-wk-pa"><span class="npv2-wk-radio' + (isC ? " on" : "") + '"></span>' + (of.isCustom ? '<span class="npv2-wk-pl">CUSTOM</span>' : of.isRec ? '<span class="npv2-wk-rec">#1 REC</span>' : "#" + of.rank) + "</td>" +
+        offerCells(of) + "<td></td></tr>";
+    });
+    // LY row
+    h += '<tr class="npv2-wk-refrow npv2-wk-nest"><td class="l npv2-wk-pa"><span class="npv2-wk-refpill ly">LY</span></td>' +
+      dashCells(3) + '<td class="r npv2-wk-promo">$' + pd.ly.promo.toFixed(2) + "</td>" +
+      '<td class="l"><div class="npv2-wk-tac"><b>' + esc(pd.ly.label) + "</b><small>Last year</small></div></td>" + dashCells(4) +
+      '<td class="r">' + wkM(pd.ly.sales) + '</td><td class="r">' + wkU(pd.ly.units) + '</td><td class="r">' + wkM(pd.ly.agp) + "</td>" +
+      '<td class="r npv2-wk-score"><small>actual</small></td><td></td></tr>';
+    // NP baseline row
+    h += '<tr class="npv2-wk-refrow npv2-wk-nest"><td class="l npv2-wk-pa"><span class="npv2-wk-refpill np">NP</span></td>' +
+      dashCells(2) + '<td class="r">$' + pd.np.base.toFixed(2) + '</td><td class="c npv2-wk-mut">–</td>' +
+      '<td class="l"><div class="npv2-wk-tac"><b>No promo</b><small>Skip promo</small></div></td>' + dashCells(4) +
+      '<td class="r">' + wkM(pd.np.sales) + '</td><td class="r">' + wkU(pd.np.units) + '</td><td class="r">' + wkM(pd.np.agp) + "</td>" +
+      '<td class="r npv2-wk-score"><b>' + pd.np.total + "</b><small>R " + pd.np.R + " · G " + pd.np.G + "</small></td><td></td></tr>";
+    // override link
+    const cust = WKST.custom[paKey(o, week, pd.pa)];
+    h += '<tr class="npv2-wk-ovrow npv2-wk-nest"><td colspan="15">' + (cust
+      ? "Custom override saved for <strong>" + pd.pa + '</strong>. <a href="#" class="npv2-wk-ovlink" data-override="' + pd.pa + '">Edit</a> · <a href="#" class="npv2-wk-ovlink npv2-wk-ovclear" data-ovclear="' + pd.pa + '">Clear</a>.'
+      : 'None of these fit? <a href="#" class="npv2-wk-ovlink" data-override="' + pd.pa + '">Override the recommendation →</a>') + "</td></tr>";
+    return h;
+  }
+  function recTableHTML(o, week, pds, selPa) {
+    const tot = pds.reduce((t, pd) => { const c = chosenFor(o, week, pd); return { funding: t.funding + c.funding, sales: t.sales + c.sales, units: t.units + c.units, agp: t.agp + c.agp }; }, { funding: 0, sales: 0, units: 0, agp: 0 });
+    return '<div class="npv2-wk-tablewrap"><table class="npv2-wk-table"><thead><tr>' +
+      '<th class="l">PA</th><th class="r">VLC</th><th class="r">DNC</th><th class="r">Base $</th><th class="r">Promo $</th><th class="l">Store tactic</th><th class="l">Digital tactic</th>' +
+      '<th class="c">MB / Lim</th><th class="c">Ad / Disp</th><th class="r">Funding $</th>' +
+      '<th class="r">Sales</th><th class="r">Units</th><th class="r">AGP</th><th class="r">Total score</th><th class="c npv2-wk-altc"></th>' +
+      "</tr></thead><tbody>" + pds.map((pd) => paBlockHTML(o, week, pd, selPa)).join("") + "</tbody><tfoot>" +
+      '<tr class="npv2-wk-tot"><td class="l">Total</td><td colspan="8" class="l"><small>' + pds.length + " price areas</small></td>" +
+      '<td class="r">$' + tot.funding.toFixed(2) + '</td><td class="r">' + wkM(tot.sales) + '</td><td class="r">' + wkU(tot.units) + '</td><td class="r">' + wkM(tot.agp) + "</td><td></td><td></td></tr>" +
+      "</tfoot></table></div>";
+  }
+
+  // --- right side panel: Cost ladder / NCRC grid ---
+  function ladderHTML(o, chosen) {
+    const e = NP.effective(o, NP.displayMap()), l = e.ladder, vlc = chosen ? chosen.vlc : e.vlc;
+    const off = vlc * l.offInvoice, bb = vlc * l.billBack, pb = vlc * l.priceBreak, fr = vlc * l.freight;
+    const totBuy = off + bb + pb, ret = NP.RETAIL_KEYS.map((k) => [RLBL[k] || k, vlc * (l[k] || 0)]);
+    const totRet = ret.reduce((s, r) => s + r[1], 0), net = vlc - totBuy - fr, dead = net - totRet;
+    const row = (a, v, cls) => '<div class="npv2-wk-lrow' + (cls ? " " + cls : "") + '"><span>' + a + "</span><b>$" + v.toFixed(2) + "</b></div>";
+    return '<div class="npv2-wk-ladder">' + row("Vendor list cost", vlc, "head") +
+      '<div class="npv2-wk-lgrp">Buying allowances</div>' + row("Off-invoice", off) + row("Bill back", bb) + row("Price break", pb) + row("Total buying", totBuy, "sub") + row("Freight", fr) + row("Net cost", net, "sub") +
+      '<div class="npv2-wk-lgrp">Retail allowances</div>' + ret.map((r) => row(r[0], r[1])).join("") + row("Total retail", totRet, "sub") + row("Dead-net cost", dead, "tot") + "</div>";
+  }
+  function gridPanelHTML(o, week, pds) {
+    const rows = pds.map((pd) => { const c = chosenFor(o, week, pd); return '<tr><td class="npv2-wk-l">' + pd.pa + "</td><td>" + esc(c.storeName) + '</td><td class="npv2-wk-r">' + wkM(c.sales) + '</td><td class="npv2-wk-r">' + wkU(c.units) + '</td><td class="npv2-wk-r">' + wkM(c.agp) + "</td></tr>"; }).join("");
+    return '<table class="npv2-wk-gridtbl"><thead><tr><th class="npv2-wk-l">PA</th><th>Tactic</th><th class="npv2-wk-r">Sales</th><th class="npv2-wk-r">Units</th><th class="npv2-wk-r">AGP</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  }
+  // NOPAs (funding agreements) linked to this NCRC / PA — ported from the exec screen's cost-ladder panel
+  function nopaPanelHTML(o, pa) {
+    const seed = (o.ncrc || "").split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const nopas = [
+      { id: "NOPA-" + (1000 + seed % 9000), label: "Off-Invoice MD", window: "W48 – W52", amount: "$0.57 / unit" },
+      { id: "NOPA-" + (2000 + (seed + 17) % 9000), label: "Bill-Back FY26 Q1", window: "P11 – P13", amount: "$0.05 / unit" },
+      { id: "NOPA-" + (3000 + (seed + 41) % 9000), label: "Retail transaction", window: "Always-on", amount: "$0.45 / txn" }
+    ];
+    return '<section class="pd-nopa">' +
+      '<header class="pd-nopa-head"><strong>NOPAs linked to</strong><span>' + esc(o.ncrc) + " · " + esc(o.item) + " <em>" + esc(o.pack) + "</em></span>" + (pa ? '<span class="pd-nopa-pa">' + esc(pa) + "</span>" : "") + "</header>" +
+      '<ul class="pd-nopa-list">' + nopas.map((n) => '<li><a href="#" class="pd-nopa-link"><strong>' + esc(n.id) + "</strong><span>" + esc(n.label) + '</span></a><span class="pd-nopa-meta">' + esc(n.window) + " · " + esc(n.amount) + "</span></li>").join("") + "</ul></section>";
+  }
+  // Promotion history — this NCRC's last 6 ad-breaks (side-panel tab)
+  function promoHistoryHTML(o) {
+    const dates = ["10/22/25", "09/24/25", "08/27/25", "07/30/25", "07/02/25", "06/04/25"], tac = ["PP", "Digital", "BxGx", "PP", "Digital", "BxGx"];
+    const h = NP.util.hashStr(o.uid), base = Math.round(o.baseUnitsK * 1000 / 52);
+    const rows = dates.map((d, i) => { const r = ((h + i * 37) % 50) / 100, units = Math.round(base * (1.35 + r)), aiv = o.basePrice * (0.7 + (i % 3) * 0.18), sales = Math.round(units * aiv);
+      return '<tr><td class="npv2-wk-l">' + d + '</td><td class="r">' + units.toLocaleString() + '</td><td class="r">$' + sales.toLocaleString() + '</td><td class="npv2-wk-l">' + tac[i] + '</td><td class="r">$' + aiv.toFixed(2) + "</td></tr>"; }).join("");
+    return '<table class="npv2-wk-gridtbl"><thead><tr><th class="npv2-wk-l">Ad break</th><th class="r">Units</th><th class="r">Sales</th><th class="npv2-wk-l">Tactic</th><th class="r">AIV</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  }
+  function sidePanelHTML(o, week, pds) {
+    const selPa = WKST.selPa || pds[0].pa, pd = pds.find((p) => p.pa === selPa) || pds[0], chosen = chosenFor(o, week, pd);
+    const tab = WKST.tab;
+    const phead = tab === "cost" ? esc(chosen.label) + " · " + esc(pd.pa) : tab === "hist" ? esc(o.ncrc) + " · last 6 ad-breaks" : "";
+    return '<aside class="npv2-wk-panel">' +
+      '<div class="npv2-wk-ptabs"><button type="button" data-ptab="cost" class="' + (tab === "cost" ? "is-on" : "") + '">Cost ladder</button><button type="button" data-ptab="hist" class="' + (tab === "hist" ? "is-on" : "") + '">Promotion History</button><button type="button" data-ptab="explain" class="' + (tab === "explain" ? "is-on" : "") + '">Explain</button></div>' +
+      (phead ? '<div class="npv2-wk-phead">' + phead + "</div>" : "") +
+      (tab === "hist" ? promoHistoryHTML(o) : tab === "explain" ? explainPanelHTML(o) : ladderHTML(o, chosen) + nopaPanelHTML(o, pd.pa)) + "</aside>";
+  }
+
+  // ============================ OVERRIDE RECOMMENDATION (ported: default + per-PA exceptions,
+  // APEX/OMS dual system). Uses the original promo-plan.css pd-* classes for pixel parity.
+  const PROMO_OPTS = {
+    apexDiscount: ["PP", "%", "Cents", "BXG1"],
+    omsDiscount: ["PP Ea", "% Ea", "Cents Ea", "Free Ea", "PP lb", "% lb", "Cents lb", "Free lb"],
+    uom: [["E", "E — Each"], ["W", "W — Weighted"]],
+    channel: ["Store Only", "Print Only", "Clip Click", "Digital Only"],
+    omsTactic: ["Item Discount", "BXGX", "MB"]
+  };
+  const APEX_ALLOWANCES = [
+    { id: "4379527", name: "Buying allowance", tag: "PRIMARY", status: "Active", amount: 11550 },
+    { id: "4381002", name: "Off-invoice allowance", tag: "", status: "Active", amount: 8200 },
+    { id: "4390115", name: "Bill-back allowance", tag: "", status: "Pending", amount: 4300 }
+  ];
+  function freshPromoForm(extra) {
+    return Object.assign({
+      apexDiscount: "PP", apexFactor: "0", apexAmount: "", apexUom: "E", apexMinBuy: "1", apexLimit: "6", apexInAd: false, apexAllowanceId: "4379527",
+      omsChannel: "Store Only", omsTactic: "Item Discount", omsUom: "E", omsMinBuy: "0", omsDiscount: "PP Ea", omsAmount: "", omsLim: "6", omsLimLb: "0"
+    }, extra || {});
+  }
+  function promoSummary(f) {
+    f = f || {};
+    const amtStr = (opt, amt) => { if (amt === "" || amt == null) return ""; if (/^%/.test(opt)) return amt + "%"; if (/^Cents/.test(opt)) return amt + "¢"; return "$" + Number(amt).toFixed(2); };
+    const aA = amtStr(f.apexDiscount, f.apexAmount), aO = amtStr(f.omsDiscount, f.omsAmount);
+    return { apex: (f.apexDiscount || "—") + (aA ? " " + aA : ""), oms: ((f.omsChannel || "") + (f.omsDiscount ? " · " + f.omsDiscount : "") + (aO ? " " + aO : "")).replace(/^ · /, "") };
+  }
+  function promoDepth(f) {
+    const opt = f.apexDiscount, amt = parseFloat(f.apexAmount) || 0;
+    if (/^%/.test(opt)) return clampN(amt / 100, 0, 0.6);
+    if (/^Cents/.test(opt)) return clampN((amt / 100) / 3, 0, 0.6);
+    if (/^BXG1/.test(opt)) return 0.5;
+    if (/^PP/.test(opt)) return 0.2;
+    return clampN(amt / 5, 0, 0.6);
+  }
+  function customOfferFrom(o, week, pa, f) {
+    const bm = weekBaseMetrics(o, week), pds = paData(o, week), pd = pds.find((p) => p.pa === pa) || pds[0];
+    const rec = pd.offers.find((x) => x.isRec) || pd.offers[0];
+    const depth = promoDepth(f), base = rec.base, promo = round(base * (1 - depth), 2), dd = depth - bm.recDepth;
+    const um = clampN(1 + dd * 1.4, 0.55, 1.85), sm = clampN(um * (1 - dd * 0.35), 0.5, 1.9), am = clampN(um * (1 - dd * 1.05), 0.35, 1.8);
+    const sum = promoSummary(f);
+    return {
+      id: "custom-" + pa, label: "APEX+OMS · " + f.omsTactic, rank: 0, isRec: false, isCustom: true,
+      storeName: f.omsTactic, storeCode: "CUSTOM", digName: (f.omsChannel && f.omsChannel !== "Store Only") ? f.omsChannel : null,
+      depth: depth, vlc: rec.vlc, dnc: rec.dnc, base: base, promo: promo, save: Math.max(0, base - promo),
+      digPromo: null, mb: (f.apexMinBuy || "1") + " / " + (f.apexLimit || "6"), ad: (f.apexInAd ? "Y / N" : "N / N"), funding: rec.funding,
+      units: rec.units * um, sales: rec.sales * sm, agp: rec.agp * am, R: 0, G: 0, total: null,
+      _form: Object.assign({}, f), _apex: sum.apex, _oms: sum.oms
+    };
+  }
+  function apexAllowanceListHTML(selectedId, attr) {
+    const groupName = "apexAllow-" + attr.replace(/[^a-z]/gi, ""), sel = selectedId || APEX_ALLOWANCES[0].id;
+    return '<div class="pd-allow"><span class="pd-of-label">Allowance</span><div class="pd-allow-list">' +
+      APEX_ALLOWANCES.map((a) => '<label class="pd-allow-item ' + (sel === a.id ? "is-sel" : "") + '"><input type="radio" name="' + groupName + '" ' + attr + '="apexAllowanceId" value="' + esc(a.id) + '" ' + (sel === a.id ? "checked" : "") + ' /><span class="pd-allow-id">' + esc(a.id) + '</span><span class="pd-allow-name">' + esc(a.name) + "</span>" + (a.tag ? '<span class="pd-allow-badge">' + esc(a.tag) + "</span>" : "") + '<span class="pd-allow-meta">' + esc(a.status) + " · $" + a.amount.toLocaleString("en-US", { minimumFractionDigits: 2 }) + "</span></label>").join("") +
+      "</div></div>";
+  }
+  function promoSystemsPairHTML(f, attr) {
+    const O = PROMO_OPTS;
+    const sel = (name, options, cur) => "<select " + attr + '="' + name + '">' + options.map((o) => { const v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o; return '<option value="' + esc(v) + '"' + (cur === v ? " selected" : "") + ">" + esc(l) + "</option>"; }).join("") + "</select>";
+    const num = (name, val) => '<input type="number" step="1" min="0" ' + attr + '="' + name + '" value="' + esc(val == null ? "" : val) + '" />';
+    const money = (name, val) => '<div class="pd-money"><span>$</span><input type="number" step="0.01" min="0" ' + attr + '="' + name + '" value="' + esc(val == null ? "" : val) + '" placeholder="-" /></div>';
+    const field = (label, inner, cls) => '<label class="pd-of-field ' + (cls || "") + '"><span>' + esc(label) + "</span>" + inner + "</label>";
+    return '<div class="pd-promo-systems">' +
+      '<section class="pd-promo-sys-card"><header><span class="pd-sys-tag pd-sys-apex">APEX</span> <span>Price-point promotion</span></header>' +
+        '<div class="pd-override-fields">' +
+          field("Discount", sel("apexDiscount", O.apexDiscount, f.apexDiscount)) +
+          field("Factor", num("apexFactor", f.apexFactor), "pd-of-field-sm") +
+          field("Amount", money("apexAmount", f.apexAmount)) +
+          field("UOM", sel("apexUom", O.uom, f.apexUom), "pd-of-field-sm") +
+          field("Min buy", num("apexMinBuy", f.apexMinBuy), "pd-of-field-sm") +
+          field("Limit", num("apexLimit", f.apexLimit), "pd-of-field-sm") +
+          '<label class="pd-of-field pd-of-check"><input type="checkbox" ' + attr + '="apexInAd" ' + (f.apexInAd ? "checked" : "") + " /> <span>In Ad</span></label>" +
+        "</div>" + apexAllowanceListHTML(f.apexAllowanceId, attr) +
+      "</section>" +
+      '<section class="pd-promo-sys-card"><header><span class="pd-sys-tag pd-sys-oms">OMS</span> <span>Multi-channel promotion</span></header>' +
+        '<div class="pd-override-fields">' +
+          field("Channel", sel("omsChannel", O.channel, f.omsChannel)) +
+          field("Tactic", sel("omsTactic", O.omsTactic, f.omsTactic)) +
+          field("UOM", sel("omsUom", O.uom, f.omsUom), "pd-of-field-sm") +
+          field("Min buy", num("omsMinBuy", f.omsMinBuy), "pd-of-field-sm") +
+          field("Discount", sel("omsDiscount", O.omsDiscount, f.omsDiscount)) +
+          field("Amount", money("omsAmount", f.omsAmount)) +
+          field("Lim", num("omsLim", f.omsLim), "pd-of-field-sm") +
+          field("Lim Lb", num("omsLimLb", f.omsLimLb), "pd-of-field-sm") +
+        "</div>" +
+      "</section>" +
+    "</div>";
+  }
+  function editPanelHTML(paName) {
+    const f = WKST.manualEditForm || freshPromoForm();
+    return '<div class="pd-manual-default pd-manual-editpanel"><div class="pd-manual-default-head"><div class="pd-md-title"><span class="pd-md-badge pd-md-badge-edit">OVERRIDE</span><strong>Overriding ' + esc(paName) + '</strong><p>Break this price area out from the default. Forecast recalculates on save.</p></div></div>' +
+      '<div class="pd-manual-fields">' + promoSystemsPairHTML(f, "data-of2") +
+        '<div class="pd-manual-default-actions"><button type="button" class="pd-btn-secondary" data-ovcancel>Cancel</button><button type="button" class="pd-btn-primary" data-ovsave>Save override</button></div>' +
+      "</div></div>";
+  }
+  function overrideHTML(o, week) {
+    const pds = paData(o, week), f = WKST.oform || (WKST.oform = freshPromoForm());
+    const customCount = pds.filter((pd) => WKST.custom[paKey(o, week, pd.pa)]).length;
+    const editPa = WKST.manualEditPa;
+    const rows = pds.map((pd) => {
+      const cust = WKST.custom[paKey(o, week, pd.pa)], isEditing = editPa === pd.pa;
+      const sum = (cust && cust._form) ? promoSummary(cust._form) : promoSummary(f);
+      const status = isEditing ? '<span class="pd-status-badge pd-status-custom">Editing…</span>' : cust ? '<span class="pd-status-badge pd-status-custom">Custom</span>' : '<span class="pd-status-badge pd-status-inherit">Inherits default</span>';
+      const actions = isEditing ? "" : cust
+        ? '<a href="#" class="pd-override-link pd-override-link-clear" data-ovclear="' + pd.pa + '">Reset</a> <a href="#" class="pd-override-link" data-ovedit="' + pd.pa + '">✎ Edit</a>'
+        : '<a href="#" class="pd-override-link" data-ovedit="' + pd.pa + '">✎ Override</a>';
+      return '<tr class="pd-manual-row ' + (isEditing ? "is-editing-row" : cust ? "is-custom" : "is-inherit") + '"><td class="pa-col"><strong>' + pd.pa + "</strong></td>" +
+        '<td class="pd-manual-promo"><span class="pd-sys-tag pd-sys-apex">APEX</span> ' + esc(sum.apex) + "</td>" +
+        '<td class="pd-manual-promo"><span class="pd-sys-tag pd-sys-oms">OMS</span> ' + esc(sum.oms) + "</td>" +
+        "<td>" + status + '</td><td class="r pd-manual-actions">' + actions + "</td></tr>";
+    }).join("");
+    return '<section class="pd-section pd-manual">' +
+      '<div class="pd-manual-topbar"><div><h3>Override recommendation</h3><p>Build a custom promo across every price area, or override individual price areas below.</p></div>' +
+        '<button type="button" class="pd-override-flip" data-ovback>← Back to recommendations</button></div>' +
+      '<div class="pd-manual-default"><div class="pd-manual-default-head"><div class="pd-md-title"><span class="pd-md-badge">DEFAULT</span><strong>Promo tactic — applies to all ' + pds.length + " price area" + (pds.length === 1 ? "" : "s") + "</strong><p>Set once here. Every price area inherits this unless you override it below.</p></div>" +
+        '<span class="pd-md-count">' + customCount + " of " + pds.length + " price areas customised</span></div>" +
+        '<div class="pd-manual-fields">' + promoSystemsPairHTML(f, "data-of") +
+          '<div class="pd-manual-default-actions"><button type="button" class="pd-btn-secondary" data-ovresetall' + (customCount ? "" : " disabled") + ">Reset all exceptions</button><button type=\"button\" class=\"pd-btn-primary\" data-ovapply>Apply &amp; forecast</button></div>" +
+        "</div></div>" +
+      '<p class="pd-override-disclaimer"><strong>Override mode.</strong> Results are not optimised by the recommender. Linked items in store may be impacted. No guardrail or reliability scores will be shown.</p>' +
+      (editPa ? editPanelHTML(editPa) : "") +
+      '<p class="pd-manual-cascade">↳ Changes to the default cascade to every <b>Inherits default</b> row automatically. Customised rows keep their own values.</p>' +
+      '<div class="pd-section-head pd-rec-head"><div><h3>Price areas</h3><p>One row per price area for ' + esc(o.ncrc) + ". Override a row to break from the default; reset to snap it back.</p></div></div>" +
+      '<div class="pd-pa-table-wrap"><table class="pd-pa-cols-table pd-manual-table"><thead><tr><th>PA</th><th>APEX promo</th><th>OMS promo</th><th>Status</th><th class="r"></th></tr></thead><tbody>' + rows + "</tbody>" +
+      '<tfoot><tr class="pd-pa-totals-row"><td class="pa-col"><strong>Total</strong><span class="pd-totals-sub">' + pds.length + " price areas · " + customCount + ' customised</span></td><td></td><td></td><td></td><td class="r"></td></tr></tfoot></table></div>' +
+      "</section>";
+  }
+
+  // --- worklist rail (basket of completed promos) ---
+  function worklistHTML(items, active, week) {
+    const done = items.filter((x) => WKCART[cartKey(x, week)]).length;
+    let html = '<div class="npv2-wk-wlhead"><h4>Worklist</h4><span class="npv2-wk-wlsub">' + esc(weekLabel(week)) + " · " + done + " of " + items.length + " added</span></div>";
+    let lastV = null, n = 0;
+    items.forEach((o) => {
+      if (o.vendor !== lastV) { lastV = o.vendor; html += '<div class="npv2-wk-wlvendor">' + esc(o.vendor) + "</div>"; }
+      n++;
+      const inCart = !!WKCART[cartKey(o, week)];
+      const c = NP.weekPlan(o, NP.displayMap(), false)[week - 1];
+      const rec = inCart ? "✓ Added — " + WKCART[cartKey(o, week)].offer : (c && c.promoted && c.offer ? "Rec: " + c.offer.label : "No promo rec");
+      html += '<button type="button" class="npv2-wk-wlitem' + (o.uid === active ? " is-active" : "") + (inCart ? " is-done" : "") + '" data-wl="' + o.uid + '">' +
+        '<span class="npv2-wk-wlnum">' + (inCart ? "✓" : n) + "</span>" +
+        '<span class="npv2-wk-wlbody"><span class="npv2-wk-wlcode">' + esc(o.ncrc) + '</span><span class="npv2-wk-wlname">' + esc(o.item) + " <i>" + esc(o.pack) + '</i></span><span class="npv2-wk-wlrec">' + esc(rec) + "</span></span></button>";
+    });
+    const cart = Object.keys(WKCART).map((k) => WKCART[k]);
+    html += '<div class="npv2-wk-cart"><div class="npv2-wk-carthead">Basket (' + cart.length + ") · not published yet</div>" +
+      (cart.length ? cart.slice(-6).map((c) => '<div class="npv2-wk-cartrow"><span>' + esc(c.ncrc) + " · W" + c.week + '</span><b>' + esc(c.offer) + "</b></div>").join("") : '<div class="npv2-wk-cartempty">Basket is empty. Add selections as you go; nothing publishes until you finalize.</div>') + "</div>";
+    return html;
+  }
+
+  // "Explain" side-panel tab — why the optimizer picked this promo (ported pd-narrative)
+  function explainPanelHTML(o) {
+    const ctx = NP.askContext(o), reasons = ctx.reasons || [];
+    return '<article class="pd-narrative">' +
+      '<span class="pd-narrative-eyebrow">WHY THIS PROMOTION?</span>' +
+      '<h2 class="pd-narrative-title">' + esc(o.item) + "</h2>" +
+      '<p class="pd-narrative-subtitle">' + esc(o.ncrc + " · " + o.vendor) + "</p>" +
+      '<p class="pd-narrative-recommendation"><strong>Recommendation:</strong> promote at the optimized depth — it beats last year on sales (' + NP.fmt.pct(ctx.dR) + "), units (" + NP.fmt.pct(ctx.dU) + ") and AGP (" + NP.fmt.pct(ctx.dA) + ").</p>" +
+      '<h3 class="pd-narrative-heading">The short version</h3>' +
+      '<p class="pd-narrative-body">The optimizer chose this tactic and depth because it maximizes ' + esc(NP.objMeta().short) + " within the learned guardrails while holding margin.</p>" +
+      '<h3 class="pd-narrative-heading">Why the optimizer favours it</h3>' +
+      '<ul class="pd-narrative-list">' + reasons.map((r) => "<li>" + r + "</li>").join("") + "</ul>" +
+      '<h3 class="pd-narrative-heading">What we tested</h3>' +
+      '<p class="pd-narrative-body">Every eligible tactic × depth for this NCRC was scored; the pick is the top of that set after guardrail and reliability penalties.</p>' +
+      "</article>";
+  }
+
+  // "More" row on a promoted NCRC — Ad &amp; tag details + per-PA overrides + tag/digital preview (ported)
+  function shelfFigureHTML() {
+    return '<figure class="pd-tagprev-card pd-tagprev-shelf"><div class="pd-tagprev-canvas pd-shelf">' +
+      '<div class="pd-shelf-member">Member Price!</div><div class="pd-shelf-rule"></div>' +
+      '<div class="pd-shelf-prices"><div class="pd-shelf-p"><b>3<sup>99</sup></b><em>ea</em></div><div class="pd-shelf-bar"></div><div class="pd-shelf-p"><b>3<sup>49</sup></b><em>ea</em><span class="pd-shelf-mm">Mix &amp; Match<br>Limit 4</span></div></div>' +
+      '<div class="pd-shelf-save">SAVE $1.50</div>' +
+      '<div class="pd-shelf-foot"><span>$5.32<br><i>PER QUART</i></span><span class="pd-shelf-thru">Thru Tue Oct 22</span><span>$4.66<br><i>PER QUART</i></span></div>' +
+      '</div><span class="pd-tagprev-overlay">Coming soon</span></figure>';
+  }
+  function digitalFigureHTML(o) {
+    return '<figure class="pd-tagprev-card pd-tagprev-digital"><div class="pd-tagprev-canvas pd-digital">' +
+      '<div class="pd-digital-top"><span class="pd-digital-foru">for U</span><b class="pd-digital-price">$3.49</b><span class="pd-digital-each">Each</span></div>' +
+      '<div class="pd-digital-instore">In-store: $4.99</div>' +
+      '<div class="pd-digital-name">' + esc(o.item) + "</div>" +
+      '<a class="pd-digital-offer">Offer Details</a>' +
+      '<div class="pd-digital-row"><button type="button" class="pd-digital-clip">Clip Coupon</button><span class="pd-digital-exp">Unlimited use<br>Expires soon</span></div>' +
+      '<div class="pd-digital-plu">PLU 70432</div>' +
+      '</div><span class="pd-tagprev-overlay">Coming soon</span></figure>';
+  }
+  function reviewExpandedRow(o, week) {
+    const pas = paData(o, week).map((p) => p.pa);
+    const af = (label, ph) => '<label class="pd-rev-field"><span>' + label + '</span><input type="text" placeholder="' + esc(ph) + '" /></label>';
+    const at = (label, ph) => '<label class="pd-rev-field"><span>' + label + '</span><input type="text" maxlength="8" placeholder="' + esc(ph) + '" /></label>';
+    const paList = '<div class="pd-rev-pa-list"><div class="pd-rev-pa-list-head"><strong>Price areas</strong><span class="pd-rev-pa-list-sub">0 of ' + pas.length + " overridden · the rest inherit the default above</span></div>" +
+      pas.map((pa) => '<div class="pd-rev-pa-item is-inherit"><div class="pd-rev-pa-item-top"><span class="pd-rev-pa-name">' + pa + '</span><span class="pd-status-badge pd-status-inherit">Inherits default</span><span class="pd-rev-pa-actions"><a href="#" class="pd-override-link">✎ Override</a></span></div></div>').join("") + "</div>";
+    return '<tr class="pd-review-row-expanded"><td colspan="20">' +
+      '<div class="pd-rev-detail-bar"><span class="pd-rev-detail-eyebrow">More details</span><span class="pd-rev-detail-context">' + esc(o.ncrc) + " · " + esc(o.vendor) + "</span></div>" +
+      '<div class="pd-rev-scope"><span class="pd-rev-scope-t"><span class="pd-md-badge">DEFAULT</span> Ad &amp; tag details</span><span class="pd-rev-scope-applies">Applies to <b>all ' + pas.length + " price area" + (pas.length === 1 ? "" : "s") + "</b> unless overridden below</span></div>" +
+      '<div class="pd-rev-2tables"><div class="pd-rev-table1"><div class="pd-rev-adtag">' +
+        '<section class="pd-rev-detail-card"><header><strong>Ad details</strong></header><div class="pd-rev-detail-fields">' +
+          af("Headline", "Cool down with...") + af("Body copy", "Short marketing line") + af("Image UPC", "049000028911") + af("Ad instructions", "Reverse type, blue chip") + af("Pricing comments", "BOGO restriction on size") +
+          '<label class="pd-rev-field"><span>Ad bug</span><select><option>None</option><option>1x rewards</option><option>2x rewards</option><option>Limit 4</option></select></label>' + af("Coupon PLU", "70432") +
+        "</div></section>" +
+        '<section class="pd-rev-detail-card pd-rev-detail-card-tags"><header><strong>Tag details</strong></header><div class="pd-rev-detail-fields pd-rev-detail-fields-tags">' + at("BIB", "EC15") + at("SIGN", "SC15") + at("Talker", "1") + at("Molding", "0") + "</div></section>" +
+      "</div>" + paList + "</div>" +
+      '<div class="pd-rev-table2"><div class="pd-tagprev-head"><strong>Tag &amp; digital preview</strong><span class="pd-soon-badge">Coming soon</span></div>' + shelfFigureHTML() + digitalFigureHTML(o) + "</div></div>" +
+      "</td></tr>";
+  }
+
+  // finalise CONFIRMATION screen (real screen, not an alert) — shown after publish
+  function finalizeScreenHTML() {
+    const f = WKST.finalized;
+    return '<div class="pd-review pd-review-done">' +
+      '<div class="pd-finalize-receipt"><div class="pd-finalize-check">✓</div>' +
+        "<h2>Plan published</h2>" +
+        "<p>" + f.count + " promotion" + (f.count === 1 ? "" : "s") + " for <strong>" + esc(f.category) + "</strong> · Week <strong>W" + f.week + "</strong> " + (f.count === 1 ? "was" : "were") + " committed to the plan.</p>" +
+        '<div class="pd-finalize-totals"><div><span>Sales</span><strong>' + f.sales + '</strong></div><div><span>Units</span><strong>' + f.units + '</strong></div><div><span>AGP</span><strong>' + f.agp + "</strong></div></div>" +
+        '<div class="pd-finalize-actions"><button type="button" class="pd-btn-secondary" data-revback>← Back to worklist</button><button type="button" class="pd-btn-primary" data-findone>Done</button></div>' +
+      "</div></div>";
+  }
+
+  // ======================= REVIEW & FINALISE (ported: 3 sections — promoting / skipped /
+  // no-offer — with the original 20-column table + grand-total summary. pd-* classes.)
+  function reviewHTML() {
+    if (WKST.finalized) return finalizeScreenHTML();
+    const week = WEEKSEL.week, worklist = frontItems();
+    const money = (vM) => wkM(vM), unitsF = (uK) => wkU(uK);
+    const sortKey = ff.sortBy || "sales";
+    const objective = sortKey === "agp" ? "AGP velocity" : sortKey === "units" ? "Units velocity" : "Sales velocity";
+    const category = NP.cat().name.split(" — ")[0];
+    // classify worklist rows for the selected week
+    const promoted = [], skipped = [], unavail = [];
+    worklist.forEach((o) => {
+      if (WKCART[cartKey(o, week)]) { promoted.push(o); return; }
+      const hash = (o.ncrc || "").split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+      (hash % 3 === 0 ? unavail : skipped).push(o);
+    });
+    const promoMetrics = (o) => {
+      const pds = paData(o, week), chosen = pds.map((pd) => chosenFor(o, week, pd)), first = chosen[0];
+      const sales = chosen.reduce((s, c) => s + c.sales, 0), units = chosen.reduce((s, c) => s + c.units, 0), agp = chosen.reduce((s, c) => s + c.agp, 0);
+      const allow = chosen.reduce((s, c) => s + c.funding * c.units, 0) / 1000, promoGp = agp + allow;
+      const lySales = pds.reduce((s, pd) => s + pd.ly.sales, 0), lyUnits = pds.reduce((s, pd) => s + pd.ly.units, 0), lyAgp = pds.reduce((s, pd) => s + pd.ly.agp, 0);
+      return { o, first, sales, units, agp, allow, promoGp, lySales, lyUnits, lyAgp, lyAllow: allow * 0.92, lyPromoGp: lyAgp + allow * 0.92, isCustom: first.isCustom };
+    };
+    const baseMetrics = (o) => { const bm = weekBaseMetrics(o, week); return { o, sales: bm.npSales, units: bm.npUnits, agp: bm.npAgp, vlc: NP.deadNetOf(o), aiv: o.basePrice }; };
+    const pm = promoted.map(promoMetrics);
+    const sortField = sortKey === "agp" ? "agp" : sortKey === "units" ? "units" : "sales";
+    pm.sort((a, b) => b[sortField] - a[sortField]);
+    const sk = skipped.map(baseMetrics), un = unavail.map(baseMetrics);
+    // section totals
+    const sum = (arr, k) => arr.reduce((s, r) => s + r[k], 0);
+    const s1 = { sales: sum(pm, "sales"), units: sum(pm, "units"), agp: sum(pm, "agp"), allow: sum(pm, "allow"), promoGp: sum(pm, "promoGp"), lySales: sum(pm, "lySales"), lyUnits: sum(pm, "lyUnits"), lyAgp: sum(pm, "lyAgp"), lyAllow: sum(pm, "lyAllow"), lyPromoGp: sum(pm, "lyPromoGp") };
+    const s2 = { sales: sum(sk, "sales"), units: sum(sk, "units"), agp: sum(sk, "agp") };
+    const s3 = { sales: sum(un, "sales"), units: sum(un, "units"), agp: sum(un, "agp") };
+    const grand = { sales: s1.sales + s2.sales + s3.sales, units: s1.units + s2.units + s3.units, agp: s1.agp + s2.agp + s3.agp };
+    const dlt = (cur, base) => { const d = cur - base, pct = base ? d / base * 100 : 0; return { d, pct, klass: d >= 0 ? "positive" : "negative" }; };
+    const mcell = (val, d, f) => '<td class="r"><strong>' + val + '</strong><div class="pd-review-sub ' + d.klass + '">' + (d.d >= 0 ? "+" : "") + f(d.d) + " <span>/</span> " + (d.pct >= 0 ? "+" : "") + d.pct.toFixed(1) + "% vs LY</div></td>";
+    const yn = (b) => b ? "Y" : "N", dash = '<span class="pd-rev-na">—</span>';
+    // promoted row
+    const promoRow = (r) => {
+      const inCirc = r.first.ad && r.first.ad.charAt(0) === "Y", inDisp = r.first.ad && r.first.ad.slice(-1) === "Y", hasFund = r.allow > 0;
+      const dS = dlt(r.sales, r.lySales), dU = dlt(r.units, r.lyUnits), dA = dlt(r.agp, r.lyAgp), dG = dlt(r.promoGp, r.lyPromoGp);
+      const dig = r.first.digName ? '<div class="pd-review-stack"><span>' + esc(r.first.digName) + "</span><small>$" + (r.first.digPromo || r.first.promo).toFixed(2) + "</small></div>" : '<span class="pd-faint">No digital</span>';
+      return '<tr class="pd-review-row pd-review-row-priced"><td class="pd-rev-priced"><span class="pd-rev-pill pd-rev-pill-priced">Priced</span>' + (r.isCustom ? '<span class="pd-rev-pill pd-rev-pill-custom">Custom</span>' : "") + "</td>" +
+        "<td>" + esc(r.o.vendor) + "</td><td>" + esc(r.o.ncrc) + "</td><td>" + esc(r.o.item) + " <em>" + esc(r.o.pack) + "</em></td>" +
+        '<td class="c">' + yn(inCirc) + '</td><td>' + (inCirc ? '<input type="text" class="pd-rev-input" maxlength="6" placeholder="PG-#" />' : '<span class="pd-faint">—</span>') + "</td>" +
+        '<td class="c">' + yn(inDisp) + '</td><td>' + (inDisp ? '<input type="text" class="pd-rev-input pd-rev-input-wide" maxlength="10" placeholder="Endcap" />' : '<span class="pd-faint">—</span>') + "</td>" +
+        '<td class="r">245</td><td class="c">' + yn(hasFund) + "</td>" +
+        '<td><div class="pd-review-stack"><span>' + esc(r.first.storeName) + "</span><small>Save $" + r.first.save.toFixed(2) + "</small></div></td><td>" + dig + "</td>" +
+        '<td class="r">$' + r.first.vlc.toFixed(2) + "</td>" +
+        mcell(money(r.sales), dS, money) + mcell(unitsF(r.units), dU, unitsF) + mcell(money(r.agp), dA, money) +
+        '<td class="r">$' + r.first.promo.toFixed(2) + '</td><td class="r"><strong>' + money(r.allow) + "</strong></td>" +
+        mcell(money(r.promoGp), dG, money) +
+        '<td class="c pd-rev-more-col"><button type="button" class="pd-pa-toggle-btn pd-rev-more-btn' + (WKST.reviewExpanded[r.o.uid] ? " is-open" : "") + '" data-revmore="' + r.o.uid + '"><span>' + (WKST.reviewExpanded[r.o.uid] ? "Hide" : "More") + '</span><span class="pd-pa-toggle-arrow">▾</span></button></td></tr>' +
+        (WKST.reviewExpanded[r.o.uid] ? reviewExpandedRow(r.o, week) : "");
+    };
+    // baseline row (skipped / no-offer)
+    const baseRow = (r, mode) => {
+      const pill = mode === "decided" ? '<span class="pd-rev-pill pd-rev-pill-skip">Skipped</span>' : '<span class="pd-rev-pill pd-rev-pill-warn">No live offer</span>';
+      const klass = mode === "decided" ? "pd-review-row-skipped" : "pd-review-row-unavailable";
+      return '<tr class="pd-review-row ' + klass + '"><td class="pd-rev-priced">' + pill + "</td><td>" + esc(r.o.vendor) + "</td><td>" + esc(r.o.ncrc) + "</td><td>" + esc(r.o.item) + " <em>" + esc(r.o.pack) + "</em></td>" +
+        '<td class="c">N</td><td class="pd-rev-na-cell">' + dash + '</td><td class="c">N</td><td class="pd-rev-na-cell">' + dash + '</td><td class="r">245</td><td class="c">N</td>' +
+        '<td><div class="pd-review-stack"><span>No promo</span><small>' + (mode === "decided" ? "Planner stepped past" : "No live offer") + '</small></div></td><td class="pd-rev-na-cell">' + dash + "</td>" +
+        '<td class="r">$' + r.vlc.toFixed(2) + '</td><td class="r">' + money(r.sales) + '</td><td class="r">' + unitsF(r.units) + '</td><td class="r">' + money(r.agp) + '</td><td class="r">$' + r.aiv.toFixed(2) + '</td><td class="pd-rev-na-cell">' + dash + '</td><td class="pd-rev-na-cell">' + dash + '</td><td class="pd-rev-na-cell c">' + dash + "</td></tr>";
+    };
+    const divider = (klass, title, count, blurb, controls) => '<tr class="pd-review-section-divider ' + klass + '"><td colspan="20"><div class="pd-rev-div-row"><div class="pd-rev-div-text"><strong>' + title + '</strong><span class="pd-rev-div-count">' + count + "</span><small>" + blurb + "</small></div>" + (controls || "") + "</div></td></tr>";
+    const sortChip = (k, l) => '<button type="button" class="pd-bin-chip pd-sort-chip ' + (sortKey === k ? "active" : "") + '" data-revsort="' + k + '"><i class="pd-bin-dot pd-sort-dot-' + k + '"></i><span class="pd-bin-label">' + l + "</span></button>";
+    const sortControls = '<div class="pd-rev-div-controls"><span class="pd-scope-label">Sort by</span><div class="pd-bin-chips">' + sortChip("sales", "Sales velocity") + sortChip("units", "Units velocity") + sortChip("agp", "AGP velocity") + "</div></div>";
+    const s1TotalsRow = (() => {
+      const dS = dlt(s1.sales, s1.lySales), dU = dlt(s1.units, s1.lyUnits), dA = dlt(s1.agp, s1.lyAgp), dAl = dlt(s1.allow, s1.lyAllow), dG = dlt(s1.promoGp, s1.lyPromoGp);
+      return '<tr class="pd-review-totals pd-review-section-totals"><td colspan="12"><strong>Section total · ' + pm.length + " promoted " + (pm.length === 1 ? "item" : "items") + '</strong></td><td class="r">—</td>' +
+        mcell(money(s1.sales), dS, money) + mcell(unitsF(s1.units), dU, unitsF) + mcell(money(s1.agp), dA, money) + '<td class="r">—</td>' + mcell(money(s1.allow), dAl, money) + mcell(money(s1.promoGp), dG, money) + '<td class="c pd-rev-more-col"></td></tr>';
+    })();
+    const baseTotalsRow = (rows, tot) => '<tr class="pd-review-totals pd-review-section-totals"><td colspan="13"><strong>Section total · ' + rows.length + " " + (rows.length === 1 ? "item" : "items") + '</strong></td><td class="r"><strong>' + money(tot.sales) + '</strong></td><td class="r"><strong>' + unitsF(tot.units) + '</strong></td><td class="r"><strong>' + money(tot.agp) + '</strong></td><td class="r">—</td><td class="pd-rev-na-cell"><span class="pd-rev-na">—</span></td><td class="pd-rev-na-cell"><span class="pd-rev-na">—</span></td><td class="c pd-rev-more-col"></td></tr>';
+    const gcard = (label, val, sp, sk2, un2) => '<article class="pd-grand-metric"><span class="pd-grand-label">' + label + '</span><strong class="pd-grand-value">' + val + '</strong><div class="pd-grand-split"><span><em>Promoted</em> ' + sp + "</span><span><em>Skipped</em> " + sk2 + "</span><span><em>No offer</em> " + un2 + "</span></div></article>";
+    return '<div class="pd-review">' +
+      '<header class="pd-review-head"><div><span class="pd-eyebrow">REVIEW &amp; FINALISE</span><h2>' + esc(category) + '</h2>' +
+        '<div class="pd-review-meta"><span><em>Week</em> <strong>W' + week + '</strong></span><span class="dot">·</span><span><em>Objective</em> <strong>' + objective + '</strong></span><span class="dot">·</span><span><em>Division</em> <strong>' + esc(NP.divMeta().short) + '</strong></span></div></div>' +
+        '<div class="pd-review-counts"><span class="pd-review-count priced">' + pm.length + ' promoted</span><span class="pd-review-count skipped">' + sk.length + ' skipped</span><span class="pd-review-count unavailable">' + un.length + ' no promo available</span></div></header>' +
+      '<section class="pd-review-grand"><div class="pd-review-grand-head"><span class="pd-eyebrow">Plan summary · all sections</span></div>' +
+        '<div class="pd-review-grand-grid">' + gcard("Sales", money(grand.sales), money(s1.sales), money(s2.sales), money(s3.sales)) + gcard("Units", unitsF(grand.units), unitsF(s1.units), unitsF(s2.units), unitsF(s3.units)) + gcard("AGP $", money(grand.agp), money(s1.agp), money(s2.agp), money(s3.agp)) + "</div></section>" +
+      '<div class="pd-review-table-wrap pd-review-table-wrap-unified"><table class="pd-review-table pd-review-table-unified"><thead><tr>' +
+        '<th class="pd-rev-priced">Priced</th><th class="l">Vendor</th><th class="l">NCRC</th><th class="l">NCRC description</th><th class="c">In circ.</th><th class="l">Ad page</th><th class="c">In disp.</th><th class="l">Display</th><th class="r">Stores</th><th class="c">NOPA</th><th class="l">Store tactic</th><th class="l">Digital tactic</th><th class="r">VLC</th><th class="r">Sales</th><th class="r">Units</th><th class="r">AGP $</th><th class="r">AIV</th><th class="r">Allow. $</th><th class="r">Promo GP</th><th class="c pd-rev-more-col"></th>' +
+        "</tr></thead>" +
+        '<tbody class="pd-section-body pd-section-body-promoted">' + divider("pd-rev-div-promoted", "Items you're promoting", pm.length, "Use <em>More</em> on any row for the full ad / tag form.") + (pm.length ? pm.map(promoRow).join("") + s1TotalsRow : '<tr><td colspan="20" class="pd-review-skip-msg">Nothing added for this week yet — add promotions from the worklist.</td></tr>') + "</tbody>" +
+        (sk.length ? '<tbody class="pd-section-body pd-section-body-skipped">' + divider("pd-rev-div-skipped", "Items you decided not to promote", sk.length, "The recommendation existed; the planner stepped past it. Metrics use the <strong>no-promo baseline</strong>.") + sk.map((r) => baseRow(r, "decided")).join("") + baseTotalsRow(sk, s2) + "</tbody>" : "") +
+        (un.length ? '<tbody class="pd-section-body pd-section-body-unavailable">' + divider("pd-rev-div-unavailable", "Items with no promotion available", un.length, "No live offer in the selected price area — metrics use the <strong>no-promo baseline</strong>.") + un.map((r) => baseRow(r, "unavailable")).join("") + baseTotalsRow(un, s3) + "</tbody>" : "") +
+        "</table></div>" +
+      '<footer class="pd-review-footer"><button type="button" class="pd-btn-secondary" data-revback>← Back to worklist</button>' +
+        '<button type="button" class="pd-btn-primary pd-btn-finalize" data-publish' + (pm.length ? "" : " disabled") + ">Finalise promotions (" + pm.length + ")</button></footer>" +
+      "</div>";
+  }
+
+  // condensed, full-width plan header for step 5 — the SELECTED strategy only, with the
+  // optimized metrics (Sales/Units/AGP) separated from the informational ones (AIV etc.).
+  function wkStratBarHTML() {
+    const cfV = window.NPViews; if (!cfV || !cfV.cfStrategies) return "";
+    const cur = NP.state.cf.strategy || "optimized", ly = lyTotals(), strategies = cfV.cfStrategies();
+    const s = strategies.find((x) => x.id === cur) || strategies[0], t = cfV.cfTotals(s.id);
+    // One compact line: name · primary (Sales/Units/AGP) | pipe | secondary (AIV/List/Funding/Spend).
+    const met = (lab, cv, lv, money) => { const f = money ? km : NP.fmt.u, d = lv ? (cv - lv) / lv : 0, dd = cv - lv; return '<div class="npv2-hb-m"><span class="npv2-hb-l">' + lab + '</span><span class="npv2-hb-data"><b class="npv2-hb-v">' + f(cv) + '</b><span class="npv2-hb-d ' + (d >= 0 ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(d) + " · " + (dd >= 0 ? "+" : "") + f(dd) + "</span></span></div>"; };
+    const met2 = (lab, cvS, lvS, dcls, dtxt) => '<div class="npv2-hb-m npv2-hb-m2"><span class="npv2-hb-l">' + lab + '</span><span class="npv2-hb-data"><b class="npv2-hb-v2">' + cvS + '</b><span class="npv2-hb-ly">LY ' + lvS + '</span><span class="npv2-hb-d ' + dcls + '">' + dtxt + "</span></span></div>";
+    const pc = (() => { let u = 0, listS = 0, fundS = 0; const map = NP.displayMap(); NP.cat().items.forEach((o) => { const res = NP.resultFor(o, map), e = NP.effective(o, map); u += res.units; listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units; }); return { listU: u ? listS / u : 0, fundU: u ? fundS / u : 0, fundM: fundS / 1000 }; })();
+    const aiv = t.units ? (t.revenueM * 1000) / t.units : 0, lyAiv = ly.u ? (ly.r * 1000) / ly.u : 0, aivD = lyAiv ? (aiv - lyAiv) / lyAiv : 0;
+    const lyListU = pc.listU * 0.985, listD = lyListU ? (pc.listU - lyListU) / lyListU : 0;
+    const lyFundU = pc.fundU * 0.94, fundD = lyFundU ? (pc.fundU - lyFundU) / lyFundU : 0;
+    const rate = t.revenueM ? pc.fundM / t.revenueM : 0, lyRate = ly.r ? (pc.fundM * 0.94) / ly.r : 0, ppd = (rate - lyRate) * 100;
+    return '<div class="npv2-hb">' +
+      '<div class="npv2-hb-id"><span class="npv2-hb-name">' + esc(s.name) + "</span>" + (s.tag ? '<span class="npv2-hb-rec">' + esc(s.tag) + "</span>" : "") + "</div>" +
+      '<div class="npv2-hb-grp">' + met("Sales", t.revenueM, ly.r, true) + met("Units", t.units, ly.u, false) + met("AGP", t.agpM, ly.a, true) + "</div>" +
+      '<div class="npv2-hb-pipe"></div>' +
+      '<div class="npv2-hb-grp npv2-hb-grp2">' + met2("AIV", "$" + aiv.toFixed(2), "$" + lyAiv.toFixed(2), aivD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(aivD)) + met2("List $/u", "$" + pc.listU.toFixed(2), "$" + lyListU.toFixed(2), listD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(listD)) + met2("Funding $/u", "$" + pc.fundU.toFixed(2), "$" + lyFundU.toFixed(2), fundD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(fundD)) + met2("Spend rate", (rate * 100).toFixed(1) + "%", (lyRate * 100).toFixed(1) + "%", ppd >= 0 ? "np-pos" : "np-neg", (ppd >= 0 ? "+" : "") + ppd.toFixed(1) + "pp") + "</div>" +
+      "</div>";
+  }
+
+  // --- toolbar (plan header + filter bar with the Week filter inline) ---
+  function wkToolsHTML(all) {
+    const cats = (NP.state.categoryIds || [NP.state.categoryId]).map((id) => [id, (NP.DATA[id] ? NP.DATA[id].name : id).split(" — ")[0]]);
+    const vendors = [...new Set(all.map((o) => o.vendor))].sort();
+    const rogs = [...new Set(all.map((o) => o.rog))].sort();
+    const clusters = [...new Set(all.map((o) => o.cluster))].map((c) => [c, NP.CLUSTER_LABEL[c] || c]);
+    const subs = [...new Set(all.map((o) => o.form))].map((f) => [f, SUBCLASS_LABEL[f] || f]);
+    let weekOpts = "";
+    for (let w = FIRST_PLAN_WEEK; w <= 52; w++) weekOpts += '<option value="' + w + '"' + (WEEKSEL.week === w ? " selected" : "") + ">" + esc(weekLabel(w)) + "</option>";
+    const weekFilter = '<label class="npv2-fg-filter npv2-wk-weekfilter">Week ' +
+      '<span class="npv2-wk-wkctl"><button type="button" class="npv2-wk-wknav" data-wkstep="-1"' + (WEEKSEL.week <= FIRST_PLAN_WEEK ? " disabled" : "") + ">‹</button>" +
+      '<select id="npV2WkSel">' + weekOpts + "</select>" +
+      '<button type="button" class="npv2-wk-wknav" data-wkstep="1"' + (WEEKSEL.week >= 52 ? " disabled" : "") + "›</button></span></label>";
+    // inline flex-nowrap + horizontal scroll is forced here so the filter row can never
+    // wrap into extra lines that float over the content (belt-and-suspenders vs CSS specificity).
+    return '<div class="npv2-fg-tools npv2-wk-tools">' +
+      wkStratBarHTML() +
+      '<div class="npv2-fg-trow" style="display:flex!important;flex-wrap:nowrap!important;align-items:center;gap:12px;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;">' +
+        '<div class="npv2-fg-gl" style="display:flex!important;flex-wrap:nowrap!important;flex:0 0 auto!important;gap:10px;align-items:center;">' + weekFilter + sel("Category", "npV2FgCat", cats, ff.cat, "All selected categories") + sel("Vendor", "npV2FgVendor", vendors, ff.vendor) + sel("ROG", "npV2FgRog", rogs, ff.rog) + sel("Class", "npV2FgClass", clusters, ff.cls) + sel("Sub-class", "npV2FgSub", subs, ff.sub, "All sub-classes") + "</div>" +
+        '<div class="npv2-fg-gr" style="display:flex!important;flex-wrap:nowrap!important;flex:0 0 auto!important;gap:10px;align-items:center;margin-left:auto;">' + sortControlsHTML(false) + "</div>" +
+      "</div>" +
+      '<div class="npv2-rule"></div>' +
+      "</div>";
+  }
+
+  function renderWeekView() {
+    const front = document.getElementById(FRONT); if (!front) return;
+    const all = NP.cat().items;
+    if (ff.cat !== "all" && !(NP.state.categoryIds || []).includes(ff.cat)) ff.cat = "all";
+    if (WEEKSEL.week < FIRST_PLAN_WEEK) WEEKSEL.week = FIRST_PLAN_WEEK;
+    const items = frontItems();
+    // Review & finalise takes over the whole screen — no strat header / filter bar here.
+    if (WKST.review) { front.innerHTML = '<div class="npv2-wk-scroll npv2-wk-takeover">' + reviewHTML() + "</div>"; bindReview(front, items); return; }
+    if (!items.length) { front.innerHTML = wkToolsHTML(all) + '<div class="npv2-wk-scroll"><div class="npv2-wk-empty">No NCRCs match the current filters.</div></div>'; bindWkTools(front, items); return; }
+    let o = items.find((x) => x.uid === WEEKSEL.uid); if (!o) { o = items[0]; WEEKSEL.uid = o.uid; }
+    const week = WEEKSEL.week, pds = paData(o, week), selPa = WKST.selPa || pds[0].pa;
+    // Override recommendation also takes over the whole screen — no strat header / filter bar.
+    if (WKST.override) { front.innerHTML = '<div class="npv2-wk-scroll npv2-wk-takeover">' + overrideHTML(o, week) + "</div>"; bindOverride(front, o, week, items); return; }
+    const tot = pds.reduce((t, pd) => { const c = chosenFor(o, week, pd); return { sales: t.sales + c.sales, units: t.units + c.units, agp: t.agp + c.agp, lsales: t.lsales + pd.ly.sales, lunits: t.lunits + pd.ly.units, lagp: t.lagp + pd.ly.agp }; }, { sales: 0, units: 0, agp: 0, lsales: 0, lunits: 0, lagp: 0 });
+    const kpi = (lab, big, cur, ly, money) => '<div class="npv2-wk-kpi"><span class="npv2-wk-kl">' + lab + '</span><b class="npv2-wk-kv">' + big + '</b><span class="npv2-wk-kd ' + (cur >= ly ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(ly ? (cur - ly) / ly : 0) + " vs LY · LY " + (money ? wkM(ly) : wkU(ly)) + "</span></div>";
+    const stratName = (window.NPViews && NPViews.cfStratName) ? NPViews.cfStratName(NP.state.cf.strategy) : "Optimized";
+    const bm = weekBaseMetrics(o, week), inCart = !!WKCART[cartKey(o, week)];
+    const center = '<div class="npv2-wk-recs"><div class="npv2-wk-recshead"><h4>Promo recommendations by price area</h4>' + (bm.promoted ? '<span class="npv2-wk-chip is-ok">✓ Allowance linked</span>' : '<span class="npv2-wk-chip is-off">No promo recommended</span>') + '<span class="npv2-wk-recshint">expand a PA for its alternates, LY actual &amp; no-promo baseline</span></div>' +
+        recTableHTML(o, week, pds, selPa) + "</div>";
+    front.innerHTML =
+      wkToolsHTML(all) +
+      '<div class="npv2-wk-scroll"><div class="npv2-wk-body">' +
+        '<aside class="npv2-wk-worklist">' + worklistHTML(items, o.uid, week) + "</aside>" +
+        '<div class="npv2-wk-center">' +
+          '<div class="npv2-wk-mhead">' +
+            '<div class="npv2-wk-mtitle"><span class="npv2-wk-eyebrow">' + esc(o.ncrc) + " · " + esc(stratName) + " plan" + (isLocked(week) ? " · LOCKED ACTUAL" : "") + "</span><h3>" + esc(o.item) + " <i>" + esc(o.pack) + "</i></h3><span class=\"npv2-wk-msub\">" + esc(o.vendor) + " · " + esc(weekLabel(week)) + "</span></div>" +
+            '<div class="npv2-wk-kpis">' + kpi("Sales", wkM(tot.sales), tot.sales, tot.lsales, true) + kpi("Units", wkU(tot.units), tot.units, tot.lunits, false) + kpi("AGP", wkM(tot.agp), tot.agp, tot.lagp, true) + "</div>" +
+          "</div>" + center + "</div>" +
+        sidePanelHTML(o, week, pds) +
+      "</div></div>" +
+      '<footer class="npv2-wk-footer">' +
+        '<div class="npv2-wk-fsummary"><span class="npv2-wk-feyebrow">' + (inCart ? "IN BASKET" : "PENDING") + '</span>' +
+          "<span><b>" + esc(chosenFor(o, week, pds[0]).label) + "</b> + " + (pds.length - 1) + " more PAs for <b>" + esc(o.ncrc) + "</b>, " + esc(weekLabel(week)) + '</span><span class="npv2-wk-fbin">' + (items.indexOf(o) + 1) + " of " + items.length + " in this view</span></div>" +
+        '<div class="npv2-wk-fbtns"><button type="button" class="npv2-wk-fbtn" id="npV2WkSkip">Skip →</button><button type="button" class="npv2-wk-fbtn is-primary" id="npV2WkAdd">' + (inCart ? "Update &amp; next →" : "Add &amp; next →") + '</button><button type="button" class="npv2-wk-fbtn is-finalize" id="npV2WkFinalize"' + (Object.keys(WKCART).length ? "" : " disabled") + ">Review &amp; finalize (" + Object.keys(WKCART).length + ")</button></div>" +
+      "</footer>";
+    bindWkTools(front, items);
+    bindWeekMain(front, items, o, week, pds);
+  }
+
+  function bindWeekMain(front, items, o, week, pds) {
+    front.querySelectorAll("[data-wl]").forEach((b) => (b.onclick = () => { WEEKSEL.uid = b.dataset.wl; WKST.selPa = null; WKST.override = null; renderWeekView(); }));
+    // expand / collapse a PA
+    front.querySelectorAll("[data-toggle]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const pa = b.dataset.toggle; WKST.expanded[pa] = !WKST.expanded[pa]; WKST.selPa = pa; renderWeekView(); }));
+    // pick an offer (radio)
+    front.querySelectorAll("[data-pick]").forEach((tr) => (tr.onclick = () => { const p = tr.dataset.pick.split("|"); WKST.chosen[paKey(o, week, p[0])] = p[1]; WKST.selPa = p[0]; renderWeekView(); }));
+    // click a PA summary row → focus it in the side panel
+    front.querySelectorAll(".npv2-wk-parow[data-pa]").forEach((tr) => (tr.onclick = (e) => { if (e.target.closest("[data-toggle]")) return; WKST.selPa = tr.dataset.pa; renderWeekView(); }));
+    // open the Override recommendation builder (full-screen), jumping to the clicked PA
+    front.querySelectorAll("[data-override]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.override; const cust = WKST.custom[paKey(o, week, pa)]; WKST.oform = WKST.oform || freshPromoForm(); WKST.override = true; WKST.manualEditPa = pa; WKST.manualEditForm = (cust && cust._form) ? Object.assign({}, cust._form) : Object.assign({}, WKST.oform); renderWeekView(); }));
+    front.querySelectorAll("[data-ovclear]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovclear; delete WKST.custom[paKey(o, week, pa)]; if (WKST.chosen[paKey(o, week, pa)] === "custom-" + pa) delete WKST.chosen[paKey(o, week, pa)]; renderWeekView(); }));
+    // side-panel tabs
+    front.querySelectorAll("[data-ptab]").forEach((b) => (b.onclick = () => { WKST.tab = b.dataset.ptab; renderWeekView(); }));
+    // footer
+    const skip = front.querySelector("#npV2WkSkip"); if (skip) skip.onclick = () => advanceWorklist(items, o, week);
+    const add = front.querySelector("#npV2WkAdd"); if (add) add.onclick = () => addToCart(o, week, items);
+    const fin = front.querySelector("#npV2WkFinalize"); if (fin) fin.onclick = () => { WKST.review = true; renderWeekView(); };
+  }
+
+  function bindOverride(front, o, week, items) {
+    const back = front.querySelector("[data-ovback]"); if (back) back.onclick = () => { WKST.override = false; WKST.manualEditPa = null; WKST.manualEditForm = null; renderWeekView(); };
+    // live-bind a form's fields (default card → WKST.oform; edit panel → WKST.manualEditForm)
+    const bindForm = (attr, get) => front.querySelectorAll("[" + attr + "]").forEach((el) => {
+      const key = el.getAttribute(attr);
+      const h = () => { const f = get(); f[key] = (el.type === "checkbox") ? el.checked : el.value; };
+      el.onchange = h;
+      if (el.tagName === "INPUT" && el.type !== "checkbox" && el.type !== "radio") el.oninput = h;
+    });
+    bindForm("data-of", () => (WKST.oform = WKST.oform || freshPromoForm()));
+    bindForm("data-of2", () => (WKST.manualEditForm = WKST.manualEditForm || freshPromoForm()));
+    // apply the default to every price area that isn't individually customised
+    const apply = front.querySelector("[data-ovapply]"); if (apply) apply.onclick = () => {
+      paData(o, week).forEach((pd) => { const k = paKey(o, week, pd.pa); if (!WKST.custom[k]) { WKST.custom[k] = customOfferFrom(o, week, pd.pa, WKST.oform); WKST.chosen[k] = "custom-" + pd.pa; } });
+      WKST.override = false; WKST.manualEditPa = null; renderWeekView();
+    };
+    const resetAll = front.querySelector("[data-ovresetall]"); if (resetAll) resetAll.onclick = () => {
+      paData(o, week).forEach((pd) => { const k = paKey(o, week, pd.pa); delete WKST.custom[k]; if (WKST.chosen[k] === "custom-" + pd.pa) delete WKST.chosen[k]; });
+      renderWeekView();
+    };
+    // per-PA override / edit / reset from the price-areas table
+    front.querySelectorAll("[data-ovedit]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovedit, cust = WKST.custom[paKey(o, week, pa)]; WKST.manualEditPa = pa; WKST.manualEditForm = (cust && cust._form) ? Object.assign({}, cust._form) : Object.assign({}, WKST.oform || freshPromoForm()); renderWeekView(); }));
+    front.querySelectorAll("[data-ovclear]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovclear, k = paKey(o, week, pa); delete WKST.custom[k]; if (WKST.chosen[k] === "custom-" + pa) delete WKST.chosen[k]; renderWeekView(); }));
+    const save = front.querySelector("[data-ovsave]"); if (save) save.onclick = () => { const pa = WKST.manualEditPa; if (pa) { const k = paKey(o, week, pa); WKST.custom[k] = customOfferFrom(o, week, pa, WKST.manualEditForm || WKST.oform); WKST.chosen[k] = "custom-" + pa; } WKST.manualEditPa = null; WKST.manualEditForm = null; renderWeekView(); };
+    const cancel = front.querySelector("[data-ovcancel]"); if (cancel) cancel.onclick = () => { WKST.manualEditPa = null; WKST.manualEditForm = null; renderWeekView(); };
+  }
+
+  function bindReview(front, items) {
+    const back = front.querySelector("[data-revback]"); if (back) back.onclick = () => { WKST.review = false; WKST.finalized = null; renderWeekView(); };
+    const done = front.querySelector("[data-findone]"); if (done) done.onclick = () => { WKST.review = false; WKST.finalized = null; renderWeekView(); };
+    front.querySelectorAll("[data-revmore]").forEach((b) => (b.onclick = () => { const uid = b.dataset.revmore; WKST.reviewExpanded[uid] = !WKST.reviewExpanded[uid]; renderWeekView(); }));
+    const pub = front.querySelector("[data-publish]"); if (pub) pub.onclick = () => {
+      const keys = Object.keys(WKCART); if (!keys.length) return;
+      const t = keys.reduce((a, k) => { const c = WKCART[k]; return { s: a.s + c.sales, u: a.u + c.units, a: a.a + c.agp }; }, { s: 0, u: 0, a: 0 });
+      WKST.finalized = { count: keys.length, category: NP.cat().name.split(" — ")[0], week: WEEKSEL.week, sales: wkM(t.s), units: wkU(t.u), agp: wkM(t.a) };
+      keys.forEach((k) => delete WKCART[k]);
+      renderWeekView();
+    };
+  }
+
+  function addToCart(o, week, items) {
+    const pds = paData(o, week), chosen = pds.map((pd) => chosenFor(o, week, pd));
+    const t = chosen.reduce((a, c) => ({ sales: a.sales + c.sales, units: a.units + c.units, agp: a.agp + c.agp }), { sales: 0, units: 0, agp: 0 });
+    WKCART[cartKey(o, week)] = { uid: o.uid, week: week, ncrc: o.ncrc, item: o.item, vendor: o.vendor, offer: chosen[0].label, store: chosen[0].storeName, paCount: pds.length, sales: t.sales, units: t.units, agp: t.agp };
+    advanceWorklist(items, o, week);
+  }
+  function advanceWorklist(items, o, week) {
+    const idx = items.findIndex((x) => x.uid === o.uid);
+    const next = items.slice(idx + 1).find((x) => !WKCART[cartKey(x, week)]) || items[idx + 1] || items[idx];
+    WEEKSEL.uid = next.uid; WKST.selPa = null; WKST.override = null; renderWeekView();
+  }
+
+  function bindWkTools(front, items) {
+    front.querySelectorAll("[data-strat]").forEach((b) => (b.onclick = () => { NP.state.cf.strategy = b.dataset.strat; renderWeekView(); }));
+    const moreBtn = front.querySelector("#npV2StratMore"), stratRow = front.querySelector("#npV2Strats");
+    if (moreBtn && stratRow) moreBtn.onclick = () => { stratExpanded = !stratExpanded; stratRow.classList.toggle("is-collapsed", !stratExpanded); const others = stratRow.querySelectorAll(".npv2-strat").length - 1; moreBtn.textContent = stratExpanded ? "Hide other scenarios" : "Other scenarios (" + others + ")"; moreBtn.setAttribute("aria-expanded", String(stratExpanded)); };
+    const bindSel = (id, key) => { const s = front.querySelector("#" + id); if (s) s.onchange = () => { ff[key] = s.value; renderWeekView(); }; };
+    bindSel("npV2FgCat", "cat"); bindSel("npV2FgVendor", "vendor"); bindSel("npV2FgRog", "rog"); bindSel("npV2FgClass", "cls"); bindSel("npV2FgSub", "sub");
+    front.querySelectorAll("[data-sortby]").forEach((b) => (b.onclick = () => { ff.sortBy = ff.sortBy === b.dataset.sortby ? null : b.dataset.sortby; renderWeekView(); }));
+    front.querySelectorAll("[data-bin]").forEach((b) => (b.onclick = () => { ff.bin = b.dataset.bin; renderWeekView(); }));
+    const ws = front.querySelector("#npV2WkSel"); if (ws) ws.onchange = () => { WEEKSEL.week = +ws.value; WKST.selPa = null; WKST.override = null; renderWeekView(); };
+    front.querySelectorAll("[data-wkstep]").forEach((b) => (b.onclick = () => { const w = WEEKSEL.week + (+b.dataset.wkstep); if (w >= FIRST_PLAN_WEEK && w <= 52) { WEEKSEL.week = w; WKST.selPa = null; WKST.override = null; renderWeekView(); } }));
+  }
+
+  // entry point from the Promotional Calendar week drawer — select the NCRC + week, jump to step 5
+  function openWeekView(uid, week) {
+    WEEKSEL.uid = uid; WKST.review = false; WKST.override = null; WKST.selPa = null;
+    if (week) WEEKSEL.week = Math.max(FIRST_PLAN_WEEK, week);
+    if (NP.closeOverlays) NP.closeOverlays();
+    NP.goStep(5);
+  }
+
   /* ================================================================ mount / unmount */
   function mount() {
     ensureShell();
@@ -921,13 +1607,20 @@
     renderFront();
     syncFlip();
   }
+  function mountWeek() {
+    ensureShell();
+    renderToggle();
+    const back = document.getElementById(MFACE); if (back) back.hidden = true;
+    const flipEl = document.getElementById(FLIPEL); if (flipEl) flipEl.classList.remove("is-flipped");
+    renderWeekView();
+  }
   function unmount() {
     if (!shellExists()) return;
     document.getElementById(SHELL).remove();
     flip = { open: false, m: 0, animating: false };
   }
 
-  window.NPV2 = { mount, unmount, renderToggle };
+  window.NPV2 = { mount, mountWeek, unmount, renderToggle, openWeekView };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", renderToggle);
   else renderToggle();

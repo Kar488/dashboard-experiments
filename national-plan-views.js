@@ -1155,11 +1155,14 @@
         card("Sales", kM(sF), d2(sL ? (sF - sL) / sL : 0, "vs LY"), '<span class="np-cw-ly">LY ' + kM(sL) + "</span>") +
         card("AGP", kM(aF), d2(aL ? (aF - aL) / aL : 0, "vs LY"), '<span class="np-cw-ly">LY ' + kM(aL) + "</span>");
     }
-    const foot = locked
-      ? '<div class="np-cw-foot np-cw-foot-locked"><span class="np-cw-lockmsg">🔒 Locked actual — already run, can’t be changed</span></div>'
-      : '<div class="np-cw-foot">' + (NP.state.cf.approved[akey]
+    // jump to the week-by-week view (step 5) for this NCRC + week — see the full price-area breakdown
+    const wkNav = '<div class="np-cw-navbox"><button class="np-cw-wkview" type="button" data-wkview>Open week-by-week view — by price area →</button></div>';
+    const lockBox = locked
+      ? '<div class="np-cw-lockbox is-locked"><span class="np-cw-lockmsg">🔒 Locked actual — already run, can’t be changed</span></div>'
+      : '<div class="np-cw-lockbox">' + (NP.state.cf.approved[akey]
         ? '<span class="np-cw-lockedmsg">🔒 Week ' + week + ' locked into the plan</span><button class="np-cw-undo" type="button" data-cfapprove>Unlock</button>'
         : '<span class="np-cw-foothint">Lock week ' + week + " into the plan?</span><button class=\"np-cw-lock-btn\" type=\"button\" data-cfapprove>Lock deal</button>") + "</div>";
+    const foot = '<div class="np-cw-foot' + (locked ? " np-cw-foot-locked" : "") + '">' + lockBox + '<span class="np-cw-or">or</span>' + wkNav + "</div>";
     const drawer = document.getElementById("npDrawer"), scrim = document.getElementById("npDrawerScrim");
     drawer.innerHTML =
       '<div class="np-ask-head"><div><span class="np-ask-eyebrow">' + o.ncrc + " · " + planLabel + (locked ? " · ACTUALS" : "") + '</span><h3>' + esc(o.item) + " — Week " + week + '</h3><small>' + esc(o.vendor) + " · " + c.offer.label + '</small></div><button class="np-ask-close" type="button">×</button></div>' +
@@ -1175,6 +1178,7 @@
     drawer.hidden = false; scrim.hidden = false; drawer.classList.add("is-open"); document.body.classList.add("np-noscroll");
     drawer.querySelector(".np-ask-close").onclick = NP.closeOverlays; scrim.onclick = NP.closeOverlays;
     const ab = drawer.querySelector("[data-cfapprove]"); if (ab) ab.onclick = () => { NP.state.cf.approved[akey] = !NP.state.cf.approved[akey]; NP.renderAll(); openWeek(ctx, uid, week); };
+    const wv = drawer.querySelector("[data-wkview]"); if (wv) wv.onclick = () => { if (window.NPV2 && NPV2.openWeekView) NPV2.openWeekView(uid, week); };
   }
   function cfDetail(o) {
     const tab = NP.state.cf.tab[o.uid] || "ladder";
