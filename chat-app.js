@@ -1752,9 +1752,11 @@
     const ask = e.rawAsk || "";
     const isPen = /penetration/i.test(concept), isBasket = /basket/i.test(concept);
     const isSpace = /facing|planogram|shelf|spaced|days of supply|pack[- ]?out/i.test(concept + " " + ask);
+    // MERCHANT-CLEAN: no pipeline talk ("constructed target response",
+    // "captured request") in the answer — the contract in the lineage panel
+    // carries the verbatim ask and the traceability marks. The merchant gets
+    // a finished answer, one honest gap box, and follow-ups.
     const blocks = [];
-    blocks.push(NOTE(`No stored contract covers ${isSpace ? "shelf-space optimization" : concept} — this is the CONSTRUCTED target response. Every figure below is illustrative: the lineage panel marks this analysis as not traceable to any known table or derived feature yet.`));
-    blocks.push(NOTE(`Captured request (verbatim, so nothing is silently dropped): “${ask.slice(0, 200)}${ask.length > 200 ? "…" : ""}”`));
     if (isSpace) {
       const catNm = e.cat || (/cream cheese/i.test(ask) ? "CREAM CHEESE" : "the category");
       const items = (catInfo(catNm) ? catInfo(catNm).v : ["OWN BRANDS", "KRAFT HEINZ CO"]).slice(0, 4).map((v, i) => ncrcName(v, { ...e, cat: catNm }, rngFor(id, 60 + i)) + " " + ["8OZ", "12OZ", "8OZ WHIPPED", "16OZ"][i % 4]);
@@ -1774,19 +1776,19 @@
     } else
     if (isPen) {
       const pen = rr(rng, 0.1, 0.3), penLY = pen - rr(rng, -0.02, 0.03);
-      blocks.push(H(`Illustrative shape: household penetration for the asked scope would read ${fmt.pct(pen)} of active households, ${pen >= penLY ? "up" : "down"} ${fmt.pts(pen - penLY).replace("+", "")} versus last year.`));
-      blocks.push(TB("Target output shape — penetration trend (illustrative values)",
+      blocks.push(H(`Household penetration for ${scope(e) || "the asked scope"} reads ${fmt.pct(pen)} of active households, ${pen >= penLY ? "up" : "down"} ${fmt.pts(pen - penLY).replace("+", "")} versus last year.`));
+      blocks.push(TB("Penetration trend — ILLUSTRATIVE",
         ["Period", "Buying HH", "Active HH", "Penetration", "vs LY"],
         Array.from({ length: 4 }, (_, i) => { const r = rngFor(id, i); const a = rr(r, 8e5, 1.1e6); const b = a * rr(r, 0.1, 0.3); return [`P${i + 7}`, fmt.units(b), fmt.units(a), fmt.pct(b / a), fmt.pts(rr(r, -0.01, 0.015))]; })));
     } else if (isBasket) {
-      blocks.push(H(`Illustrative shape: when a household buys the first item, it would buy the second in the same trip some share of the time — attach rate, lift vs independence, and the co-purchase direction.`));
-      blocks.push(TB("Target output shape — basket affinity (illustrative values)",
+      blocks.push(H(`When a household buys chips, salsa lands in the same basket well above chance — the attach rates, lift versus independence, and which item leads the trip are below.`));
+      blocks.push(TB("Basket affinity — ILLUSTRATIVE",
         ["Pair", "Attach Rate", "Lift vs Independence", "Direction"],
         [["Chips → Salsa", fmt.pct(rr(rng, 0.1, 0.25)), rr(rng, 1.5, 3.2).toFixed(1) + "×", "Chips leads"], ["Salsa → Chips", fmt.pct(rr(rng, 0.3, 0.5)), rr(rng, 1.5, 3.2).toFixed(1) + "×", "Symmetric check"]]));
       blocks.push(NOTE("Note: the co-purchase graph in the demand platform computes exactly these statistics per key-pair — the gap is conversational access to it, not the science."));
     } else {
-      blocks.push(H(`Illustrative shape: the constructed metric would be defined, computed at the stated grain, and compared vs prior year — rendered in the house response structure (headline, evidence table, follow-ups).`));
-      blocks.push(TB("Target output shape (illustrative values)", ["Entity", "Metric TY", "Metric LY", "Change"],
+      blocks.push(H(`Here is the read for ${concept} across the asked scope, this year versus last — the cuts below carry the measure at the asked grain.`));
+      blocks.push(TB(`${concept} by scope — ILLUSTRATIVE`, ["Entity", "Metric TY", "Metric LY", "Change"],
         Array.from({ length: 3 }, (_, i) => { const r = rngFor(id, 5 + i); const ly = rr(r, 1e5, 6e5); const chg = rr(r, -0.15, 0.15); return [["Scope A", "Scope B", "Scope C"][i], fmt.k(ly * (1 + chg)), fmt.k(ly), fmt.spct(chg)]; })));
     }
     blocks.push(GAPBOX([
@@ -2641,8 +2643,10 @@
   function narrowAskScope(text) {
     // lookup phrasing required…
     if (!/\bwere there\b|\bwas there\b|\bany change\b|\bchanges? (in|to)\b|\bwhat (is|was|were|are)\b|\bhow much\b|\bdid .{0,40}\bchange\b/i.test(text)) return null;
-    // …and no diagnostic / ranking / review ask — those earn the full card
-    if (/\bwhy\b|driver|decompos|diagnos|review|reconcil|rank|top\s*\d|\bwhich\b|\bwho\b|break\s?down|analy[sz]e|explain|deteriorat|impact/i.test(text)) return null;
+    // …and no diagnostic / causal / ranking / review ask — those earn the
+    // full card (incrementality and "controlling for" are causal designs,
+    // not lookups, however many metrics they happen to name)
+    if (/\bwhy\b|driver|decompos|diagnos|review|reconcil|rank|top\s*\d|\bwhich\b|\bwho\b|break\s?down|analy[sz]e|explain|deteriorat|impact|\bcaus\w*\b|\bincrement|controlling for/i.test(text)) return null;
     const hits = METRIC_LEX.filter(([, ask]) => ask.test(text));
     return hits.length >= 1 && hits.length <= 3 ? hits.map(([name, , row]) => ({ name, row })) : null;
   }
@@ -3140,7 +3144,16 @@
       // question's nature for any unseen phrasing; the registry supplies the
       // honest landing template for each class.
       if (out.question_class === "strategy_program") { arch = "advisory_scope"; e.rawAsk = text; }
-      else if (out.question_class === "methodology") { arch = "methodology"; e.rawAsk = text; }
+      else if (out.question_class === "methodology") {
+        // A measurement-design question whose core concepts NO template
+        // covers (e.g. household-grain incrementality) deserves its own
+        // constructed template, not the generic worked example — same
+        // construct-once-and-register rule as novel concepts.
+        if ((out.uncovered_concepts || []).length) {
+          try { return await constructAndRegister(text, { ...match, e }); }
+          catch { arch = "methodology"; e.rawAsk = text; }
+        } else { arch = "methodology"; e.rawAsk = text; }
+      }
       else if ((out.question_class === "novel_concept" && !(out.confidence >= 0.6 && ARCHETYPES[out.archetype] && /constructed at runtime/.test(ARCHETYPES[out.archetype].name || "")))
         || ((out.uncovered_concepts || []).length && !["novel_analysis", "household_exclusivity"].includes(arch) && out.question_class !== "data_lookup" && out.question_class !== "diagnostic")) {
         // outside every registered template → CONSTRUCT one and register it.
@@ -3229,11 +3242,11 @@
     const stageDefs = [
       match.tier === 1 ? { label: `Intent matched — registry exact hit`, ms: 240 }
         : match.tier === 2 ? { label: `Intent matched — nearest neighbor (${match.score.toFixed(2)})`, ms: 380 }
-          : match.guarded ? { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one`, ms: 950 }
+          : match.guarded ? { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one (SIMULATED — ${LLM.live ? "live status not confirmed at send time" : "no API key configured"}; with a live key the model constructs and registers a real template)`, ms: 950 }
           : match.upgraded ? { label: `Registered template upgraded to the current spec schema via ${match.model} — upserted under the same id`, ms: 160 }
           : match.constructed ? { label: `Outside every registered template — NEW contract constructed via ${match.model} and registered for reuse`, ms: 160 }
           : match.live ? { label: `No direct hit — contract inferred via ${match.model} (live call, 3 nearest archetypes injected)`, ms: 120 }
-          : { label: `No direct hit — inferring contract via fast-LLM (SIMULATED — no API key configured)`, ms: 900 },
+          : { label: match.llmError ? `Live inference FAILED (${match.llmError}) — SIMULATED deterministic fallback` : `No direct hit — inferring contract via fast-LLM (SIMULATED — no API key configured)`, ms: 900 },
       { label: `Answer contract built — ${ARCHETYPES[match.arch].name}`, ms: 320 },
       { label: "Fetching data (mock)", ms: 620 },
       { label: "Composing response", ms: 300 }
@@ -3258,9 +3271,12 @@
     let blocks;
     try { blocks = R[match.arch](qid, match.e || {}); }
     catch (err) { blocks = [H("Could not render this archetype — " + err.message)]; }
-    // narrow lookups get an answer scoped to the metrics they named
+    // narrow lookups get an answer scoped to the metrics they named —
+    // but never trim a runtime-constructed template: the model built its
+    // sections for this exact ask, so projection would second-guess it
     const askScope = narrowAskScope(text);
-    if (askScope) blocks = projectToAsk(blocks, askScope);
+    const isConstructed = /constructed at runtime/.test((ARCHETYPES[match.arch] || {}).name || "");
+    if (askScope && !isConstructed) blocks = projectToAsk(blocks, askScope);
     const body = el("div", "answer-body");
     bubble.appendChild(body);
     for (const b of blocks) {
