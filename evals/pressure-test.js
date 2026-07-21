@@ -57,6 +57,10 @@ const VARIATIONS = [
   { cls: "novel", q: "I am running three groups of categories through a planning process, use the two lead digits of the four digit category number to group the categories together. 0201 - COOKIES 0204 - ON THE GO LUNCHBOX 0210 - CRACKERS 3001 - BATH TISSUE 3002 - PAPER TOWELS 3004 - FACIAL TISSUE 4201 - PACKAGED ICE CREAM 4205 - NOVELTIES I need to understand how exclusive households are, inside each group of categories. I want to establish a risk factor for removing overlapping promotions inside a group. For each group of categories go down to the NCRC level and identify total households buying the NCRC and how many of those households are exclusive to that NCRC only in that group of categories. Use promo week 49 2025 to promo week 8 2026 as the time frame to evaluate. I will also need to understand this at the group of categories level. I will also need to know this at a Division level." },
   { cls: "novel", q: "what is the basket affinity between chips and salsa at jewel — when households buy one how often do they buy the other in the same trip" },
   { cls: "novel", q: "show me household penetration for greek yogurt in jewel and how it trends vs last year" },
+  // -- causal treated-vs-comparison asks (field miss 2026-07-21: SNAP offer
+  //    incrementality answered with a single-concept penetration card and a
+  //    phantom HOUSEHOLD CLEANERS category from an 8-char prefix match)
+  { cls: "causal", q: "Did households that redeemed the digital yogurt coupon make purchases that would not otherwise have occurred, compared with matched households that did not redeem, and what was the incremental impact on trips, basket size, and retention?" },
   // -- clarification traps (missing values must trigger a hold, not a guess)
   { cls: "clarify", q: "For Jewel store, list all stores, their district, and store name along with sales for fiscal week 34 in the year 2025 in a table. Sort by the largest revenue to the smallest and only provides stores with over  in revenue for the fiscal week. In text below the prompt, tell me how many stores meet this criteria." }
 ];

@@ -675,6 +675,26 @@ window.ChatData = (() => {
       ],
       gaps: [{ sev: "med", text: "Rules 1–4 are structural and computable from onboarded tables. Confirming ACTUAL historical cannibalization (rule 5) needs the promo baseline model — flagged, not asserted." }]
     },
+    incrementality_cohort: {
+      name: "Incrementality — treated vs matched comparison",
+      style: "gap",
+      intent: "Causal read of a treatment (offer redemption, promo exposure, program participation) versus a matched comparison group: per-KPI incremental lift, and whether the program created behavior that would not otherwise have occurred or subsidized purchases that would have happened anyway.",
+      lineage: [
+        { table: "NOT TRACEABLE — needs: household-grain outcomes with a treatment link (loyalty/offer-redemption feed)", grain: "household-week", cols: ["household_id", "treatment_flag", "kpi outcomes"], why: "builds the treated cohort and the matched comparison group" },
+        { table: "transaction data (store-item grain)", grain: "store-item-week", cols: ["sales", "units", "agp"], why: "aggregate context; funds the KPI math once cohorts exist" }
+      ],
+      derived: [
+        { name: "incremental lift per KPI", formula: "treated outcome − matched comparison outcome", status: "gap" },
+        { name: "subsidy share", formula: "1 − incremental sales ÷ treated-linked sales", status: "gap" }
+      ],
+      recipe: [
+        "State the treatment, the eligible cohort, and the matched comparison design (prior behavior, household characteristics, market conditions).",
+        "Per-KPI table: treated vs matched comparison vs incremental lift with a confidence read — one row per KPI the question names.",
+        "Subsidy-vs-incremental verdict: which KPIs moved incrementally, which were subsidized, and the net economics after program cost.",
+        "Mark the household-grain treatment feed as the blocking input."
+      ],
+      gaps: [{ sev: "high", text: "Household-grain outcomes with a treatment link (who redeemed / was exposed) are not onboarded — cohort matching cannot run on current tables." }]
+    },
     advisory_scope: {
       name: "Strategy / optimization program — beyond a single analytical answer",
       style: "gap",
