@@ -1853,6 +1853,11 @@ body.dark .npv2-lg-dg { background: #1c2638; color: #9fb0c4; }
 /* collapsed: pull the active card to the left regardless of which strategy it is
    (the four hidden cards keep their slots, so width/position stay stable). */
 .npv2-strat-row.is-collapsed .npv2-strat.is-active { order: -1; }
+/* condensed default: the step-4 one-line header for the active scenario + a quiet
+   "Other scenarios (N)" link on the right. Expanding swaps in the full tall cards. */
+.npv2-strat-row.is-condensed { display: flex !important; align-items: center; gap: 14px; overflow: visible !important; padding: 2px 0 6px; }
+.npv2-strat-row.is-condensed .npv2-hb { flex: 1 1 auto; margin-bottom: 0; }
+.npv2-strat-row.is-condensed .npv2-strat-more { align-self: center; }
 
 /* airy, divided toolbar — sections don't crowd */
 .npv2-fg-tools { padding: 10px 2px 2px !important; }
@@ -2397,24 +2402,41 @@ body.dark .npv2-wk-weeknav { background: #0e1626; color: #e6ecf5; border-color: 
 
 /* step-5 body scrolls as one unit; toolbar stays above, footer stays below (the page itself is fixed-height) */
 .npv2-wk-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 4px; }
-.npv2-wk-body { display: grid; grid-template-columns: 188px minmax(0, 1fr) 272px; gap: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; align-items: stretch; }
+/* normal (non-takeover) layout: the body fills the viewport and each PANE scrolls on its own —
+   the outer scroll is frozen so the page doesn't move; the footer stays pinned. */
+.npv2-wk-scroll:has(> .npv2-wk-body) { overflow: hidden; padding-bottom: 0; }
+.npv2-wk-body { display: grid; grid-template-columns: 188px minmax(0, 1fr) 272px; grid-template-rows: minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; align-items: stretch; height: 100%; }
 body.dark .npv2-wk-body { background: #0e1626; border-color: #22304a; }
-.npv2-wk-center { padding: 14px 16px; min-width: 0; }
+.npv2-wk-center { padding: 14px 16px; min-width: 0; min-height: 0; overflow-y: auto; }
+.npv2-wk-panel { min-height: 0; overflow-y: auto; }
 
-.npv2-wk-worklist { border-right: 1px solid var(--line); padding: 12px 10px; background: #fcfdff; }
+/* left rail: pinned header + basket, only the item list scrolls (no visible scrollbar) */
+.npv2-wk-worklist { border-right: 1px solid var(--line); padding: 12px 0; background: #fcfdff; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.npv2-wk-wlscroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
+.npv2-wk-wlscroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
 body.dark .npv2-wk-worklist { background: #0c1420; border-color: #22304a; }
+.npv2-wk-wlhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 12px; }
 .npv2-wk-wlhead h4 { margin: 0; font-size: 0.85rem; }
-.npv2-wk-wlsub { display: block; font-size: 0.62rem; color: var(--faint); margin: 2px 0 10px; }
-.npv2-wk-wlvendor { font-size: 0.58rem; letter-spacing: 0.06em; font-weight: 700; text-transform: uppercase; color: var(--faint); margin: 10px 2px 5px; }
-.npv2-wk-wlitem { position: relative; display: flex; gap: 8px; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 9px; padding: 8px 9px; margin-bottom: 6px; background: #fff; cursor: pointer; font-family: inherit; }
-.npv2-wk-wlitem:hover { border-color: var(--line-strong); }
-/* selected item is a blue tab that PLUGS INTO the content — its right side is open and it
-   overlaps the divider so there is no gap / grey seam between the item and the panel. */
-/* selected item: blue border + light-blue fill + a › chevron pointing to the content it drives */
-.npv2-wk-wlitem.is-active { border: 1.5px solid var(--blue); background: var(--blue-soft); border-radius: 10px; box-shadow: inset 3px 0 0 var(--blue); padding-right: 22px; }
-body.dark .npv2-wk-wlitem.is-active { background: #16233c; }
-.npv2-wk-wlitem.is-active::after { content: "\203A"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--blue); font-size: 1.15rem; font-weight: 700; line-height: 1; }
-body.dark .npv2-wk-wlitem { background: #0e1626; border-color: #22304a; }
+.npv2-wk-wlprog { font-size: 0.98rem; font-weight: 800; color: var(--ink); line-height: 1; }
+.npv2-wk-wlprog small { font-size: 0.55rem; font-weight: 600; color: var(--faint); letter-spacing: 0.01em; }
+body.dark .npv2-wk-wlprog { color: #e6ecf5; }
+.npv2-wk-wlbar { height: 4px; border-radius: 3px; background: var(--soft); overflow: hidden; margin: 8px 12px 9px; }
+.npv2-wk-wlbar > span { display: block; height: 100%; background: var(--blue); border-radius: 3px; transition: width .2s; }
+.npv2-wk-wlsub { display: block; font-size: 0.62rem; color: var(--faint); margin: 0 0 8px; padding: 0 12px; }
+.npv2-wk-wlvendor { display: flex; align-items: center; justify-content: space-between; font-size: 0.58rem; letter-spacing: 0.06em; font-weight: 700; text-transform: uppercase; color: var(--faint); margin: 12px 0 6px; padding: 0 12px; }
+.npv2-wk-wlvendor span { color: var(--muted); background: var(--soft); border-radius: 8px; padding: 1px 7px; font-size: 0.55rem; letter-spacing: 0; }
+body.dark .npv2-wk-wlvendor span { background: #17253c; color: #aab6c8; }
+/* flat list rows (no per-item box) — full-bleed to the rail edges with a hairline separator,
+   exactly like the original worklist. */
+.npv2-wk-wlitem { position: relative; display: flex; gap: 8px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 9px 12px; margin: 0; background: transparent; cursor: pointer; font-family: inherit; transition: background .12s; }
+.npv2-wk-wlitem:hover { background: var(--soft); }
+/* selected row: light-blue fill + a 4px blue accent bar on the LEFT, the NCRC code turns blue,
+   and a small solid triangle caret points toward the content it drives. No box, no wedge. */
+.npv2-wk-wlitem.is-active { background: rgba(31, 111, 235, 0.10); box-shadow: inset 4px 0 0 var(--blue); padding-right: 22px; }
+body.dark .npv2-wk-wlitem.is-active { background: rgba(115, 167, 255, 0.12); }
+.npv2-wk-wlitem.is-active .npv2-wk-wlcode { color: var(--blue); }
+.npv2-wk-wlitem.is-active::after { content: ""; position: absolute; right: 9px; top: 50%; transform: translateY(-50%); width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid var(--blue); }
+body.dark .npv2-wk-wlitem { border-bottom-color: #22304a; }
 .npv2-wk-wlnum { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; background: var(--soft); color: var(--muted); font-size: 0.6rem; font-weight: 700; display: grid; place-items: center; }
 .npv2-wk-wlitem.is-active .npv2-wk-wlnum { background: var(--blue); color: #fff; }
 .npv2-wk-wlbody { display: flex; flex-direction: column; min-width: 0; }
@@ -2494,7 +2516,10 @@ body.dark .npv2-wk-footer { background: #0e1626; border-color: #22304a; }
 .npv2-wk-fbtn.is-finalize { background: var(--green); border-color: var(--green); color: #fff; }
 body.dark .npv2-wk-fbtn { background: #0e1626; color: #aab6c8; border-color: #2c3a52; }
 
-.np-cw-wkview { width: 100%; border: 1px solid var(--blue); background: var(--blue-soft); color: var(--blue); font: inherit; font-weight: 700; font-size: 0.78rem; padding: 10px 12px; border-radius: 9px; cursor: pointer; text-align: center; }
+.np-cw-wkview { width: 100%; border: 1px solid var(--blue); background: var(--blue-soft); color: var(--blue); font: inherit; padding: 9px 12px; border-radius: 9px; cursor: pointer; text-align: center; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.np-cw-wkview-main { font-weight: 700; font-size: 0.78rem; }
+.np-cw-wkview-sub { font-weight: 500; font-size: 0.62rem; opacity: 0.82; }
+.np-cw-wkview:hover .np-cw-wkview-sub { opacity: 1; }
 .np-cw-wkview:hover { background: var(--blue); color: #fff; }
 
 /* ---- step 5 v2: inline week filter, alternates, override, side panel, basket, review ---- */
@@ -2571,11 +2596,13 @@ body.dark .npv2-wk-ovform select, body.dark .npv2-wk-ovform input { background: 
 .npv2-wk-ovresult button { margin-left: auto; }
 
 /* basket in worklist rail */
-.npv2-wk-wlitem.is-done { border-color: #b7e0c4; background: #f4fbf6; }
-body.dark .npv2-wk-wlitem.is-done { background: #10261a; border-color: #245637; }
+.npv2-wk-wlitem.is-done { background: rgba(0, 155, 90, 0.05); }
+body.dark .npv2-wk-wlitem.is-done { background: rgba(61, 220, 146, 0.06); }
 .npv2-wk-wlitem.is-done .npv2-wk-wlnum { background: var(--green); color: #fff; }
 .npv2-wk-wlitem.is-done .npv2-wk-wlrec { color: var(--green); }
-.npv2-wk-cart { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+/* an added row that is also selected keeps the blue selection treatment */
+.npv2-wk-wlitem.is-done.is-active { background: rgba(31, 111, 235, 0.10); }
+.npv2-wk-cart { flex: 0 0 auto; margin: 0; border-top: 1px solid var(--line); padding: 10px 12px 0; }
 .npv2-wk-carthead { font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; color: var(--faint); margin-bottom: 6px; }
 .npv2-wk-cartrow { display: flex; justify-content: space-between; gap: 8px; font-size: 0.64rem; padding: 3px 0; color: var(--muted); }
 .npv2-wk-cartrow b { color: var(--ink); font-weight: 600; }
@@ -2615,6 +2642,13 @@ body.dark .npv2-wksb { background: linear-gradient(180deg, #14203a, #0f1830); bo
 /* step 5: full-screen takeovers (Override recommendation, Review & finalise) — no strat/filter bar */
 .npv2-wk-takeover { padding: 10px 6px 24px; }
 .npv2-wk-takeover .pd-review, .npv2-wk-takeover .pd-section { max-width: none; }
+/* collapsible DEFAULT (all-price-areas) section in the override screen — starts collapsed
+   when you arrive from a specific price area so the focus is the PA you clicked. */
+.pd-manual-default-head { cursor: pointer; align-items: center; gap: 10px; }
+.pd-manual-default-head .pd-md-title { margin-right: auto; }
+.pd-md-caret { font-size: 0.8rem; color: var(--muted); line-height: 1; flex: 0 0 auto; }
+.pd-manual-default.is-collapsed .pd-manual-default-head { margin-bottom: 0; }
+.pd-manual-default.is-collapsed .pd-md-title p { display: none; }
 .pd-published-banner { background: rgba(23,114,69,0.1); color: var(--green, #177245); border: 1px solid rgba(23,114,69,0.3); border-radius: 10px; padding: 11px 16px; font-size: 0.82rem; font-weight: 600; margin: 4px 0 14px; }
 
 /* ===== step-5 header bar: ONE compact line — plan · primary | pipe | secondary ===== */
@@ -2713,12 +2747,42 @@ body.dark .pd-finalize-receipt { background: #0e1626; border-color: #22304a; }
    authoritative block (no competing wrap rules); also forced inline in the markup. ===== */
 .npv2-wk-tools { background: var(--bg, #f5f8fc); }
 body.dark .npv2-wk-tools { background: #0e1626; }
-.npv2-wk-tools .npv2-fg-trow { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
-.npv2-wk-tools .npv2-fg-gl { display: flex; flex-wrap: nowrap; flex: 0 0 auto; margin: 0; gap: 10px; }
-.npv2-wk-tools .npv2-fg-gr { display: flex; flex-wrap: nowrap; flex: 0 0 auto; margin-left: auto; gap: 10px; }
-.npv2-wk-tools .npv2-fg-filter { flex: 0 0 auto; font-size: 0.5rem; gap: 5px; }
-.npv2-wk-tools .npv2-fg-filter select { min-width: 118px; }
-.npv2-wk-tools .npv2-wk-weekfilter select { min-width: 116px; }
+/* the filter row keeps everything READABLE: filters stay on one line; the sort/velocity group
+   drops to a clean second line only if it doesn't fit. Never clip, never horizontal-scroll. */
+.npv2-wk-tools .npv2-fg-trow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding-bottom: 2px; }
+.npv2-wk-tools .npv2-fg-gl { display: flex; flex-wrap: nowrap; flex: 0 1 auto; margin: 0; gap: 8px; }
+.npv2-wk-tools .npv2-fg-gr { display: flex; flex-wrap: nowrap; flex: 0 0 auto; margin-left: auto; gap: 8px; }
+.npv2-wk-tools .npv2-fg-filter { flex: 0 0 auto; font-size: 0.48rem; gap: 4px; }
+/* native selects size to their widest OPTION unless we pin an explicit width. Pin each just wide
+   enough to show its default label in full; a long chosen value ellipsizes rather than stretching. */
+.npv2-wk-tools .npv2-fg-filter select { min-width: 0; padding: 0 22px 0 9px; text-overflow: ellipsis; }
+.npv2-wk-tools #npV2WkSel { width: 164px; }
+.npv2-wk-tools #npV2FgCat { width: 150px; }
+.npv2-wk-tools #npV2FgVendor { width: 130px; }
+.npv2-wk-tools #npV2FgRog { width: 92px; }
+.npv2-wk-tools #npV2FgClass { width: 122px; }
+.npv2-wk-tools #npV2FgSub { width: 142px; }
+/* keep the sort / velocity pills compact so they sit tidily on their line */
+.npv2-wk-tools .npv2-fg-gr .npv2-sort { gap: 5px; }
+.npv2-wk-tools .npv2-fg-gr .npv2-sort-l { font-size: 0.48rem; }
+.npv2-wk-tools .npv2-fg-gr .npv2-sort-pill { padding: 3px 8px; font-size: 0.62rem; }
+.npv2-wk-tools .npv2-fg-gr .npv2-divider { margin: 0 2px; height: 20px; }
 /* thin, unobtrusive scrollbar for the filter strip */
 .npv2-wk-tools .npv2-fg-trow::-webkit-scrollbar { height: 6px; }
 .npv2-wk-tools .npv2-fg-trow::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+
+/* ===== step-4 header: inner card reuses step-3 .npv2-strat classes for IDENTICAL fonts/weights;
+   it's transparent+horizontal, so the outer .npv2-hb owns the white card. ===== */
+.npv2-hb .npv2-hb-card { display: flex !important; flex-direction: row; align-items: center; gap: 20px; flex: 0 0 auto; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; cursor: default; }
+.npv2-hb .npv2-hb-card .npv2-strat-name { display: inline-flex; align-items: center; margin: 0; white-space: nowrap; }
+.npv2-hb .npv2-hb-card .npv2-strat-grid { display: flex !important; gap: 24px; }
+/* primary metrics INLINE (label · value · delta on one line) — mirrors step-3's
+   collapsed/scrolled card so step 4 reads identically, NOT stacked in 3 rows. */
+.npv2-hb .npv2-hb-card .npv2-strat-m { flex-direction: row !important; align-items: baseline; gap: 5px; line-height: 1.2; }
+.npv2-hb .npv2-hb-card .npv2-strat-sub, .npv2-hb .npv2-hb-card .npv2-strat-mly { display: none; }
+
+/* review header: plan totals inline (no separate summary section) */
+.npv2-rev-totals { display: flex; gap: 26px; margin-top: 10px; flex-wrap: wrap; }
+.npv2-rev-totals span { display: inline-flex; align-items: baseline; gap: 7px; }
+.npv2-rev-totals em { font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--faint); font-style: normal; }
+.npv2-rev-totals b { font-size: 1.1rem; font-weight: 800; color: var(--ink); }

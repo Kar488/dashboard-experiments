@@ -1155,8 +1155,9 @@
         card("Sales", kM(sF), d2(sL ? (sF - sL) / sL : 0, "vs LY"), '<span class="np-cw-ly">LY ' + kM(sL) + "</span>") +
         card("AGP", kM(aF), d2(aL ? (aF - aL) / aL : 0, "vs LY"), '<span class="np-cw-ly">LY ' + kM(aL) + "</span>");
     }
-    // jump to the week-by-week view (step 5) for this NCRC + week — see the full price-area breakdown
-    const wkNav = '<div class="np-cw-navbox"><button class="np-cw-wkview" type="button" data-wkview>Open week-by-week view — by price area →</button></div>';
+    // jump to the week-by-week view (step 5) for this NCRC + week — see the full price-area breakdown.
+    // This also creates the NOPA (funding agreement) before dropping into the price-area execution screen.
+    const wkNav = '<div class="np-cw-navbox"><button class="np-cw-wkview" type="button" data-wkview><span class="np-cw-wkview-main">Create NOPA &amp; open week-by-week view — by price area →</span><span class="np-cw-wkview-sub">Generates the funding agreement, then takes you to the price-area execution screen</span></button></div>';
     const lockBox = locked
       ? '<div class="np-cw-lockbox is-locked"><span class="np-cw-lockmsg">🔒 Locked actual — already run, can’t be changed</span></div>'
       : '<div class="np-cw-lockbox">' + (NP.state.cf.approved[akey]
@@ -1390,10 +1391,11 @@
     // YOUR ASKS — the only four things the merchant sets or checks here. Everything
     // else on this step is reference, folded behind "Show system-learnt settings".
     const catIds = (NP.state.categoryIds && NP.state.categoryIds.length ? NP.state.categoryIds : [NP.state.categoryId]);
-    const floorFor = (id) => { const h = NP.util.hashStr(id); const reg = 1.2 + (h % 17) / 10, hol = reg + 1.2 + (h % 7) / 10; return { reg, hol }; };
+    // the optimized plan's units change vs last year, for each selected category (one value, no holiday split)
+    const unitsPctFor = (id) => { const items = (NP.DATA[id] && NP.DATA[id].items) || []; let cur = 0, ly = 0; items.forEach((o) => { cur += NP.resultFor(o, {}).units; ly += NP.lyResult(o).units; }); return ly ? (cur - ly) / ly : 0; };
     const floorChips = catIds.map((id) => {
-      const f = floorFor(id), nm = (NP.DATA[id] ? NP.DATA[id].name : id).split(" — ")[0];
-      return '<div class="np-ask4-chip"><span class="np-ask4-chipname">' + esc(nm) + "</span><b>−" + f.reg.toFixed(1) + "%</b><small>holiday −" + f.hol.toFixed(1) + "%</small></div>";
+      const p = unitsPctFor(id), nm = (NP.DATA[id] ? NP.DATA[id].name : id).split(" — ")[0];
+      return '<div class="np-ask4-chip"><span class="np-ask4-chipname">' + esc(nm) + '</span><b class="' + (p >= 0 ? "np-pos" : "np-neg") + '">' + fmt.pct(p) + "</b></div>";
     }).join("");
     const askCard = (num, title, control, note) =>
       '<div class="np-ask4-card"><div class="np-ask4-head"><span class="np-ask4-num">' + num + "</span><h4>" + title + '</h4></div><div class="np-ask4-ctl">' + control + '</div><p class="np-ask4-note">' + note + "</p></div>";
@@ -1401,9 +1403,9 @@
       askCard(1, "Margin $ investment vs LY",
         '<div class="np-ask4-input"><span class="np-ask4-cur">$</span><input id="npAskMargin" type="text" inputmode="decimal" placeholder="2.50" value="' + esc(c3Asks.margin) + '"><span class="np-ask4-unit">M</span></div>',
         "The margin you'd invest vs LY. Flows into " + glink(3, "Deal inputs") + " as allowances by sub-type — an input, not a cap, so the spend stays visible.") +
-      askCard(2, "Units ID % vs LY",
+      askCard(2, "Units % vs LY",
         '<div class="np-ask4-chips">' + floorChips + "</div>",
-        "Learnt per selected category, holiday and non-holiday. The optimizer already lands on the optimal number — there is no floor for you to set.") +
+        "The optimized plan's units change vs last year for the selected category. The optimizer already lands on the optimal number — nothing for you to set.") +
       askCard(3, "Complex promotions",
         '<div class="np-ask4-seg" id="npAskComplex"><button type="button" data-yn="yes" class="' + (c3Asks.complex ? "is-on" : "") + '">Yes</button><button type="button" data-yn="no" class="' + (!c3Asks.complex ? "is-on" : "") + '">No</button></div>',
         "No = single-mechanic offers only. Digital caps still flex weekly with seasonality, so the forecast holds either way.") +

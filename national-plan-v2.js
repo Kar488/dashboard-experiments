@@ -154,7 +154,8 @@
     if (includePlan === undefined) includePlan = true;   // the week-by-week view drops the swipe-up 52-week toggle
     const pill = (label, active, attr) => '<button type="button" class="npv2-sort-pill' + (active ? " is-active" : "") + '" ' + attr + ">" + label + "</button>";
     const sortPills = [["sales", "Sales"], ["units", "Units"], ["agp", "AGP"]].map(([m, l]) => pill(l, ff.sortBy === m, 'data-sortby="' + m + '"')).join("");
-    const binPills = ["all", "1", "2", "3", "4", "5"].map((b) => pill(b === "all" ? "All" : b, (ff.bin || "all") === b, 'data-bin="' + b + '"')).join("");
+    const binsPresent = [...new Set((NP.cat().items || []).map((o) => o.bin).filter((b) => b != null))].sort();
+    const binPills = ["all"].concat(binsPresent.map(String)).map((b) => pill(b === "all" ? "All" : b, (ff.bin || "all") === b, 'data-bin="' + b + '"')).join("");
     const planOn = !!NP.state.v2plan;
     const planPills = pill("Off", !planOn, 'data-planview="0"') + pill("On", planOn, 'data-planview="1"');
     return '<span class="npv2-sort"><span class="npv2-sort-l">Sort by</span><span class="npv2-pillgroup">' + sortPills + "</span></span>" +
@@ -189,7 +190,7 @@
   function inputsOn() { return NP.state.v2inputs !== false; }
   function idCell(o, res, ly, eDraft) {
     return '<th class="npv2-fg-id"><div class="npv2-fg-idin">' +
-      '<div class="npv2-fg-name"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + '</span><span class="np-rc-id npv2-fg-base">Base ' + NP.fmt.price(o.basePrice) + "</span></div>" +
+      '<div class="npv2-fg-name"><b>' + esc(o.item) + " " + esc(o.pack) + '</b><span class="np-rc-id">' + esc(String(o.ncrc).replace(/^NCRC\s*/i, "")) + '</span><span class="np-rc-id npv2-fg-base">Base ' + NP.fmt.price(o.basePrice) + "</span></div>" +
       grpBody("out", OUTCOLS.map((c) => outCellHTML(c, res, ly)).join("")) +
       (inputsOn()
         ? grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
@@ -417,7 +418,12 @@
     const collapsed = !stratExpanded, others = strategies.length - 1;
     const disclosure = '<button type="button" class="npv2-strat-more" id="npV2StratMore" aria-expanded="' + (!collapsed) + '">' +
       (collapsed ? "Other scenarios (" + others + ")" : "Hide other scenarios") + "</button>";
-    return '<div class="npv2-strat-row' + (collapsed ? " is-collapsed" : "") + '" id="npV2Strats">' + allCards + disclosure + '</div><div class="npv2-rule"></div>';
+    // COLLAPSED (default) = the condensed one-line header (same as step 4) for the active
+    // scenario + a quiet disclosure. EXPANDED = the full tall cards for all scenarios.
+    if (collapsed) {
+      return '<div class="npv2-strat-row is-condensed" id="npV2Strats">' + wkStratBarHTML() + disclosure + '</div><div class="npv2-rule"></div>';
+    }
+    return '<div class="npv2-strat-row" id="npV2Strats">' + allCards + disclosure + '</div><div class="npv2-rule"></div>';
   }
   // heatmap legend — same gentle colours as the ribbon
   function legendHTML() {
@@ -590,7 +596,7 @@
         "</div>" +
         // row 3 — filters (left) · sort (right)
         '<div class="npv2-fg-trow">' +
-          '<div class="npv2-fg-gl">' + sel("Category", "npV2FgCat", cats, ff.cat, "All selected categories") + sel("Vendor", "npV2FgVendor", vendors, ff.vendor) + sel("ROG", "npV2FgRog", rogs, ff.rog) + sel("Class", "npV2FgClass", clusters, ff.cls) + sel("Sub-class", "npV2FgSub", subs, ff.sub, "All sub-classes") + "</div>" +
+          '<div class="npv2-fg-gl">' + sel("Category", "npV2FgCat", cats, ff.cat, "All selected categories") + sel("Vendor", "npV2FgVendor", vendors, ff.vendor) + sel("ROG", "npV2FgRog", rogs, ff.rog) + sel("Class", "npV2FgClass", clusters, ff.cls, "All classes") + sel("Sub-class", "npV2FgSub", subs, ff.sub, "All sub-classes") + "</div>" +
           '<div class="npv2-fg-gr">' + sortControlsHTML() + "</div>" +
         "</div>" +
         '<div class="npv2-fg-dirty" id="npV2Dirty" hidden><span>You have unsaved edits.</span><button type="button" class="npv2-fg-dlink" id="npV2RerunB">Rerun forecast to see the impact →</button><button type="button" class="npv2-fg-dlink npv2-fg-dmut" id="npV2Discard">Discard edits</button></div>' +
@@ -606,12 +612,9 @@
     front.querySelectorAll("[data-strat]").forEach((b) => (b.onclick = () => { NP.state.cf.strategy = b.dataset.strat; renderFront(); }));
     const moreBtn = front.querySelector("#npV2StratMore"), stratRow = front.querySelector("#npV2Strats");
     if (moreBtn && stratRow) moreBtn.onclick = () => {
-      // toggle in place — no renderFront, so the page/grid don't shift
+      // condensed header ↔ full cards swap different markup, so re-render the step
       stratExpanded = !stratExpanded;
-      stratRow.classList.toggle("is-collapsed", !stratExpanded);
-      const others = stratRow.querySelectorAll(".npv2-strat").length - 1;
-      moreBtn.textContent = stratExpanded ? "Hide other scenarios" : "Other scenarios (" + others + ")";
-      moreBtn.setAttribute("aria-expanded", String(stratExpanded));
+      renderFront();
     };
     const kts = front.querySelector("#npV2FgCat"); if (kts) kts.onchange = () => { ff.cat = kts.value; renderFront(); };
     const vs = front.querySelector("#npV2FgVendor"); vs.onchange = () => { ff.vendor = vs.value; renderFront(); };
@@ -876,7 +879,7 @@
       weeks.forEach((w) => { rS += s.sales[w]; rU += s.units[w]; rA += s.agp[w]; lS += s.lySales[w]; lU += s.lyUnits[w]; lA += s.lyAgp[w]; if (wk[w].promoted) nP++; });
       const cells = weeks.map((w) => monthCell(o, s, wk, w, noAlw)).join("");
       const roll = '<td class="npv2-mg-rollcell"><div class="npv2-mc">' + miniTable({ s: rS, u: rU, a: rA }, { s: lS, u: lU, a: lA }) + '<div class="npv2-mg-rollp">' + nP + " / " + weeks.length + " wks on promo</div></div></td>";
-      const idh = '<th class="npv2-mg-ncrc"><b>' + esc(o.item) + '</b><span class="np-rc-size">' + esc(o.pack) + '</span><span class="np-rc-id">' + o.ncrc + "</span>" +
+      const idh = '<th class="npv2-mg-ncrc"><b>' + esc(o.item) + " " + esc(o.pack) + '</b><span class="np-rc-id">' + esc(String(o.ncrc).replace(/^NCRC\s*/i, "")) + "</span>" +
         '<div class="npv2-mg-vlc"><span>VLC <b>' + NP.fmt.price(e.vlc) + '</b></span><span>Base <b>' + NP.fmt.price(o.basePrice) + "</b></span></div></th>";
       rows += "<tr>" + idh + cells + roll + "</tr>";
     });
@@ -937,7 +940,7 @@
   function scoreTone(s) { return s >= 80 ? "np-pos" : s >= 62 ? "" : "np-neg"; }
 
   // step-5 interaction state (kept in-session, like the original promo builder)
-  const WKST = { expanded: {}, chosen: {}, custom: {}, selPa: null, tab: "cost", override: false, oform: null, manualEditPa: null, manualEditForm: null, review: false, reviewExpanded: {}, finalized: null };
+  const WKST = { expanded: {}, chosen: {}, custom: {}, selPa: null, tab: "cost", override: false, oform: null, manualEditPa: null, manualEditForm: null, review: false, reviewExpanded: {}, finalized: null, defaultOpen: true };
   const WKCART = {};                                 // key `${uid}:${week}` -> committed NCRC plan
   function paKey(o, week, pa) { return o.uid + ":" + week + ":" + pa; }
   function cartKey(o, week) { return o.uid + ":" + week; }
@@ -1209,6 +1212,8 @@
         '<div class="pd-manual-default-actions"><button type="button" class="pd-btn-secondary" data-ovcancel>Cancel</button><button type="button" class="pd-btn-primary" data-ovsave>Save override</button></div>' +
       "</div></div>";
   }
+  // Corporate Item Group id — a stable 9-digit system id per item (no NCRCs in override mode).
+  function cigId(o) { const h = Math.abs(NP.util.hashStr(o.uid + "|cig")); return "CIG " + (100000000 + (h % 900000000)); }
   function overrideHTML(o, week) {
     const pds = paData(o, week), f = WKST.oform || (WKST.oform = freshPromoForm());
     const customCount = pds.filter((pd) => WKST.custom[paKey(o, week, pd.pa)]).length;
@@ -1226,17 +1231,17 @@
         "<td>" + status + '</td><td class="r pd-manual-actions">' + actions + "</td></tr>";
     }).join("");
     return '<section class="pd-section pd-manual">' +
-      '<div class="pd-manual-topbar"><div><h3>Override recommendation</h3><p>Build a custom promo across every price area, or override individual price areas below.</p></div>' +
+      '<div class="pd-manual-topbar"><div><h3>Override recommendation</h3><p><strong>' + esc(o.item) + "</strong> · " + cigId(o) + " · " + esc(o.vendor) + " — build a custom promo across every price area, or override individual price areas below.</p></div>" +
         '<button type="button" class="pd-override-flip" data-ovback>← Back to recommendations</button></div>' +
-      '<div class="pd-manual-default"><div class="pd-manual-default-head"><div class="pd-md-title"><span class="pd-md-badge">DEFAULT</span><strong>Promo tactic — applies to all ' + pds.length + " price area" + (pds.length === 1 ? "" : "s") + "</strong><p>Set once here. Every price area inherits this unless you override it below.</p></div>" +
-        '<span class="pd-md-count">' + customCount + " of " + pds.length + " price areas customised</span></div>" +
-        '<div class="pd-manual-fields">' + promoSystemsPairHTML(f, "data-of") +
+      '<div class="pd-manual-default' + (WKST.defaultOpen ? "" : " is-collapsed") + '"><div class="pd-manual-default-head" data-oftoggle role="button" tabindex="0" aria-expanded="' + (WKST.defaultOpen ? "true" : "false") + '"><div class="pd-md-title"><span class="pd-md-badge">DEFAULT</span><strong>Promo tactic — applies to all ' + pds.length + " price area" + (pds.length === 1 ? "" : "s") + "</strong><p>Set once here. Every price area inherits this unless you override it below.</p></div>" +
+        '<span class="pd-md-count">' + customCount + " of " + pds.length + ' price areas customised</span><span class="pd-md-caret" aria-hidden="true">' + (WKST.defaultOpen ? "▾" : "▸") + "</span></div>" +
+        (WKST.defaultOpen ? '<div class="pd-manual-fields">' + promoSystemsPairHTML(f, "data-of") +
           '<div class="pd-manual-default-actions"><button type="button" class="pd-btn-secondary" data-ovresetall' + (customCount ? "" : " disabled") + ">Reset all exceptions</button><button type=\"button\" class=\"pd-btn-primary\" data-ovapply>Apply &amp; forecast</button></div>" +
-        "</div></div>" +
+        "</div>" : "") + "</div>" +
       '<p class="pd-override-disclaimer"><strong>Override mode.</strong> Results are not optimised by the recommender. Linked items in store may be impacted. No guardrail or reliability scores will be shown.</p>' +
       (editPa ? editPanelHTML(editPa) : "") +
       '<p class="pd-manual-cascade">↳ Changes to the default cascade to every <b>Inherits default</b> row automatically. Customised rows keep their own values.</p>' +
-      '<div class="pd-section-head pd-rec-head"><div><h3>Price areas</h3><p>One row per price area for ' + esc(o.ncrc) + ". Override a row to break from the default; reset to snap it back.</p></div></div>" +
+      '<div class="pd-section-head pd-rec-head"><div><h3>Price areas</h3><p>One row per price area for ' + cigId(o) + ". Override a row to break from the default; reset to snap it back.</p></div></div>" +
       '<div class="pd-pa-table-wrap"><table class="pd-pa-cols-table pd-manual-table"><thead><tr><th>PA</th><th>APEX promo</th><th>OMS promo</th><th>Status</th><th class="r"></th></tr></thead><tbody>' + rows + "</tbody>" +
       '<tfoot><tr class="pd-pa-totals-row"><td class="pa-col"><strong>Total</strong><span class="pd-totals-sub">' + pds.length + " price areas · " + customCount + ' customised</span></td><td></td><td></td><td></td><td class="r"></td></tr></tfoot></table></div>' +
       "</section>";
@@ -1245,18 +1250,30 @@
   // --- worklist rail (basket of completed promos) ---
   function worklistHTML(items, active, week) {
     const done = items.filter((x) => WKCART[cartKey(x, week)]).length;
-    let html = '<div class="npv2-wk-wlhead"><h4>Worklist</h4><span class="npv2-wk-wlsub">' + esc(weekLabel(week)) + " · " + done + " of " + items.length + " added</span></div>";
-    let lastV = null, n = 0;
-    items.forEach((o) => {
-      if (o.vendor !== lastV) { lastV = o.vendor; html += '<div class="npv2-wk-wlvendor">' + esc(o.vendor) + "</div>"; }
-      n++;
-      const inCart = !!WKCART[cartKey(o, week)];
-      const c = NP.weekPlan(o, NP.displayMap(), false)[week - 1];
-      const rec = inCart ? "✓ Added — " + WKCART[cartKey(o, week)].offer : (c && c.promoted && c.offer ? "Rec: " + c.offer.label : "No promo rec");
-      html += '<button type="button" class="npv2-wk-wlitem' + (o.uid === active ? " is-active" : "") + (inCart ? " is-done" : "") + '" data-wl="' + o.uid + '">' +
-        '<span class="npv2-wk-wlnum">' + (inCart ? "✓" : n) + "</span>" +
-        '<span class="npv2-wk-wlbody"><span class="npv2-wk-wlcode">' + esc(o.ncrc) + '</span><span class="npv2-wk-wlname">' + esc(o.item) + " <i>" + esc(o.pack) + '</i></span><span class="npv2-wk-wlrec">' + esc(rec) + "</span></span></button>";
+    const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+    // group by vendor so each header can carry its own count (matches the original rail)
+    const byV = {}, order = [];
+    items.forEach((o) => { if (!byV[o.vendor]) { byV[o.vendor] = []; order.push(o.vendor); } byV[o.vendor].push(o); });
+    // pinned header (title/progress/context) — stays put while only the item list scrolls
+    let html = '<div class="npv2-wk-wlhead"><h4>Worklist</h4><span class="npv2-wk-wlprog">' + done + ' <small>of ' + items.length + " added</small></span></div>" +
+      '<div class="npv2-wk-wlbar" aria-hidden="true"><span style="width:' + pct + '%"></span></div>' +
+      '<p class="npv2-wk-wlsub">' + esc(weekLabel(week)) + " · " + items.length + " NCRCs in view</p>";
+    // scrollable item list (its own scroll area, no visible scrollbar)
+    html += '<div class="npv2-wk-wlscroll">';
+    order.forEach((v) => {
+      html += '<div class="npv2-wk-wlvendor">' + esc(v) + "<span>" + byV[v].length + "</span></div>";
+      byV[v].forEach((o) => {
+        const n = items.indexOf(o) + 1;
+        const inCart = !!WKCART[cartKey(o, week)];
+        const c = NP.weekPlan(o, NP.displayMap(), false)[week - 1];
+        const rec = inCart ? "✓ Added — " + WKCART[cartKey(o, week)].offer : (c && c.promoted && c.offer ? "Rec: " + c.offer.label : "No promo rec");
+        html += '<button type="button" class="npv2-wk-wlitem' + (o.uid === active ? " is-active" : "") + (inCart ? " is-done" : "") + '" data-wl="' + o.uid + '">' +
+          '<span class="npv2-wk-wlnum">' + (inCart ? "✓" : n) + "</span>" +
+          '<span class="npv2-wk-wlbody"><span class="npv2-wk-wlcode">' + esc(o.ncrc) + '</span><span class="npv2-wk-wlname">' + esc(o.item) + " <i>" + esc(o.pack) + '</i></span><span class="npv2-wk-wlrec">' + esc(rec) + "</span></span></button>";
+      });
     });
+    html += "</div>";
+    // pinned basket footer
     const cart = Object.keys(WKCART).map((k) => WKCART[k]);
     html += '<div class="npv2-wk-cart"><div class="npv2-wk-carthead">Basket (' + cart.length + ") · not published yet</div>" +
       (cart.length ? cart.slice(-6).map((c) => '<div class="npv2-wk-cartrow"><span>' + esc(c.ncrc) + " · W" + c.week + '</span><b>' + esc(c.offer) + "</b></div>").join("") : '<div class="npv2-wk-cartempty">Basket is empty. Add selections as you go; nothing publishes until you finalize.</div>') + "</div>";
@@ -1406,11 +1423,11 @@
     const baseTotalsRow = (rows, tot) => '<tr class="pd-review-totals pd-review-section-totals"><td colspan="13"><strong>Section total · ' + rows.length + " " + (rows.length === 1 ? "item" : "items") + '</strong></td><td class="r"><strong>' + money(tot.sales) + '</strong></td><td class="r"><strong>' + unitsF(tot.units) + '</strong></td><td class="r"><strong>' + money(tot.agp) + '</strong></td><td class="r">—</td><td class="pd-rev-na-cell"><span class="pd-rev-na">—</span></td><td class="pd-rev-na-cell"><span class="pd-rev-na">—</span></td><td class="c pd-rev-more-col"></td></tr>';
     const gcard = (label, val, sp, sk2, un2) => '<article class="pd-grand-metric"><span class="pd-grand-label">' + label + '</span><strong class="pd-grand-value">' + val + '</strong><div class="pd-grand-split"><span><em>Promoted</em> ' + sp + "</span><span><em>Skipped</em> " + sk2 + "</span><span><em>No offer</em> " + un2 + "</span></div></article>";
     return '<div class="pd-review">' +
-      '<header class="pd-review-head"><div><span class="pd-eyebrow">REVIEW &amp; FINALISE</span><h2>' + esc(category) + '</h2>' +
-        '<div class="pd-review-meta"><span><em>Week</em> <strong>W' + week + '</strong></span><span class="dot">·</span><span><em>Objective</em> <strong>' + objective + '</strong></span><span class="dot">·</span><span><em>Division</em> <strong>' + esc(NP.divMeta().short) + '</strong></span></div></div>' +
+      '<header class="pd-review-head"><div class="pd-review-head-l"><span class="pd-eyebrow">REVIEW &amp; FINALISE</span><h2>' + esc(category) + '</h2>' +
+        '<div class="pd-review-meta"><span><em>Week</em> <strong>W' + week + '</strong></span><span class="dot">·</span><span><em>Objective</em> <strong>' + objective + '</strong></span><span class="dot">·</span><span><em>Division</em> <strong>' + esc(NP.divMeta().short) + "</strong></span></div>" +
+        // plan totals live in the header (no separate summary section)
+        '<div class="npv2-rev-totals"><span><em>Sales</em><b>' + money(grand.sales) + "</b></span><span><em>Units</em><b>" + unitsF(grand.units) + "</b></span><span><em>AGP</em><b>" + money(grand.agp) + "</b></span></div></div>" +
         '<div class="pd-review-counts"><span class="pd-review-count priced">' + pm.length + ' promoted</span><span class="pd-review-count skipped">' + sk.length + ' skipped</span><span class="pd-review-count unavailable">' + un.length + ' no promo available</span></div></header>' +
-      '<section class="pd-review-grand"><div class="pd-review-grand-head"><span class="pd-eyebrow">Plan summary · all sections</span></div>' +
-        '<div class="pd-review-grand-grid">' + gcard("Sales", money(grand.sales), money(s1.sales), money(s2.sales), money(s3.sales)) + gcard("Units", unitsF(grand.units), unitsF(s1.units), unitsF(s2.units), unitsF(s3.units)) + gcard("AGP $", money(grand.agp), money(s1.agp), money(s2.agp), money(s3.agp)) + "</div></section>" +
       '<div class="pd-review-table-wrap pd-review-table-wrap-unified"><table class="pd-review-table pd-review-table-unified"><thead><tr>' +
         '<th class="pd-rev-priced">Priced</th><th class="l">Vendor</th><th class="l">NCRC</th><th class="l">NCRC description</th><th class="c">In circ.</th><th class="l">Ad page</th><th class="c">In disp.</th><th class="l">Display</th><th class="r">Stores</th><th class="c">NOPA</th><th class="l">Store tactic</th><th class="l">Digital tactic</th><th class="r">VLC</th><th class="r">Sales</th><th class="r">Units</th><th class="r">AGP $</th><th class="r">AIV</th><th class="r">Allow. $</th><th class="r">Promo GP</th><th class="c pd-rev-more-col"></th>' +
         "</tr></thead>" +
@@ -1429,8 +1446,9 @@
     const cfV = window.NPViews; if (!cfV || !cfV.cfStrategies) return "";
     const cur = NP.state.cf.strategy || "optimized", ly = lyTotals(), strategies = cfV.cfStrategies();
     const s = strategies.find((x) => x.id === cur) || strategies[0], t = cfV.cfTotals(s.id);
-    // One compact line: name · primary (Sales/Units/AGP) | pipe | secondary (AIV/List/Funding/Spend).
-    const met = (lab, cv, lv, money) => { const f = money ? km : NP.fmt.u, d = lv ? (cv - lv) / lv : 0, dd = cv - lv; return '<div class="npv2-hb-m"><span class="npv2-hb-l">' + lab + '</span><span class="npv2-hb-data"><b class="npv2-hb-v">' + f(cv) + '</b><span class="npv2-hb-d ' + (d >= 0 ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(d) + " · " + (dd >= 0 ? "+" : "") + f(dd) + "</span></span></div>"; };
+    // PRIMARY uses step-3's exact strat-card classes → identical font sizes/weights/background.
+    const met = (lab, cv, lv, money) => { const f = money ? km : NP.fmt.u, d = lv ? (cv - lv) / lv : 0, dd = cv - lv; return '<div class="npv2-strat-m"><span class="npv2-strat-ml">' + lab + '</span><span class="npv2-strat-mv">' + f(cv) + '</span><span class="npv2-strat-md ' + (d >= 0 ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(d) + " · " + (dd >= 0 ? "+" : "") + f(dd) + "</span></div>"; };
+    // SECONDARY = smaller focus (own classes).
     const met2 = (lab, cvS, lvS, dcls, dtxt) => '<div class="npv2-hb-m npv2-hb-m2"><span class="npv2-hb-l">' + lab + '</span><span class="npv2-hb-data"><b class="npv2-hb-v2">' + cvS + '</b><span class="npv2-hb-ly">LY ' + lvS + '</span><span class="npv2-hb-d ' + dcls + '">' + dtxt + "</span></span></div>";
     const pc = (() => { let u = 0, listS = 0, fundS = 0; const map = NP.displayMap(); NP.cat().items.forEach((o) => { const res = NP.resultFor(o, map), e = NP.effective(o, map); u += res.units; listS += e.vlc * res.units; fundS += (e.vlc - e.deadNet) * res.units; }); return { listU: u ? listS / u : 0, fundU: u ? fundS / u : 0, fundM: fundS / 1000 }; })();
     const aiv = t.units ? (t.revenueM * 1000) / t.units : 0, lyAiv = ly.u ? (ly.r * 1000) / ly.u : 0, aivD = lyAiv ? (aiv - lyAiv) / lyAiv : 0;
@@ -1438,8 +1456,10 @@
     const lyFundU = pc.fundU * 0.94, fundD = lyFundU ? (pc.fundU - lyFundU) / lyFundU : 0;
     const rate = t.revenueM ? pc.fundM / t.revenueM : 0, lyRate = ly.r ? (pc.fundM * 0.94) / ly.r : 0, ppd = (rate - lyRate) * 100;
     return '<div class="npv2-hb">' +
-      '<div class="npv2-hb-id"><span class="npv2-hb-name">' + esc(s.name) + "</span>" + (s.tag ? '<span class="npv2-hb-rec">' + esc(s.tag) + "</span>" : "") + "</div>" +
-      '<div class="npv2-hb-grp">' + met("Sales", t.revenueM, ly.r, true) + met("Units", t.units, ly.u, false) + met("AGP", t.agpM, ly.a, true) + "</div>" +
+      '<div class="npv2-strat is-active npv2-hb-card">' +
+        '<span class="npv2-strat-name">' + esc(s.name) + (s.tag ? ' <em>' + esc(s.tag) + "</em>" : "") + "</span>" +
+        '<div class="npv2-strat-grid">' + met("Sales", t.revenueM, ly.r, true) + met("Units", t.units, ly.u, false) + met("AGP", t.agpM, ly.a, true) + "</div>" +
+      "</div>" +
       '<div class="npv2-hb-pipe"></div>' +
       '<div class="npv2-hb-grp npv2-hb-grp2">' + met2("AIV", "$" + aiv.toFixed(2), "$" + lyAiv.toFixed(2), aivD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(aivD)) + met2("List $/u", "$" + pc.listU.toFixed(2), "$" + lyListU.toFixed(2), listD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(listD)) + met2("Funding $/u", "$" + pc.fundU.toFixed(2), "$" + lyFundU.toFixed(2), fundD >= 0 ? "np-pos" : "np-neg", NP.fmt.pct(fundD)) + met2("Spend rate", (rate * 100).toFixed(1) + "%", (lyRate * 100).toFixed(1) + "%", ppd >= 0 ? "np-pos" : "np-neg", (ppd >= 0 ? "+" : "") + ppd.toFixed(1) + "pp") + "</div>" +
       "</div>";
@@ -1457,14 +1477,14 @@
     const weekFilter = '<label class="npv2-fg-filter npv2-wk-weekfilter">Week ' +
       '<span class="npv2-wk-wkctl"><button type="button" class="npv2-wk-wknav" data-wkstep="-1"' + (WEEKSEL.week <= FIRST_PLAN_WEEK ? " disabled" : "") + ">‹</button>" +
       '<select id="npV2WkSel">' + weekOpts + "</select>" +
-      '<button type="button" class="npv2-wk-wknav" data-wkstep="1"' + (WEEKSEL.week >= 52 ? " disabled" : "") + "›</button></span></label>";
+      '<button type="button" class="npv2-wk-wknav" data-wkstep="1"' + (WEEKSEL.week >= 52 ? " disabled" : "") + ">›</button></span></label>";
     // inline flex-nowrap + horizontal scroll is forced here so the filter row can never
     // wrap into extra lines that float over the content (belt-and-suspenders vs CSS specificity).
     return '<div class="npv2-fg-tools npv2-wk-tools">' +
       wkStratBarHTML() +
-      '<div class="npv2-fg-trow" style="display:flex!important;flex-wrap:nowrap!important;align-items:center;gap:12px;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;">' +
-        '<div class="npv2-fg-gl" style="display:flex!important;flex-wrap:nowrap!important;flex:0 0 auto!important;gap:10px;align-items:center;">' + weekFilter + sel("Category", "npV2FgCat", cats, ff.cat, "All selected categories") + sel("Vendor", "npV2FgVendor", vendors, ff.vendor) + sel("ROG", "npV2FgRog", rogs, ff.rog) + sel("Class", "npV2FgClass", clusters, ff.cls) + sel("Sub-class", "npV2FgSub", subs, ff.sub, "All sub-classes") + "</div>" +
-        '<div class="npv2-fg-gr" style="display:flex!important;flex-wrap:nowrap!important;flex:0 0 auto!important;gap:10px;align-items:center;margin-left:auto;">' + sortControlsHTML(false) + "</div>" +
+      '<div class="npv2-fg-trow" style="display:flex!important;flex-wrap:wrap;align-items:center;gap:8px 10px;padding-bottom:2px;">' +
+        '<div class="npv2-fg-gl" style="display:flex!important;flex-wrap:nowrap!important;flex:0 1 auto!important;gap:8px;align-items:center;">' + weekFilter + sel("Category", "npV2FgCat", cats, ff.cat, "All categories") + sel("Vendor", "npV2FgVendor", vendors, ff.vendor) + sel("ROG", "npV2FgRog", rogs, ff.rog) + sel("Class", "npV2FgClass", clusters, ff.cls, "All classes") + sel("Sub-class", "npV2FgSub", subs, ff.sub, "All sub-classes") + "</div>" +
+        '<div class="npv2-fg-gr" style="display:flex!important;flex-wrap:nowrap!important;flex:0 0 auto!important;gap:8px;align-items:center;margin-left:auto;">' + sortControlsHTML(false) + "</div>" +
       "</div>" +
       '<div class="npv2-rule"></div>' +
       "</div>";
@@ -1518,7 +1538,7 @@
     // click a PA summary row → focus it in the side panel
     front.querySelectorAll(".npv2-wk-parow[data-pa]").forEach((tr) => (tr.onclick = (e) => { if (e.target.closest("[data-toggle]")) return; WKST.selPa = tr.dataset.pa; renderWeekView(); }));
     // open the Override recommendation builder (full-screen), jumping to the clicked PA
-    front.querySelectorAll("[data-override]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.override; const cust = WKST.custom[paKey(o, week, pa)]; WKST.oform = WKST.oform || freshPromoForm(); WKST.override = true; WKST.manualEditPa = pa; WKST.manualEditForm = (cust && cust._form) ? Object.assign({}, cust._form) : Object.assign({}, WKST.oform); renderWeekView(); }));
+    front.querySelectorAll("[data-override]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.override; const cust = WKST.custom[paKey(o, week, pa)]; WKST.oform = WKST.oform || freshPromoForm(); WKST.override = true; WKST.manualEditPa = pa; WKST.defaultOpen = false; WKST.manualEditForm = (cust && cust._form) ? Object.assign({}, cust._form) : Object.assign({}, WKST.oform); renderWeekView(); }));
     front.querySelectorAll("[data-ovclear]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovclear; delete WKST.custom[paKey(o, week, pa)]; if (WKST.chosen[paKey(o, week, pa)] === "custom-" + pa) delete WKST.chosen[paKey(o, week, pa)]; renderWeekView(); }));
     // side-panel tabs
     front.querySelectorAll("[data-ptab]").forEach((b) => (b.onclick = () => { WKST.tab = b.dataset.ptab; renderWeekView(); }));
@@ -1530,6 +1550,8 @@
 
   function bindOverride(front, o, week, items) {
     const back = front.querySelector("[data-ovback]"); if (back) back.onclick = () => { WKST.override = false; WKST.manualEditPa = null; WKST.manualEditForm = null; renderWeekView(); };
+    // collapse / expand the DEFAULT (all-price-areas) section
+    const defToggle = front.querySelector("[data-oftoggle]"); if (defToggle) defToggle.onclick = () => { WKST.defaultOpen = !WKST.defaultOpen; renderWeekView(); };
     // live-bind a form's fields (default card → WKST.oform; edit panel → WKST.manualEditForm)
     const bindForm = (attr, get) => front.querySelectorAll("[" + attr + "]").forEach((el) => {
       const key = el.getAttribute(attr);
