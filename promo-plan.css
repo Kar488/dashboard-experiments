@@ -6864,3 +6864,407 @@ body[data-theme="dark"] .pd-review-grand {
 body[data-theme="dark"] .pd-grand-metric { background: rgba(58, 110, 196, 0.08); border-color: #2c3a52; }
 body[data-theme="dark"] .pd-grand-value { color: #e4ecf6; }
 body[data-theme="dark"] .pd-grand-split { color: #cbd5e1; border-top-color: #2c3a52; }
+
+/* ============================================================
+   Manual override flow — plan-mode toggle, builder, review
+   ============================================================ */
+
+/* Plan-mode toggle (System recommended | Manual override) */
+.pd-planmode-row { display: flex; align-items: center; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
+.pd-planmode { display: inline-flex; background: var(--soft); border: 1px solid var(--line-strong); border-radius: 9px; padding: 3px; gap: 2px; }
+.pd-planmode button { border: 0; background: transparent; font: inherit; font-size: 0.76rem; font-weight: 600; color: var(--muted); padding: 7px 15px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.pd-planmode button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
+.pd-planmode-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.pd-planmode button.active .pd-planmode-dot { background: var(--blue); }
+.pd-planmode-note { font-size: 0.68rem; color: var(--faint); flex: 1 1 240px; }
+body[data-theme="dark"] .pd-planmode button.active { background: #1b2740; color: #e4ecf6; }
+
+/* Builder takes the full width when the side rail is hidden */
+.pd-layout-manual .pd-main { width: 100%; }
+
+/* Default tactic card */
+.pd-manual-default { border: 1px solid #d9e6ff; background: linear-gradient(180deg, #f5f9ff, #fbfdff); border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(23, 105, 232, 0.06); }
+.pd-manual-default-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+.pd-md-title { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.pd-md-title strong { font-size: 0.9rem; font-weight: 700; color: var(--ink); }
+.pd-md-title p { flex-basis: 100%; margin: 3px 0 0; font-size: 0.7rem; color: var(--muted); }
+.pd-md-badge { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; color: #fff; background: var(--blue); border-radius: 20px; padding: 3px 9px; }
+.pd-md-count { font-size: 0.66rem; font-weight: 600; color: var(--blue); background: #eef4ff; border: 1px solid #cfe0ff; border-radius: 20px; padding: 4px 11px; white-space: nowrap; }
+.pd-manual-fields { display: block; }
+.pd-manual-fields .pd-promosys-fields { width: 100%; }
+.pd-manual-default-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.pd-of-field-sm { min-width: 0; }
+.pd-manual-default-actions { margin-left: auto; display: flex; gap: 8px; align-items: flex-end; }
+.pd-manual-cascade { display: flex; align-items: center; gap: 7px; margin: 14px 2px 18px; font-size: 0.68rem; color: var(--muted); }
+.pd-manual-cascade b { color: var(--ink); }
+body[data-theme="dark"] .pd-manual-default { background: rgba(58, 110, 196, 0.08); border-color: #2c3a52; }
+
+/* Status badges + per-PA rows in the manual table */
+.pd-status-badge { display: inline-flex; align-items: center; font-size: 0.6rem; font-weight: 700; border-radius: 20px; padding: 3px 9px; }
+.pd-status-inherit { color: #8794a8; background: #f1f4f9; border: 1px solid #e4e9f1; }
+.pd-status-custom { color: #fff; background: var(--blue); }
+.pd-manual-table tbody tr.is-inherit td { color: #94a2b6; }
+.pd-manual-table tbody tr.is-inherit td.pa-col strong { color: var(--ink); }
+.pd-manual-table tbody tr.is-custom { background: #fbfdff; }
+.pd-manual-table tbody tr.is-custom td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.pd-manual-table tbody tr.is-custom td { color: var(--ink); }
+.pd-manual-actions { white-space: nowrap; }
+.pd-manual-actions .pd-override-link { margin-left: 10px; }
+body[data-theme="dark"] .pd-status-inherit { color: #9aa8ba; background: #1b2740; border-color: #2c3a52; }
+body[data-theme="dark"] .pd-manual-table tbody tr.is-custom { background: rgba(58, 110, 196, 0.06); }
+
+/* Override form — Apply-to scope control */
+.pd-override-scope { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.pd-of-label { font-size: 0.6rem; letter-spacing: 0.07em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
+.pd-override-scope-seg.pd-segmented { display: inline-flex; }
+.pd-override-scope-pa { border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 0.76rem; background: #fff; color: var(--ink); }
+.pd-override-scope-hint { font-size: 0.68rem; color: var(--muted); }
+
+/* Review screen — manual carry-through */
+.pd-review-manual-badge { display: inline-flex; align-items: center; gap: 7px; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: #fff; background: var(--blue); border-radius: 20px; padding: 5px 12px; }
+.pd-review-manual-badge i { width: 7px; height: 7px; border-radius: 50%; background: #bcd4ff; }
+.pd-review-manual-note { background: #fff8ec; border: 1px dashed #e6c882; border-radius: 9px; padding: 9px 13px; font-size: 0.72rem; color: #8a6d2f; margin: 4px 0 14px; }
+.pd-review-manual-note strong { color: #6f5622; }
+body[data-theme="dark"] .pd-review-manual-note { background: rgba(230, 200, 130, 0.1); border-color: #6f5622; color: #e6c882; }
+
+/* Ad/tag More details — default + exceptions */
+.pd-rev-scope { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
+.pd-rev-scope-t { font-size: 0.74rem; font-weight: 700; color: var(--ink); }
+.pd-rev-scope-applies { font-size: 0.68rem; color: var(--muted); }
+.pd-rev-scope-applies b { color: var(--ink); }
+.pd-rev-scope-hint { font-size: 0.66rem; color: var(--faint); }
+.pd-rev-add-exc { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.pd-rev-add-exc select { border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 9px; font: inherit; font-size: 0.72rem; background: #fff; color: var(--ink); }
+.pd-btn-addexc { border: 1px dashed var(--blue); background: #eef4ff; color: var(--blue); font: inherit; font-weight: 600; font-size: 0.68rem; padding: 7px 13px; border-radius: 8px; cursor: pointer; }
+.pd-btn-addexc:hover { background: #e2edff; }
+body[data-theme="dark"] .pd-btn-addexc { background: rgba(58, 110, 196, 0.12); }
+
+.pd-rev-exceptions { margin-top: 14px; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.pd-rev-exceptions-head { display: flex; align-items: center; gap: 8px; padding: 9px 13px; background: var(--soft); border-bottom: 1px solid var(--line); font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.pd-rev-exc-n { background: var(--blue); color: #fff; border-radius: 20px; padding: 1px 8px; font-size: 0.62rem; }
+.pd-rev-exc-row { padding: 11px 13px; border-bottom: 1px solid var(--line); }
+.pd-rev-exc-row:last-child { border-bottom: 0; }
+.pd-rev-exc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; }
+.pd-rev-exc-pa { font-weight: 700; font-size: 0.76rem; box-shadow: inset 3px 0 0 var(--blue); padding-left: 9px; }
+.pd-rev-exc-remove { margin-left: auto; font-size: 0.66rem; font-weight: 600; color: #c0392b; }
+.pd-rev-exc-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+body[data-theme="dark"] .pd-rev-exceptions { background: #131d30; border-color: #2c3a52; }
+body[data-theme="dark"] .pd-rev-exceptions-head { background: #1b2740; }
+
+/* Manual builder — inline per-PA edit row */
+.pd-manual-row-editing td { background: #eef4ff; }
+.pd-manual-row-editing td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.pd-manual-edit-input { border: 1px solid var(--blue); border-radius: 6px; background: #fff; padding: 5px 7px; font: inherit; font-size: 0.74rem; color: var(--ink); width: 100%; }
+.pd-manual-edit-disc { display: flex; gap: 5px; }
+.pd-manual-edit-input-sm { min-width: 0; }
+.pd-manual-edit-input-xs { width: 46px; text-align: center; }
+.pd-manual-edit-mblim { display: inline-flex; align-items: center; gap: 5px; }
+.pd-manual-edit-hint { font-size: 0.66rem; color: #4b6ea8; font-style: italic; }
+.pd-btn-inline { padding: 6px 12px; font-size: 0.7rem; }
+.pd-manual-actions .pd-btn-inline { margin-left: 6px; }
+
+/* Review ad/tag — per-price-area list (default + inline override) */
+.pd-rev-pa-list { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.pd-rev-pa-list-head { display: flex; align-items: baseline; gap: 10px; padding: 10px 13px; background: var(--soft); border-bottom: 1px solid var(--line); }
+.pd-rev-pa-list-head strong { font-size: 0.76rem; }
+.pd-rev-pa-list-sub { font-size: 0.66rem; color: var(--muted); }
+.pd-rev-pa-item { border-bottom: 1px solid var(--line); }
+.pd-rev-pa-item:last-child { border-bottom: 0; }
+.pd-rev-pa-item.is-custom { background: #fbfdff; box-shadow: inset 3px 0 0 var(--blue); }
+.pd-rev-pa-item-top { display: flex; align-items: center; gap: 12px; padding: 10px 13px; }
+.pd-rev-pa-name { font-weight: 700; font-size: 0.76rem; min-width: 54px; }
+.pd-rev-pa-actions { margin-left: auto; }
+.pd-rev-pa-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 0 13px 13px; }
+body[data-theme="dark"] .pd-rev-pa-list { background: #131d30; border-color: #2c3a52; }
+body[data-theme="dark"] .pd-rev-pa-list-head { background: #1b2740; }
+body[data-theme="dark"] .pd-rev-pa-item.is-custom { background: rgba(58, 110, 196, 0.06); }
+
+/* Promotion system (APEX / OMS) selector + fields */
+.pd-promosys { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.pd-promosys-seg.pd-segmented { display: inline-flex; }
+.pd-promosys-seg button { min-width: 62px; font-weight: 700; }
+.pd-promosys-hint { font-size: 0.66rem; color: var(--muted); }
+.pd-promosys-fields { margin-top: 0; }
+.pd-of-check { flex-direction: row; align-items: center; gap: 7px; align-self: flex-end; padding-bottom: 8px; }
+.pd-of-check input { width: 15px; height: 15px; }
+.pd-of-check span { font-size: 0.72rem; color: var(--ink); }
+.pd-money { display: flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; overflow: hidden; }
+.pd-money span { padding: 0 4px 0 9px; color: var(--faint); font-size: 0.78rem; }
+.pd-money input { border: 0; border-radius: 0; padding: 7px 9px 7px 2px; width: 100%; font: inherit; font-size: 0.78rem; background: transparent; }
+.pd-money input:focus { outline: none; }
+
+/* System tag chip in the manual builder table */
+.pd-sys-tag { display: inline-block; font-size: 0.54rem; font-weight: 700; letter-spacing: 0.04em; border-radius: 4px; padding: 1px 5px; vertical-align: middle; margin-right: 4px; }
+.pd-sys-apex { color: #1769e8; background: #eef4ff; border: 1px solid #cfe0ff; }
+.pd-sys-oms { color: #7a3ea8; background: #f4ecfb; border: 1px solid #e2d0f2; }
+.pd-manual-table tbody tr.is-inherit .pd-sys-tag { opacity: 0.6; }
+
+/* Manual builder — full-width inline edit panel */
+.pd-manual-row-editing td { background: #eef4ff; }
+.pd-manual-row-editing td:first-child { box-shadow: inset 3px 0 0 var(--blue); vertical-align: top; padding-top: 16px; }
+.pd-manual-edit-panel { padding: 6px 2px 4px; }
+.pd-manual-edit-panel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; font-size: 0.74rem; }
+.pd-manual-edit-note { font-size: 0.66rem; color: #4b6ea8; font-style: italic; }
+.pd-manual-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+body[data-theme="dark"] .pd-manual-row-editing td { background: rgba(58, 110, 196, 0.1); }
+body[data-theme="dark"] .pd-sys-apex { background: rgba(23, 105, 232, 0.15); border-color: #2c3a52; }
+body[data-theme="dark"] .pd-sys-oms { background: rgba(122, 62, 168, 0.18); border-color: #3a2c52; color: #c9a3e6; }
+
+/* Both promotion systems side by side (no toggle) */
+.pd-promo-systems { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; }
+.pd-promo-sys-card { border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 12px 14px; }
+.pd-promo-sys-card > header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 0.74rem; font-weight: 600; color: var(--muted); }
+.pd-promo-sys-card > header .pd-sys-tag { font-size: 0.58rem; padding: 2px 7px; }
+.pd-promo-sys-card .pd-override-fields { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+body[data-theme="dark"] .pd-promo-sys-card { background: #131d30; border-color: #2c3a52; }
+
+/* --- Refinements: two-system spacing, allowance list, review balance --- */
+
+/* Two-system panel — more breathing room, steady 3-col fields */
+.pd-promo-systems { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; }
+.pd-promo-sys-card { padding: 16px 18px; }
+.pd-promo-sys-card > header { margin-bottom: 14px; }
+.pd-promo-sys-card .pd-override-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 16px; }
+.pd-promo-sys-card .pd-of-check { align-self: end; padding-bottom: 8px; }
+
+/* APEX allowance picker */
+.pd-allow { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pd-allow > .pd-of-label { display: block; margin-bottom: 8px; }
+.pd-allow-list { display: flex; flex-direction: column; gap: 6px; }
+.pd-allow-item { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 9px 12px; cursor: pointer; font-size: 0.74rem; }
+.pd-allow-item:hover { border-color: #b6ccf0; background: #fafcff; }
+.pd-allow-item.is-sel { border-color: var(--blue); background: #f2f7ff; box-shadow: inset 0 0 0 1px var(--blue); }
+.pd-allow-item input[type="radio"] { width: 15px; height: 15px; accent-color: var(--blue); flex: 0 0 auto; }
+.pd-allow-id { font-weight: 700; color: var(--blue); }
+.pd-allow-name { color: var(--ink); }
+.pd-allow-badge { font-size: 0.56rem; font-weight: 700; letter-spacing: 0.05em; color: #fff; background: var(--blue); border-radius: 20px; padding: 2px 8px; }
+.pd-allow-meta { margin-left: auto; color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
+body[data-theme="dark"] .pd-allow-item.is-sel { background: rgba(58, 110, 196, 0.12); }
+
+/* Review "More details" — balance Ad vs Tag, cap width, fix selects */
+.pd-review-row-expanded .pd-rev-detail-bar,
+.pd-review-row-expanded .pd-rev-scope,
+.pd-review-row-expanded .pd-rev-detail-grid,
+.pd-review-row-expanded .pd-rev-pa-list { max-width: 1240px; }
+.pd-rev-detail-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+.pd-rev-detail-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+.pd-rev-detail-fields-tags { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pd-rev-field input, .pd-rev-field select { height: 30px; padding: 4px 8px; border-radius: 6px; font-size: 0.72rem; width: 100%; }
+.pd-rev-field select { padding-right: 22px; }
+.pd-rev-pa-fields { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+
+/* --- Unified override builder: topbar, override editor panel, table --- */
+.pd-manual-topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.pd-manual-topbar h3 { margin: 0; font-size: 0.9rem; font-weight: 700; }
+.pd-manual-topbar p { margin: 3px 0 0; font-size: 0.72rem; color: var(--muted); }
+
+/* Per-PA override editor — same card as default, distinct accent */
+.pd-manual-editpanel { margin: 4px 0 16px; border-color: #cdb6ef; background: linear-gradient(180deg, #faf7ff, #fdfcff); }
+.pd-md-badge-edit { background: #7a3ea8; }
+
+/* Manual table: promo values are normal weight (not bold), 5 columns */
+.pd-manual-promo { font-weight: 400; }
+.pd-manual-table tbody tr.is-editing-row td { background: #faf7ff; box-shadow: none; }
+.pd-manual-table tbody tr.is-editing-row td:first-child { box-shadow: inset 3px 0 0 #7a3ea8; }
+.pd-manual-table tbody tr.is-custom td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+
+/* --- Tag & digital preview (coming soon) --- */
+.pd-tagprev { margin-top: 16px; max-width: 1240px; }
+.pd-tagprev-head { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+.pd-tagprev-head strong { font-size: 0.78rem; }
+.pd-soon-badge { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.05em; color: #8a6d2f; background: #fff5e0; border: 1px solid #ecd9a8; border-radius: 20px; padding: 3px 9px; text-transform: uppercase; }
+.pd-tagprev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 280px)); gap: 14px; }
+.pd-tagprev-card { position: relative; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 10px; overflow: hidden; }
+.pd-tagprev-card figcaption { font-size: 0.62rem; color: var(--muted); margin-top: 8px; text-align: center; }
+.pd-tagprev-overlay { position: absolute; top: 8px; right: 8px; font-size: 0.54rem; font-weight: 700; letter-spacing: 0.04em; color: #fff; background: rgba(15, 23, 42, 0.6); border-radius: 20px; padding: 3px 8px; text-transform: uppercase; }
+.pd-tagprev-canvas { border-radius: 8px; padding: 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 150px; justify-content: center; }
+.pd-shelf { background: #f6d000; color: #141414; text-align: center; }
+.pd-shelf-title { font-style: italic; font-weight: 800; font-size: 1.05rem; }
+.pd-shelf-prices { display: flex; align-items: center; gap: 14px; margin: 4px 0; }
+.pd-shelf-price { font-size: 2rem; font-weight: 800; line-height: 1; }
+.pd-shelf-price sup { font-size: 0.9rem; top: -0.7em; } .pd-shelf-price em { font-size: 0.66rem; font-style: normal; margin-left: 2px; }
+.pd-shelf-div { width: 2px; height: 40px; background: #141414; }
+.pd-shelf-mm { font-weight: 700; font-size: 0.72rem; }
+.pd-shelf-save { font-size: 0.62rem; }
+.pd-digital { background: #fff; border: 1px solid #ececec; color: var(--ink); align-items: flex-start; text-align: left; }
+.pd-digital-top { display: flex; align-items: center; gap: 8px; }
+.pd-digital-foru { font-size: 0.5rem; font-weight: 800; color: #7a1f1f; border: 1px solid #7a1f1f; border-radius: 4px; padding: 1px 4px; }
+.pd-digital-price { color: #7a1f1f; font-weight: 800; font-size: 1.05rem; }
+.pd-digital-instore { font-size: 0.66rem; color: var(--muted); }
+.pd-digital-name { font-weight: 600; font-size: 0.76rem; }
+.pd-digital-clip { background: #7a1f1f; color: #fff; border-radius: 20px; padding: 6px 16px; font-size: 0.72rem; font-weight: 700; margin-top: 6px; align-self: center; }
+.pd-digital-meta { font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
+body[data-theme="dark"] .pd-manual-editpanel { background: rgba(122, 62, 168, 0.1); border-color: #3a2c52; }
+body[data-theme="dark"] .pd-tagprev-card { background: #131d30; border-color: #2c3a52; }
+
+/* Tag previews relocated into the right column (compact) */
+.pd-rev-right-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pd-rev-right-col .pd-tagprev { margin-top: 2px; max-width: none; }
+/* Stack the two previews vertically so they sit flush on the right under
+   Tag details — full column width, no cramped side-by-side gap. */
+.pd-rev-right-col .pd-tagprev-grid { grid-template-columns: 1fr; gap: 10px; }
+.pd-rev-right-col .pd-tagprev-canvas { min-height: 110px; padding: 12px 12px; gap: 4px; }
+.pd-rev-right-col .pd-tagprev-card { padding: 9px 10px; }
+.pd-rev-right-col .pd-tagprev-card figcaption { font-size: 0.56rem; }
+.pd-rev-right-col .pd-shelf-title { font-size: 0.82rem; }
+.pd-rev-right-col .pd-shelf-prices { gap: 8px; margin: 2px 0; }
+.pd-rev-right-col .pd-shelf-price { font-size: 1.4rem; }
+.pd-rev-right-col .pd-shelf-div { height: 30px; }
+.pd-rev-right-col .pd-shelf-mm { font-size: 0.62rem; }
+.pd-rev-right-col .pd-shelf-save { font-size: 0.54rem; }
+.pd-rev-right-col .pd-digital-price { font-size: 0.9rem; }
+.pd-rev-right-col .pd-digital-name { font-size: 0.66rem; }
+.pd-rev-right-col .pd-digital-clip { padding: 5px 12px; font-size: 0.64rem; }
+
+/* --- Tag previews v2: faithful shelf tag + for-U coupon, stacked right --- */
+.pd-rev-right-col .pd-tagprev { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: none; margin-top: 2px; }
+.pd-rev-right-col .pd-tagprev-card { width: 100%; max-width: none; padding: 9px 10px; }
+.pd-tagprev-canvas { min-height: 0; }
+
+/* Shelf tag (Member Price!) */
+.pd-shelf { background: #f6d21a; color: #141414; text-align: center; padding: 14px 14px 12px; gap: 6px; position: relative; }
+.pd-shelf-member { font-style: italic; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em; }
+.pd-shelf-rule { width: 62%; height: 3px; background: #b91c1c; border-radius: 3px; margin: 3px auto 4px; }
+.pd-shelf-prices { display: flex; align-items: flex-start; justify-content: center; gap: 14px; margin: 2px 0; }
+.pd-shelf-p { display: inline-flex; align-items: flex-start; position: relative; }
+.pd-shelf-p b { font-size: 2.5rem; font-weight: 800; line-height: 0.9; }
+.pd-shelf-p sup { font-size: 1.1rem; font-weight: 800; top: -0.05em; }
+.pd-shelf-p em { font-style: normal; font-size: 0.72rem; font-weight: 700; align-self: flex-end; margin: 0 0 4px 2px; }
+.pd-shelf-bar { width: 2px; align-self: stretch; background: #141414; margin: 2px 0; }
+.pd-shelf-mm { position: absolute; left: 100%; bottom: 0; margin-left: 6px; font-size: 0.6rem; font-weight: 700; line-height: 1.05; text-align: left; white-space: nowrap; }
+.pd-shelf-save { font-weight: 800; font-size: 0.9rem; }
+.pd-shelf-foot { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; font-size: 0.6rem; font-weight: 700; }
+.pd-shelf-foot i { font-style: normal; font-size: 0.5rem; font-weight: 600; }
+.pd-shelf-thru { font-weight: 600; align-self: center; }
+
+/* Digital for-U coupon */
+.pd-digital { background: #fff; border: 1px solid #ececec; color: #1c1c1c; align-items: stretch; text-align: left; padding: 14px; gap: 5px; }
+.pd-digital-top { display: flex; align-items: center; gap: 8px; }
+.pd-digital-foru { font-size: 0.56rem; font-weight: 800; color: #1e7a3a; border: 1.5px solid #1e7a3a; border-radius: 5px; padding: 1px 5px; }
+.pd-digital-price { color: #7a1f1f; font-weight: 800; font-size: 1.25rem; line-height: 1; }
+.pd-digital-each { color: #7a1f1f; font-weight: 700; font-size: 0.9rem; align-self: flex-end; margin-bottom: 2px; }
+.pd-digital-instore { font-size: 0.68rem; color: #555; }
+.pd-digital-name { font-weight: 600; font-size: 0.8rem; color: #1c1c1c; }
+.pd-digital-offer { font-size: 0.66rem; color: #7a1f1f; text-decoration: underline; cursor: pointer; }
+.pd-digital-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.pd-digital-clip { background: #7a1f1f; color: #fff; border: 0; border-radius: 22px; padding: 8px 18px; font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; }
+.pd-digital-exp { font-size: 0.6rem; color: #666; text-align: right; line-height: 1.2; }
+.pd-digital-plu { font-size: 0.6rem; color: #888; }
+body[data-theme="dark"] .pd-digital { background: #f7f7f7; }
+
+/* Tag previews as a full-width 3rd row (two cards side by side) */
+.pd-tagprev { max-width: 1240px; margin-top: 16px; }
+.pd-tagprev-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 340px)); gap: 16px; justify-content: start; align-items: start; }
+.pd-tagprev-card { width: 100%; max-width: 340px; padding: 9px 10px; }
+
+/* Tag previews as a TRUE 3rd row of the detail grid (spans both columns) */
+.pd-rev-detail-grid > .pd-tagprev { grid-column: 1 / -1; margin-top: 8px; max-width: none; }
+.pd-rev-detail-grid > .pd-tagprev .pd-tagprev-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
+.pd-rev-detail-grid > .pd-tagprev .pd-tagprev-card { max-width: none; width: 100%; }
+
+/* Stack the three blocks as rows: Ad details (1) · Tag details (2) · Preview (3) */
+.pd-review-row-expanded .pd-rev-detail-grid { grid-template-columns: 1fr; gap: 14px; }
+.pd-review-row-expanded .pd-rev-detail-fields { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); }
+.pd-review-row-expanded .pd-rev-detail-fields-tags { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); }
+
+/* Preview as the 3rd COLUMN (right) — Ad details | Tag details | Preview */
+.pd-review-row-expanded .pd-rev-detail-grid { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.1fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.pd-review-row-expanded .pd-rev-detail-fields { grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); }
+.pd-review-row-expanded .pd-rev-detail-fields-tags { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pd-rev-detail-grid > .pd-tagprev { grid-column: auto; margin-top: 0; max-width: none; }
+.pd-rev-detail-grid > .pd-tagprev .pd-tagprev-grid { grid-template-columns: 1fr; gap: 12px; }
+.pd-rev-detail-grid > .pd-tagprev .pd-tagprev-card { width: 100%; max-width: none; }
+
+/* Preview 3rd column, compact: full width, two cards SIDE BY SIDE so the
+   column is no taller than Ad/Tag and doesn't push Price areas down. */
+.pd-review-row-expanded .pd-rev-detail-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.9fr); max-width: none; align-items: start; }
+.pd-rev-detail-grid > .pd-tagprev .pd-tagprev-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
+.pd-rev-detail-grid > .pd-tagprev .pd-tagprev-card { width: 100%; max-width: none; }
+
+/* ===== Review More-details 2x2 layout =====
+   Row 1: [Ad | Tag]  | Shelf tag
+   Row 2: [Price areas]| Digital coupon   */
+.pd-rev-layout { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 14px 16px; align-items: start; max-width: 1240px; }
+.pd-rev-adtag { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.pd-rev-prevcell-store { grid-column: 2; grid-row: 1; min-width: 0; }
+.pd-rev-pa-cell { grid-column: 1; grid-row: 2; min-width: 0; }
+.pd-rev-prevcell-digital { grid-column: 2; grid-row: 2; min-width: 0; }
+.pd-rev-prevcell .pd-tagprev-card { width: 100%; max-width: none; }
+.pd-rev-prevcell-store .pd-tagprev-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.pd-rev-prevcell-store .pd-tagprev-head strong { font-size: 0.78rem; }
+.pd-rev-pa-cell .pd-rev-pa-list { margin-top: 0; }
+
+/* ===== Review More-details: two independent tables side by side =====
+   Table 1 (left): Ad | Tag, then Price areas directly below (connected).
+   Table 2 (right, narrow): preview — shelf + digital stacked.  */
+.pd-rev-2tables { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; max-width: 1240px; }
+.pd-rev-table1 { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pd-rev-table1 .pd-rev-adtag { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; align-items: start; grid-column: auto; grid-row: auto; }
+.pd-rev-table1 .pd-rev-pa-list { margin-top: 0; }
+.pd-rev-table2 { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pd-rev-table2 .pd-tagprev-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.pd-rev-table2 .pd-tagprev-head strong { font-size: 0.76rem; }
+.pd-rev-table2 .pd-tagprev-card { width: 100%; max-width: none; padding: 8px; }
+/* smaller preview at 300px column */
+.pd-rev-table2 .pd-shelf { padding: 12px 10px; }
+.pd-rev-table2 .pd-shelf-member { font-size: 0.92rem; }
+.pd-rev-table2 .pd-shelf-p b { font-size: 1.85rem; }
+.pd-rev-table2 .pd-shelf-p sup { font-size: 0.8rem; }
+.pd-rev-table2 .pd-shelf-save { font-size: 0.78rem; }
+.pd-rev-table2 .pd-shelf-foot { font-size: 0.54rem; }
+.pd-rev-table2 .pd-digital { padding: 12px; }
+.pd-rev-table2 .pd-digital-price { font-size: 1.05rem; }
+.pd-rev-table2 .pd-digital-name { font-size: 0.72rem; }
+.pd-rev-table2 .pd-digital-clip { padding: 6px 14px; font-size: 0.7rem; }
+
+/* ===== Worklist: search + vendor groups + connected selection ===== */
+.pd-shell { gap: 10px; }
+.pd-worklist-search { position: relative; display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.pd-worklist-search svg { position: absolute; left: 21px; width: 13px; height: 13px; fill: none; stroke: var(--faint); stroke-width: 2; pointer-events: none; }
+.pd-worklist-search input { width: 100%; border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 24px 6px 28px; font: inherit; font-size: 0.72rem; background: #fff; color: var(--ink); }
+.pd-worklist-search input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(31,111,235,0.12); }
+.pd-worklist-search-clear { position: absolute; right: 19px; border: 0; background: transparent; color: var(--faint); font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 2px; }
+
+/* Sticky vendor group headers for orientation */
+.pd-wl-group-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 12px; background: var(--soft); font-size: 0.56rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.pd-wl-group-head span { color: var(--faint); font-weight: 700; }
+body[data-theme="dark"] .pd-wl-group-head { background: #16223a; }
+
+/* Denser rows + flush (no rounded) connected selected state */
+.pd-worklist-list { padding: 0; }
+.pd-worklist-item { grid-template-columns: 22px 1fr; padding: 8px 12px; margin: 0; border-radius: 0; position: relative; border-bottom: 1px solid var(--line); }
+.pd-worklist-item:last-child { border-bottom: 0; }
+.pd-worklist-item.active { background: rgba(31,111,235,0.1); box-shadow: inset 4px 0 0 var(--blue); border-radius: 0; }
+body[data-theme="dark"] .pd-worklist-item.active { background: rgba(115,167,255,0.12); }
+.pd-wl-caret { display: none; }
+.pd-worklist-item.active .pd-wl-caret { display: block; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid var(--blue); }
+.pd-worklist-item.active .pd-wl-ncrc { color: var(--blue); }
+
+/* Worklist: hidden scrollbar + custom viewport control (arrows + live count) */
+.pd-worklist-list { scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
+.pd-worklist-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.pd-worklist-viewport { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--line); background: var(--soft); }
+.pd-worklist-count { font-size: 0.62rem; color: var(--muted); }
+.pd-worklist-count strong { color: var(--ink); font-weight: 700; }
+.pd-worklist-scroll-btn { border: 1px solid var(--line-strong); background: #fff; border-radius: 6px; width: 30px; height: 22px; cursor: pointer; color: var(--muted); font-size: 0.6rem; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.pd-worklist-scroll-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+.pd-worklist-scroll-btn:disabled { opacity: 0.35; cursor: default; }
+body[data-theme="dark"] .pd-worklist-viewport { background: #16223a; }
+body[data-theme="dark"] .pd-worklist-scroll-btn { background: #16223a; }
+
+/* Bound the worklist so the list scrolls internally and the control (now
+   at the top, under search) is always visible above the modal footer. */
+.pd-worklist { max-height: calc(100vh - 340px); min-height: 320px; }
+.pd-worklist-list { flex: 1 1 auto; min-height: 60px; overflow-y: auto; }
+.pd-worklist-viewport { border-top: 0; border-bottom: 1px solid var(--line); justify-content: space-between; }
+.pd-worklist-vp-arrows { display: inline-flex; gap: 5px; }
+
+/* Subtle worklist scroll indicators (not big boxed buttons) */
+.pd-worklist-scroll-btn { border: 0; background: transparent; width: 16px; height: 14px; padding: 0; color: var(--faint); font-size: 0.52rem; border-radius: 3px; }
+.pd-worklist-scroll-btn:hover:not(:disabled) { background: transparent; color: var(--blue); }
+.pd-worklist-scroll-btn:disabled { opacity: 0.25; }
+.pd-worklist-vp-arrows { gap: 1px; }
+.pd-worklist-viewport { padding: 5px 12px; }
+
+.pd-worklist-viewport .pd-worklist-scroll-btn { height: 15px; min-height: 0; line-height: 1; padding: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
+.pd-worklist-viewport .pd-worklist-vp-arrows { display: inline-flex; align-items: center; }

@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MyDesk — Group ▸ Category ▸ Item/Vendor drill</title>
+<style>
+  :root{
+    --bg:#f4f6fa;--panel:#fff;--line:#dfe5ef;--line-strong:#c8d2e2;--text:#111827;
+    --muted:#667085;--faint:#98a4b6;--ink:#0f172a;--blue:#1769e8;--blue-soft:#eaf2ff;
+    --green:#4a8a5d;--red:#b25a55;--shadow:0 10px 24px rgba(18,32,56,.06);
+    --tight-shadow:0 2px 10px rgba(15,23,42,.05);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,"Segoe UI",sans-serif;font-size:14px;}
+  .wrap{width:min(1640px,100%);margin:0 auto;padding:22px;}
+  h2{font-size:1rem;font-weight:600;margin:0;}
+  p{margin:0;color:var(--muted);line-height:1.4;}
+  .caption{font-size:.72rem;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin:30px 0 10px;}
+
+  /* ---- Panel shell ---- */
+  .panel{border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow);padding:16px;margin-bottom:14px;}
+
+  /* ---- Breadcrumb + lens header ---- */
+  .desk-head{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:14px;}
+  .crumbs{display:flex;align-items:center;gap:6px;font-size:.82rem;flex-wrap:wrap;}
+  .crumbs .crumb{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;font-weight:600;}
+  .crumbs .crumb.home{color:var(--blue);border-color:var(--blue-soft);background:var(--blue-soft);}
+  .crumbs .crumb.active{color:var(--ink);border-color:var(--line-strong);}
+  .crumbs .sep{color:var(--faint);font-weight:700;}
+  .lens{display:flex;gap:4px;}
+  .lens button{min-height:30px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--muted);font-weight:600;font-size:.78rem;padding:6px 12px;cursor:pointer;}
+  .lens button.active{border-color:var(--blue);background:var(--blue);color:#fff;}
+
+  /* ---- Miller columns ---- */
+  .miller{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+  .pane{border-right:1px solid var(--line);min-width:0;display:flex;flex-direction:column;}
+  .pane:last-child{border-right:0;}
+  .pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:#fafbfd;border-bottom:1px solid var(--line);}
+  .pane-head .ttl{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;}
+  .pane-head .cnt{font-size:.62rem;color:var(--faint);font-weight:600;}
+  .pane-toggle{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;}
+  .pane-toggle button{border:0;background:#fff;color:var(--muted);font-size:.66rem;font-weight:700;padding:4px 9px;cursor:pointer;}
+  .pane-toggle button.active{background:var(--ink);color:#fff;}
+  .pane-body{overflow-y:auto;max-height:430px;}
+
+  /* ---- Ranked row ---- */
+  .row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #eef1f6;cursor:pointer;position:relative;}
+  .row:hover{background:#fbfcfe;}
+  .row.sel{background:var(--blue-soft);}
+  .row.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);}
+  .row .accent{width:6px;height:34px;border-radius:3px;flex-shrink:0;}
+  .accent.win{background:#bfe6cd;}
+  .accent.mid{background:#e4e9f1;}
+  .accent.lose{background:#f3c8c4;}
+  .row .main{flex:1 1 auto;min-width:0;}
+  .row .nm{font-size:.8rem;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row .sub{font-size:.66rem;color:var(--faint);margin-top:2px;}
+  .row .right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;}
+  .row .val{font-size:.8rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .row .delta{font-size:.66rem;font-weight:600;font-variant-numeric:tabular-nums;}
+  .delta.pos{color:var(--green);}
+  .delta.neg{color:var(--red);}
+  .spark{width:54px;height:22px;flex-shrink:0;}
+  .spark path{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .spark.pos path{stroke:var(--green);}
+  .spark.neg path{stroke:var(--red);}
+  .chev{color:var(--faint);font-weight:700;flex-shrink:0;}
+
+  /* group section labels inside a pane */
+  .grp-label{padding:7px 14px;font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--faint);background:#fff;border-bottom:1px solid #eef1f6;}
+  .grp-label.lose{color:var(--red);}
+  .grp-label.win{color:var(--green);}
+
+  .note{font-size:.74rem;color:var(--muted);background:#fff;border:1px dashed var(--line-strong);border-radius:8px;padding:10px 14px;margin-bottom:14px;}
+  .note b{color:var(--ink);}
+
+  /* ---- KPI-pulse pane (section C) ---- */
+  .rankby{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;font-size:.78rem;font-weight:600;color:var(--ink);cursor:pointer;}
+  .kpipane{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+  .kpipane-head{display:flex;align-items:center;gap:14px;padding:8px 14px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;}
+  .kpipane-head .col-pulse{width:124px;text-align:left;}
+  .kpipane-head .col-pulse i{font-style:normal;color:var(--faint);}
+  .kpipane-head .col-decl{width:190px;}
+  .kpipane-head .col-val{width:120px;text-align:right;}
+  .krow{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid #eef1f6;cursor:pointer;}
+  .krow:last-child{border-bottom:0;}
+  .krow:hover{background:#fbfcfe;}
+  .krow .accent{width:6px;height:36px;border-radius:3px;flex-shrink:0;}
+  .kmain{flex:1 1 auto;min-width:0;}
+  .kmain .nm{font-size:.84rem;font-weight:600;color:var(--ink);}
+  .ktally{display:flex;gap:10px;margin-top:3px;font-size:.66rem;font-weight:600;}
+  .ktally .up{color:var(--green);}
+  .ktally .dn{color:var(--red);}
+  .pulse{width:124px;height:34px;flex-shrink:0;}
+  .pulse .mid{stroke:#d6deea;stroke-width:1;}
+  .pulse .p{fill:#4a8a5d;opacity:.85;}
+  .pulse .n{fill:#b25a55;}
+  .kdecl{width:190px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;}
+  .declchip{display:inline-flex;align-items:center;gap:5px;align-self:flex-start;padding:3px 9px;border-radius:999px;background:#fff0f0;color:var(--red);font-size:.7rem;font-weight:600;}
+  .declchip.muted{background:#f2f4f8;color:var(--faint);}
+  .declchip b{font-variant-numeric:tabular-nums;}
+  .declsub{font-size:.62rem;color:var(--faint);}
+  .kval{width:120px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+  .kval .val{font-size:.86rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .kval .delta{font-size:.72rem;font-weight:600;}
+
+  /* ---- Swipe fallback mini ---- */
+  .mini-stack{display:flex;gap:14px;flex-wrap:wrap;}
+  .phone{width:300px;border:1px solid var(--line-strong);border-radius:16px;overflow:hidden;background:#fff;box-shadow:var(--tight-shadow);}
+  .phone .pcrumb{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);font-size:.72rem;color:var(--muted);}
+  .phone .back{color:var(--blue);font-weight:700;}
+  .phone .row{padding:9px 12px;}
+  .phone .pane-body{max-height:none;}
+  .slidearrow{align-self:center;font-size:1.6rem;color:var(--faint);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="caption">A · Desktop — Miller columns (the spine)</p>
+
+  <section class="panel">
+    <div class="desk-head">
+      <div class="crumbs">
+        <span class="crumb home">314 · Dairy</span>
+        <span class="sep">▸</span>
+        <span class="crumb active">Group · Refrigerated Dairy</span>
+        <span class="sep">▸</span>
+        <span class="crumb active">Category · Yogurt</span>
+        <span class="sep">▸</span>
+        <span class="crumb" style="color:var(--faint);">Item</span>
+      </div>
+      <div class="lens" title="Reframes every pane's ranking — same drill, different question">
+        <button class="active">Losing</button>
+        <button>Watch</button>
+        <button>Winning</button>
+        <button>Funding</button>
+      </div>
+    </div>
+
+    <div class="miller">
+
+      <!-- PANE 1 : GROUPS -->
+      <div class="pane">
+        <div class="pane-head"><span class="ttl">Group · 314 Dairy</span><span class="cnt">4 groups</span></div>
+        <div class="pane-body">
+          <div class="row" >
+            <span class="accent lose"></span>
+            <div class="main"><div class="nm">35 · Eggs</div><div class="sub">Sales mix −1.26pp · AGP −20pp</div></div>
+            <svg class="spark neg" viewBox="0 0 54 22"><path d="M2,6 L12,9 L22,8 L32,14 L42,17 L52,20"/></svg>
+            <div class="right"><span class="val">$72.4M</span><span class="delta neg">−10.4%</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row sel">
+            <span class="accent mid"></span>
+            <div class="main"><div class="nm">36 · Refrigerated Dairy</div><div class="sub">Allowances −14.3% · BOG +5.2pp</div></div>
+            <svg class="spark neg" viewBox="0 0 54 22"><path d="M2,8 L12,7 L22,10 L32,9 L42,12 L52,13"/></svg>
+            <div class="right"><span class="val">$292.3M</span><span class="delta pos">+2.7%</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <span class="accent win"></span>
+            <div class="main"><div class="nm">38 · Refrigerated Foods</div><div class="sub">AGP% +4.4pp · Markdown +4.7pp</div></div>
+            <svg class="spark pos" viewBox="0 0 54 22"><path d="M2,18 L12,15 L22,16 L32,11 L42,8 L52,5"/></svg>
+            <div class="right"><span class="val">$72.9M</span><span class="delta neg">−2.5%</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <span class="accent win"></span>
+            <div class="main"><div class="nm">37 · Cheese</div><div class="sub">Markdown +4.67pp · stable mix</div></div>
+            <svg class="spark pos" viewBox="0 0 54 22"><path d="M2,14 L12,13 L22,11 L32,12 L42,9 L52,8"/></svg>
+            <div class="right"><span class="val">$121.7M</span><span class="delta neg">−1.4%</span></div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE 2 : CATEGORIES of selected group -->
+      <div class="pane">
+        <div class="pane-head"><span class="ttl">Category · in Refrigerated Dairy</span><span class="cnt">12 categories</span></div>
+        <div class="pane-body">
+          <div class="grp-label lose">⚠ Dragging the group</div>
+          <div class="row sel">
+            <span class="accent lose"></span>
+            <div class="main"><div class="nm">Yogurt</div><div class="sub">−$5.2M vs LY · 31% of group</div></div>
+            <svg class="spark neg" viewBox="0 0 54 22"><path d="M2,5 L12,8 L22,9 L32,13 L42,16 L52,19"/></svg>
+            <div class="right"><span class="val">$91.0M</span><span class="delta neg">−6.1%</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <span class="accent lose"></span>
+            <div class="main"><div class="nm">Butter</div><div class="sub">Cost up, retail lagging</div></div>
+            <svg class="spark neg" viewBox="0 0 54 22"><path d="M2,7 L12,8 L22,11 L32,12 L42,15 L52,17"/></svg>
+            <div class="right"><span class="val">$33.1M</span><span class="delta neg">−4.0%</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="grp-label win">✓ Carrying the group</div>
+          <div class="row">
+            <span class="accent win"></span>
+            <div class="main"><div class="nm">Fluid Milk</div><div class="sub">+$3.1M · traffic driver</div></div>
+            <svg class="spark pos" viewBox="0 0 54 22"><path d="M2,16 L12,14 L22,15 L32,10 L42,8 L52,6"/></svg>
+            <div class="right"><span class="val">$104.2M</span><span class="delta pos">+3.1%</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <span class="accent mid"></span>
+            <div class="main"><div class="nm">Creamers</div><div class="sub">Flat, premium mix +1.2pp</div></div>
+            <svg class="spark pos" viewBox="0 0 54 22"><path d="M2,12 L12,12 L22,11 L32,11 L42,10 L52,9"/></svg>
+            <div class="right"><span class="val">$28.7M</span><span class="delta pos">+0.4%</span></div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE 3 : ITEMS/VENDORS toggle -->
+      <div class="pane">
+        <div class="pane-head">
+          <span class="ttl">in Yogurt</span>
+          <div class="pane-toggle"><button class="active">Items</button><button>Vendors</button></div>
+        </div>
+        <div class="pane-body">
+          <div class="row">
+            <span class="accent lose"></span>
+            <div class="main"><div class="nm">Chobani Less Sugar 32oz</div><div class="sub">NCRC 884213 · Chobani</div></div>
+            <div class="right"><span class="val">$4.10M</span><span class="delta neg">−18.2%</span></div>
+          </div>
+          <div class="row">
+            <span class="accent lose"></span>
+            <div class="main"><div class="nm">Oui by Yoplait 5oz Glass</div><div class="sub">NCRC 771902 · General Mills</div></div>
+            <div class="right"><span class="val">$2.66M</span><span class="delta neg">−12.4%</span></div>
+          </div>
+          <div class="row">
+            <span class="accent mid"></span>
+            <div class="main"><div class="nm">Jewel Greek Plain 32oz</div><div class="sub">NCRC 660145 · Private Label</div></div>
+            <div class="right"><span class="val">$3.31M</span><span class="delta neg">−2.1%</span></div>
+          </div>
+          <div class="row">
+            <span class="accent win"></span>
+            <div class="main"><div class="nm">Two Good Vanilla 4pk</div><div class="sub">NCRC 552310 · Danone</div></div>
+            <div class="right"><span class="val">$5.02M</span><span class="delta pos">+9.4%</span></div>
+          </div>
+          <div class="row">
+            <span class="accent win"></span>
+            <div class="main"><div class="nm">Siggi's 4% Whole 4.4oz</div><div class="sub">NCRC 901882 · Siggi's</div></div>
+            <div class="right"><span class="val">$1.88M</span><span class="delta pos">+6.7%</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="note"><b>How it answers your goals:</b> the full path lives in the breadcrumb + the highlighted cells, so you never lose where you are. Click any cell in a pane to repopulate the pane to its right — click a crumb (or a cell further left) to jump back. The <b>lens chips</b> (Losing / Watch / Winning / Funding) re-rank every pane at once, so "what's working vs not" is always on screen at all three levels. The deepest pane carries the <b>Items ⇄ Vendors</b> toggle so you pivot without leaving the drill.</div>
+
+  <p class="caption">B · Narrow / focused — swipe-stack fallback (reuses the 52-week slide)</p>
+  <div class="mini-stack">
+    <div class="phone">
+      <div class="pcrumb"><span>314 · Dairy</span></div>
+      <div class="pane-body">
+        <div class="row"><span class="accent lose"></span><div class="main"><div class="nm">35 · Eggs</div><div class="sub">−10.4% · mix −1.26pp</div></div><span class="chev">›</span></div>
+        <div class="row"><span class="accent mid"></span><div class="main"><div class="nm">36 · Refrigerated Dairy</div><div class="sub">+2.7% · allowances −14%</div></div><span class="chev">›</span></div>
+        <div class="row"><span class="accent win"></span><div class="main"><div class="nm">37 · Cheese</div><div class="sub">−1.4% · markdown +4.7pp</div></div><span class="chev">›</span></div>
+      </div>
+    </div>
+    <span class="slidearrow">→</span>
+    <div class="phone">
+      <div class="pcrumb"><span class="back">‹ Refrigerated Dairy</span></div>
+      <div class="pane-body">
+        <div class="row"><span class="accent lose"></span><div class="main"><div class="nm">Yogurt</div><div class="sub">−6.1% · −$5.2M</div></div><span class="chev">›</span></div>
+        <div class="row"><span class="accent win"></span><div class="main"><div class="nm">Fluid Milk</div><div class="sub">+3.1% · driver</div></div><span class="chev">›</span></div>
+      </div>
+    </div>
+    <span class="slidearrow">→</span>
+    <div class="phone">
+      <div class="pcrumb"><span class="back">‹ Yogurt</span><div class="pane-toggle" style="margin-left:auto;"><button class="active">Items</button><button>Vendors</button></div></div>
+      <div class="pane-body">
+        <div class="row"><span class="accent lose"></span><div class="main"><div class="nm">Chobani Less Sugar 32oz</div><div class="sub">−18.2%</div></div></div>
+        <div class="row"><span class="accent win"></span><div class="main"><div class="nm">Two Good Vanilla 4pk</div><div class="sub">+9.4%</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:14px;"><b>Skip-the-group rule:</b> for a department with only one group (groups = 1), pane&nbsp;1 is omitted — the drill opens directly on <b>Category ▸ Item/Vendor</b> (2 panes on desktop, 2 cards on the swipe stack) and the breadcrumb starts at the department. No empty level is ever shown.</div>
+
+  <p class="caption">C · Many KPIs — surfacing "which declined" without picking one arbitrarily</p>
+
+  <section class="panel">
+    <div class="desk-head">
+      <div class="crumbs"><span class="crumb home">314 · Dairy</span><span class="sep">▸</span><span class="crumb" style="color:var(--faint);">Group</span></div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:.72rem;color:var(--muted);font-weight:600;">Rank by</span>
+        <span class="rankby">Sales <b>▾</b></span>
+      </div>
+    </div>
+
+    <div class="kpipane">
+      <div class="kpipane-head">
+        <span style="flex:1 1 auto;">Group</span>
+        <span class="col-pulse">KPI pulse <i>(14)</i></span>
+        <span class="col-decl">Worst decliner</span>
+        <span class="col-val">Sales</span>
+      </div>
+
+      <!-- ROW: Sales up, but several KPIs red -->
+      <div class="krow">
+        <span class="accent mid"></span>
+        <div class="kmain"><div class="nm">36 · Refrigerated Dairy</div>
+          <div class="ktally"><span class="up">▲ 9 up</span><span class="dn">▼ 5 down</span></div></div>
+        <svg class="pulse" viewBox="0 0 124 34" title="14 KPIs vs LY — bar up = improved, down = declined">
+          <line x1="0" y1="17" x2="124" y2="17" class="mid"/>
+          <rect class="p" x="2"  y="9"  width="6" height="8"/>
+          <rect class="n" x="11" y="17" width="6" height="9"/>
+          <rect class="p" x="20" y="11" width="6" height="6"/>
+          <rect class="n" x="29" y="17" width="6" height="13"/>
+          <rect class="n" x="38" y="17" width="6" height="11"/>
+          <rect class="p" x="47" y="6"  width="6" height="11"/>
+          <rect class="p" x="56" y="12" width="6" height="5"/>
+          <rect class="n" x="65" y="17" width="6" height="7"/>
+          <rect class="p" x="74" y="10" width="6" height="7"/>
+          <rect class="p" x="83" y="13" width="6" height="4"/>
+          <rect class="n" x="92" y="17" width="6" height="6"/>
+          <rect class="p" x="101" y="8" width="6" height="9"/>
+          <rect class="p" x="110" y="12" width="6" height="5"/>
+          <rect class="p" x="119" y="14" width="3" height="3"/>
+        </svg>
+        <div class="kdecl"><span class="declchip">▼ Allowances <b>−14.3%</b></span><span class="declsub">2nd: AGP$ −10.8%</span></div>
+        <div class="kval"><span class="val">$292.3M</span><span class="delta pos">▲ +2.7%</span></div>
+      </div>
+
+      <!-- ROW: Sales down -->
+      <div class="krow">
+        <span class="accent lose"></span>
+        <div class="kmain"><div class="nm">35 · Eggs</div>
+          <div class="ktally"><span class="up">▲ 3 up</span><span class="dn">▼ 11 down</span></div></div>
+        <svg class="pulse" viewBox="0 0 124 34">
+          <line x1="0" y1="17" x2="124" y2="17" class="mid"/>
+          <rect class="n" x="2"  y="17" width="6" height="14"/>
+          <rect class="n" x="11" y="17" width="6" height="6"/>
+          <rect class="n" x="20" y="17" width="6" height="10"/>
+          <rect class="p" x="29" y="13" width="6" height="4"/>
+          <rect class="n" x="38" y="17" width="6" height="15"/>
+          <rect class="n" x="47" y="17" width="6" height="9"/>
+          <rect class="n" x="56" y="17" width="6" height="12"/>
+          <rect class="p" x="65" y="11" width="6" height="6"/>
+          <rect class="n" x="74" y="17" width="6" height="8"/>
+          <rect class="n" x="83" y="17" width="6" height="13"/>
+          <rect class="n" x="92" y="17" width="6" height="7"/>
+          <rect class="p" x="101" y="12" width="6" height="5"/>
+          <rect class="n" x="110" y="17" width="6" height="10"/>
+          <rect class="n" x="119" y="17" width="3" height="6"/>
+        </svg>
+        <div class="kdecl"><span class="declchip">▼ AGP% <b>−20.0pp</b></span><span class="declsub">2nd: AGP$ −81.5%</span></div>
+        <div class="kval"><span class="val">$72.4M</span><span class="delta neg">▼ −10.4%</span></div>
+      </div>
+
+      <!-- ROW: healthy -->
+      <div class="krow">
+        <span class="accent win"></span>
+        <div class="kmain"><div class="nm">38 · Refrigerated Foods</div>
+          <div class="ktally"><span class="up">▲ 12 up</span><span class="dn">▼ 2 down</span></div></div>
+        <svg class="pulse" viewBox="0 0 124 34">
+          <line x1="0" y1="17" x2="124" y2="17" class="mid"/>
+          <rect class="p" x="2"  y="8"  width="6" height="9"/>
+          <rect class="p" x="11" y="11" width="6" height="6"/>
+          <rect class="p" x="20" y="6"  width="6" height="11"/>
+          <rect class="p" x="29" y="12" width="6" height="5"/>
+          <rect class="n" x="38" y="17" width="6" height="5"/>
+          <rect class="p" x="47" y="9"  width="6" height="8"/>
+          <rect class="p" x="56" y="13" width="6" height="4"/>
+          <rect class="p" x="65" y="7"  width="6" height="10"/>
+          <rect class="p" x="74" y="11" width="6" height="6"/>
+          <rect class="n" x="83" y="17" width="6" height="4"/>
+          <rect class="p" x="92" y="10" width="6" height="7"/>
+          <rect class="p" x="101" y="8" width="6" height="9"/>
+          <rect class="p" x="110" y="12" width="6" height="5"/>
+          <rect class="p" x="119" y="13" width="3" height="4"/>
+        </svg>
+        <div class="kdecl"><span class="declchip muted">▼ Units <b>−2.2%</b></span><span class="declsub">only minor declines</span></div>
+        <div class="kval"><span class="val">$72.9M</span><span class="delta neg">▼ −2.5%</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:.7rem;color:var(--muted);">
+      <span><svg width="14" height="14" style="vertical-align:-2px"><rect x="4" y="2" width="6" height="6" fill="#4a8a5d"/></svg> bar up = KPI improved vs LY</span>
+      <span><svg width="14" height="14" style="vertical-align:-2px"><rect x="4" y="6" width="6" height="6" fill="#b25a55"/></svg> bar down = KPI declined</span>
+      <span>height = magnitude · hover a bar to name the KPI</span>
+    </div>
+  </section>
+
+  <div class="note"><b>Three layers, no arbitrary pick:</b>
+    <b>(1) Rank&nbsp;by</b> selector drives the headline number + ▲/▼ and the sort — default Sales, switchable to any KPI, so the arrow column is always comparable.
+    <b>(2) The KPI pulse</b> is 14 diverging micro-bars — one glance tells you "5 of 14 are red and here's roughly how bad," without scanning 14 columns. Hover names each.
+    <b>(3) The worst-decliner chip</b> auto-surfaces each row's single most material decline (weighted by $ impact), so a row with Sales <i>up</i> still flashes <span style="color:var(--red);font-weight:600">▼&nbsp;Allowances&nbsp;−14.3%</span> — answering "which KPI declined" per entity. Clicking the chip can sort the whole pane by that KPI.</div>
+
+</div>
+</body>
+</html>

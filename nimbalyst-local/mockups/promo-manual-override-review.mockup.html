@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Review &amp; Finalise — Manual Override flow</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --line:#dfe5ef; --line-strong:#c8d2e2; --muted:#667085;
+    --blue:#1769e8; --soft:#f5f7fb; --ink:#0f172a; --faint:#98a4b6;
+    --positive:#177245; --negative:#c0392b; --promo-bg:#fdfaee; --promo-ink:#9a7926;
+    --custom:#1769e8; --custom-bg:#eef4ff; --green:#0f9d58;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px;padding:24px;}
+  .frame{max-width:1320px;margin:0 auto;background:#fff;border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 24px 60px rgba(15,23,42,.14);overflow:hidden;}
+
+  /* ---------- header ---------- */
+  .rv-head{padding:16px 22px 14px;border-bottom:1px solid var(--line);display:flex;
+    justify-content:space-between;align-items:flex-start;gap:24px;}
+  .eyebrow{font-size:.62rem;letter-spacing:.14em;font-weight:700;color:var(--blue);}
+  .rv-head h2{margin:4px 0 6px;font-size:1.18rem;font-weight:700;}
+  .rv-meta{display:flex;flex-wrap:wrap;gap:8px;font-size:.72rem;color:var(--muted);align-items:center;}
+  .rv-meta em{font-style:normal;color:var(--faint);text-transform:uppercase;font-size:.58rem;letter-spacing:.06em;font-weight:700;}
+  .rv-meta strong{color:var(--ink);font-weight:600;}
+  .rv-meta .dot{color:var(--line-strong);}
+  .rv-head-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+  .manual-badge{display:inline-flex;align-items:center;gap:7px;font-size:.64rem;font-weight:700;letter-spacing:.05em;
+    color:#fff;background:var(--blue);border-radius:20px;padding:5px 12px;}
+  .manual-badge .dot{width:7px;height:7px;border-radius:50%;background:#bcd4ff;}
+  .rv-counts{display:flex;gap:8px;}
+  .count-pill{font-size:.62rem;font-weight:700;letter-spacing:.04em;border-radius:20px;padding:5px 11px;
+    background:#eaf6ee;color:var(--green);border:1px solid #cdead7;}
+
+  /* hidden-note */
+  .hidden-note{display:flex;gap:8px;align-items:center;background:#fff8ec;border:1px dashed #e6c882;
+    border-radius:9px;padding:9px 13px;font-size:.68rem;color:#8a6d2f;margin:16px 22px 4px;}
+  .hidden-note b{color:#6f5622;}
+
+  /* ---------- table ---------- */
+  .tbl-wrap{padding:12px 22px 20px;overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:.72rem;min-width:920px;}
+  thead th{background:var(--soft);text-align:left;font-size:.55rem;letter-spacing:.05em;font-weight:700;
+    color:var(--muted);text-transform:uppercase;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  th.r,td.r{text-align:right;} th.c,td.c{text-align:center;}
+  tbody td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap;}
+  .vend{color:var(--muted);} .ncrc{color:var(--muted);}
+  .desc em{color:var(--faint);font-style:italic;}
+  .priced-pill{font-size:.55rem;font-weight:700;letter-spacing:.04em;color:var(--green);background:#eaf6ee;
+    border:1px solid #cdead7;border-radius:5px;padding:3px 7px;}
+  .tactic .sub{display:block;font-size:.6rem;color:var(--muted);}
+  .metric strong{font-weight:700;} .metric .up{display:block;font-size:.58rem;color:var(--positive);}
+  .col-promo{color:var(--promo-ink);font-weight:700;}
+  .more-btn{border:1px solid var(--line-strong);background:#fff;border-radius:7px;font:inherit;font-weight:600;
+    font-size:.66rem;color:var(--muted);padding:5px 11px;cursor:pointer;display:inline-flex;gap:6px;align-items:center;}
+  .more-btn.open{border-color:var(--blue);color:var(--blue);background:var(--custom-bg);}
+
+  /* section divider */
+  .divider td{background:#eef4ff;padding:10px 12px;border-bottom:1px solid var(--line);}
+  .div-row{display:flex;align-items:center;gap:10px;}
+  .div-row strong{font-size:.78rem;}
+  .div-count{background:var(--blue);color:#fff;font-size:.6rem;font-weight:700;border-radius:50%;
+    width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;}
+  .div-row small{color:var(--muted);font-size:.66rem;}
+  .div-row small b{color:var(--ink);}
+  .sort{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .sort .lbl{font-size:.58rem;letter-spacing:.06em;font-weight:700;color:var(--faint);text-transform:uppercase;}
+  .sort .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;
+    padding:4px 10px;font-size:.64rem;font-weight:600;color:var(--muted);background:#fff;}
+  .sort .chip.active{border-color:var(--blue);color:var(--ink);box-shadow:0 0 0 1px var(--blue) inset;}
+  .sort .chip i{width:7px;height:7px;border-radius:2px;background:var(--blue);}
+
+  tr.totals td{background:#fbfcfe;border-top:2px solid var(--line-strong);border-bottom:0;padding:11px 10px;font-weight:700;}
+  tr.totals .sub{display:block;font-size:.58rem;font-weight:600;color:var(--positive);}
+
+  /* ---------- MORE DETAILS expansion ---------- */
+  .exp td{background:#f7faff;border-bottom:2px solid var(--line);padding:0;}
+  .exp-inner{padding:14px 16px 18px;}
+  .exp-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .exp-eyebrow{font-size:.6rem;letter-spacing:.1em;font-weight:700;color:var(--blue);}
+  .exp-ctx{font-size:.68rem;color:var(--muted);}
+
+  /* scope line — one default form, applies to all PAs */
+  .scope-line{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .scope-line .t{font-size:.72rem;font-weight:700;color:var(--ink);}
+  .scope-line .applies{font-size:.66rem;color:var(--muted);}
+  .scope-line .applies b{color:var(--ink);}
+  .add-exc{margin-left:auto;border:1px dashed var(--blue);background:var(--custom-bg);color:var(--blue);
+    font:inherit;font-weight:600;font-size:.68rem;padding:7px 13px;border-radius:8px;cursor:pointer;}
+
+  /* ad/tag cards — compact, no horizontal scroll */
+  .detail-grid{display:grid;grid-template-columns:1fr 260px;gap:12px;}
+  .detail-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0;}
+  .detail-card header{margin-bottom:11px;}
+  .detail-card header strong{font-size:.74rem;}
+  .fields{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 12px;}
+  .fields.tags{grid-template-columns:repeat(2,1fr);}
+  .fld{display:flex;flex-direction:column;gap:4px;min-width:0;}
+  .fld label{font-size:.55rem;letter-spacing:.06em;font-weight:700;color:var(--faint);text-transform:uppercase;}
+  .fld input,.fld select{border:1px solid var(--line-strong);border-radius:7px;padding:7px 9px;font-size:.72rem;
+    font-family:inherit;color:var(--ink);background:#fff;width:100%;min-width:0;}
+  .fld input::placeholder{color:#b6c0cf;}
+
+  /* price-area exceptions — only shown when they exist */
+  .exceptions{margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .exceptions-head{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--soft);
+    border-bottom:1px solid var(--line);font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+  .exceptions-head .n{background:var(--blue);color:#fff;border-radius:20px;padding:1px 8px;font-size:.62rem;}
+  .exc-row{display:flex;align-items:center;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);}
+  .exc-row:last-child{border-bottom:0;}
+  .exc-pa{font-weight:700;font-size:.74rem;min-width:52px;}
+  .exc-summary{font-size:.68rem;color:var(--muted);}
+  .exc-summary b{color:var(--ink);font-weight:600;}
+  .exc-actions{margin-left:auto;display:flex;gap:14px;}
+  .exc-actions a{font-size:.66rem;font-weight:600;color:var(--blue);cursor:pointer;}
+  .exc-actions a.rm{color:var(--negative);}
+
+  /* footer */
+  .rv-footer{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);
+    display:flex;justify-content:flex-end;gap:10px;padding:13px 22px;box-shadow:0 -6px 18px rgba(15,23,42,.05);}
+  .btn{border:1px solid var(--line-strong);background:#fff;color:var(--muted);font:inherit;font-weight:600;
+    font-size:.74rem;padding:9px 18px;border-radius:9px;cursor:pointer;}
+  .btn:hover{background:var(--soft);color:var(--ink);}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+</style>
+</head>
+<body>
+  <div class="frame">
+    <!-- ===== HEADER (manual flag carried through) ===== -->
+    <header class="rv-head">
+      <div>
+        <span class="eyebrow">REVIEW &amp; FINALISE</span>
+        <h2>Carbonated Soft Drinks</h2>
+        <div class="rv-meta">
+          <span><em>Week</em> <strong>W33 (P9)</strong></span><span class="dot">·</span>
+          <span><em>Objective</em> <strong>Sales velocity</strong></span><span class="dot">·</span>
+          <span><em>Division</em> <strong>All accessible divisions</strong></span><span class="dot">·</span>
+          <span><em>Department / Desk</em> <strong>Carbonated Soft Drinks · Desk 12</strong></span>
+        </div>
+      </div>
+      <div class="rv-head-right">
+        <span class="manual-badge"><span class="dot"></span>MANUAL OVERRIDE</span>
+        <div class="rv-counts">
+          <span class="count-pill">2 PROMOTED</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="hidden-note">
+      <b>Manual override.</b>&nbsp;Plan summary, “Items you decided not to promote”, and “Items with no promotion available” are hidden — a manual plan only publishes the tactics you set, so only the promoting section remains.
+    </div>
+
+    <!-- ===== TABLE — only the "Items you're promoting" section ===== -->
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Priced</th><th>Vendor</th><th>NCRC</th><th>NCRC description</th>
+            <th class="c">In circ.</th><th>Ad page</th><th>Display</th><th class="r">Stores</th>
+            <th>Store tactic</th><th>Digital tactic</th><th class="r">VLC</th><th class="c"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- divider -->
+          <tr class="divider">
+            <td colspan="12">
+              <div class="div-row">
+                <strong>Items you're promoting</strong><span class="div-count">2</span>
+                <small>Set the store &amp; digital tactic per row. Use <b>More</b> for ad / tag details.</small>
+              </div>
+            </td>
+          </tr>
+
+          <!-- row 1 (expanded) -->
+          <tr>
+            <td><span class="priced-pill">PRICED</span></td>
+            <td class="vend">COCA COLA CO</td><td class="ncrc">NCRC 30043</td>
+            <td class="desc">COCA COLA ZERO SUGAR <em>12-12FZ</em></td>
+            <td class="c">Y</td><td>PG-4</td><td>Endcap</td><td class="r">245</td>
+            <td class="tactic">Item Discount<span class="sub">Save $1.00</span></td>
+            <td class="tactic">4U Item Discount<span class="sub">$4.22</span></td>
+            <td class="r">$1.93</td>
+            <td class="c"><button class="more-btn open">More ▴</button></td>
+          </tr>
+
+          <!-- MORE DETAILS expansion — one default form + optional PA exceptions -->
+          <tr class="exp">
+            <td colspan="12">
+              <div class="exp-inner">
+                <div class="exp-bar">
+                  <span class="exp-eyebrow">MORE DETAILS</span>
+                  <span class="exp-ctx">NCRC 30043 · COCA COLA CO</span>
+                </div>
+
+                <!-- one form, applies to every price area by default -->
+                <div class="scope-line">
+                  <span class="t">Ad &amp; tag details</span>
+                  <span class="applies">Applies to <b>all 12 price areas</b></span>
+                  <button class="add-exc">+ Different details for a price area</button>
+                </div>
+
+                <div class="detail-grid">
+                  <section class="detail-card">
+                    <header><strong>Ad details</strong></header>
+                    <div class="fields">
+                      <div class="fld"><label>Headline</label><input placeholder="Cool down with…" value="Cool down with…"></div>
+                      <div class="fld"><label>Body copy</label><input value="Short marketing line"></div>
+                      <div class="fld"><label>Image UPC</label><input value="049000028911"></div>
+                      <div class="fld"><label>Ad instructions</label><input value="Reverse type, blue chip"></div>
+                      <div class="fld"><label>Pricing comments</label><input value="BOGO restriction on size"></div>
+                      <div class="fld"><label>Ad bug</label><select><option>None</option><option>2x rewards</option></select></div>
+                      <div class="fld"><label>Coupon PLU</label><input value="70432"></div>
+                    </div>
+                  </section>
+                  <section class="detail-card">
+                    <header><strong>Tag details</strong></header>
+                    <div class="fields tags">
+                      <div class="fld"><label>BIB</label><input value="EC15"></div>
+                      <div class="fld"><label>SIGN</label><input value="SC15"></div>
+                      <div class="fld"><label>Talker</label><input value="1"></div>
+                      <div class="fld"><label>Molding</label><input value="0"></div>
+                    </div>
+                  </section>
+                </div>
+
+                <!-- exceptions appear only when the user adds one -->
+                <div class="exceptions">
+                  <div class="exceptions-head">Price-area exceptions <span class="n">2</span></div>
+                  <div class="exc-row">
+                    <span class="exc-pa">PA02</span>
+                    <span class="exc-summary">Headline <b>“Ice cold savings”</b> · SIGN <b>SC22</b></span>
+                    <span class="exc-actions"><a>Edit</a><a class="rm">Remove</a></span>
+                  </div>
+                  <div class="exc-row">
+                    <span class="exc-pa">PA05</span>
+                    <span class="exc-summary">BIB <b>EC30</b> · SIGN <b>SC30</b> · Coupon PLU <b>70455</b></span>
+                    <span class="exc-actions"><a>Edit</a><a class="rm">Remove</a></span>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- row 2 (collapsed) -->
+          <tr>
+            <td><span class="priced-pill">PRICED</span></td>
+            <td class="vend">PEPSICO INC</td><td class="ncrc">NCRC 30101</td>
+            <td class="desc">PEPSI ZERO SUGAR <em>12-12FZ</em></td>
+            <td class="c">Y</td><td>PG-4</td><td>Inline</td><td class="r">245</td>
+            <td class="tactic">Buy X Get X<span class="sub">BOGO 50%</span></td>
+            <td class="tactic">4U Must Buy<span class="sub">$3.58</span></td>
+            <td class="r">$2.08</td>
+            <td class="c"><button class="more-btn">More ▾</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="rv-footer">
+      <button class="btn">← Back to recommendations</button>
+      <button class="btn primary">Finalise promotions (2)</button>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MyDesk — Drill Layout Experiments</title>
+<style>
+/* ============================================================================
+   MyDesk drill — experimental single-stage layouts (NOT Miller, NOT a table).
+   One level of siblings at a time, every KPI shown visually; click to drill
+   down, breadcrumb to drill up. Three layouts share the same data + chrome:
+     1. Sparkbar Rows   — row per entity, each KPI a bullet vs LY
+     2. Heat Grid       — entity × KPI, cells colour-blocked by Δ vs LY
+     3. Metric Columns  — each KPI a column ranking all entities (momentum board)
+   Self-contained: open via file:// — no server needed.
+   ========================================================================== */
+:root{
+  --bg:#f4f6f9; --panel:#ffffff; --ink:#1c2530; --text:#2c3742; --muted:#5c6a7a;
+  --faint:#8a96a6; --line:#e4e9f0; --line-strong:#cfd7e2;
+  --blue:#2f6bd6; --blue-soft:#e7effb;
+  --pos:#2f8a56; --posSoft:#e4f2ea; --neg:#c0554f; --negSoft:#f6e6e5;
+  --heatPos:56,138,96; --heatNeg:192,85,79;
+}
+body.dark{
+  --bg:#161b22; --panel:#1e242d; --ink:#eef2f7; --text:#d4dbe4; --muted:#9aa6b4;
+  --faint:#71808f; --line:#2b333d; --line-strong:#3a4550;
+  --blue:#5b93ee; --blue-soft:#22314a;
+  --pos:#5fae7e; --posSoft:#23392c; --neg:#d98a86; --negSoft:#3f2b29;
+  --heatPos:70,160,110; --heatNeg:210,110,104;
+}
+*{ box-sizing:border-box; }
+html,body{ margin:0; }
+body{ background:var(--bg); color:var(--text); font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+.wrap{ max-width:1360px; margin:0 auto; padding:26px 24px 60px; }
+
+/* ---- page header ---- */
+.pgh{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:18px; flex-wrap:wrap; }
+.pgh h1{ font-size:1.24rem; margin:0 0 4px; color:var(--ink); letter-spacing:-.01em; }
+.pgh p{ margin:0; color:var(--faint); font-size:.82rem; max-width:640px; }
+.darktog{ border:1px solid var(--line-strong); background:var(--panel); color:var(--muted); border-radius:8px; padding:7px 12px; font-size:.74rem; font-weight:700; cursor:pointer; }
+
+/* ---- the stage panel ---- */
+.stage{ background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 1px 2px rgba(20,30,50,.04); overflow:hidden; }
+
+/* toolbar */
+.bar{ display:flex; align-items:center; gap:14px; padding:13px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.crumbs{ display:flex; align-items:center; gap:5px; font-size:.8rem; flex:1 1 320px; min-width:0; flex-wrap:wrap; }
+.crumb{ display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:999px; border:1px solid var(--line); background:var(--panel); color:var(--muted); font-weight:650; cursor:pointer; white-space:nowrap; }
+.crumb:hover{ border-color:var(--line-strong); color:var(--ink); }
+.crumb.home{ color:var(--blue); border-color:var(--blue-soft); background:var(--blue-soft); }
+.crumb.here{ color:var(--ink); border-color:var(--line-strong); cursor:default; font-weight:750; }
+.sep{ color:var(--faint); font-weight:800; }
+.lvlchip{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; font-weight:800; color:var(--faint); border:1px solid var(--line); border-radius:6px; padding:3px 7px; }
+
+.ctrls{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.search{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line-strong); border-radius:8px; padding:0 9px; background:var(--panel); }
+.search input{ border:0; outline:0; background:transparent; color:var(--ink); font-size:.78rem; padding:7px 0; width:150px; }
+.search svg{ width:13px; height:13px; opacity:.5; }
+.sel{ appearance:none; border:1px solid var(--line-strong); border-radius:8px; background:var(--panel); color:var(--muted); font-size:.75rem; font-weight:650; padding:7px 26px 7px 10px; cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a96a6' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 9px center; }
+.dirbtn{ border:1px solid var(--line-strong); background:var(--panel); color:var(--muted); border-radius:8px; padding:7px 10px; font-size:.75rem; font-weight:700; cursor:pointer; min-width:34px; }
+.dirbtn:hover{ color:var(--ink); }
+
+/* layout switcher */
+.switch{ display:inline-flex; border:1px solid var(--line-strong); border-radius:9px; overflow:hidden; }
+.switch button{ border:0; background:var(--panel); color:var(--muted); font-size:.75rem; font-weight:700; padding:7px 13px; cursor:pointer; border-right:1px solid var(--line); }
+.switch button:last-child{ border-right:0; }
+.switch button.active{ background:var(--ink); color:var(--panel); }
+
+/* body scroll region */
+.canvas{ padding:14px 16px 18px; overflow:auto; max-height:640px; }
+.hint{ font-size:.68rem; color:var(--faint); padding:0 16px 14px; }
+.empty{ padding:40px; text-align:center; color:var(--faint); font-size:.85rem; }
+
+/* ======================= 1 · SPARKBAR ROWS ======================= */
+.sb-head, .sb-row{ display:grid; align-items:center; gap:0; }
+.sb-head{ position:sticky; top:-14px; z-index:4; background:var(--panel); border-bottom:1px solid var(--line-strong); }
+.sb-h{ font-size:.58rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800; padding:8px 8px; cursor:pointer; user-select:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-left:1px solid transparent; }
+.sb-h.name{ text-align:left; padding-left:12px; }
+.sb-h:not(.name){ text-align:center; }
+.sb-h.sorted{ color:var(--blue); }
+.sb-row{ border-bottom:1px solid color-mix(in srgb, var(--line) 65%, transparent); cursor:pointer; }
+.sb-row:hover{ background:color-mix(in srgb, var(--blue) 4%, transparent); }
+.sb-name{ display:flex; align-items:center; gap:9px; padding:9px 10px 9px 12px; min-width:0; }
+.tag{ flex-shrink:0; width:19px; height:19px; border-radius:5px; font-size:.58rem; font-weight:900; display:inline-flex; align-items:center; justify-content:center; }
+.t-group{ background:#dbe6f5; color:#3a5f8f; } .t-category{ background:#e2eadf; color:#4a6b48; }
+.t-vendor{ background:#efe6d6; color:#836a3c; } .t-item{ background:#eef0f3; color:#828c9c; }
+body.dark .t-group{ background:#2a3a52; color:#9dc0ee; } body.dark .t-category{ background:#2b3a2c; color:#a6cba2; }
+body.dark .t-vendor{ background:#3d3524; color:#d8bd86; } body.dark .t-item{ background:#2b323d; color:#9aa4b3; }
+.sb-nm{ font-weight:650; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sb-nm small{ display:block; font-weight:500; color:var(--faint); font-size:.62rem; }
+.sb-cell{ padding:7px 8px; border-left:1px solid color-mix(in srgb, var(--line) 45%, transparent); }
+.bullet{ position:relative; height:22px; }
+.bullet .track{ position:absolute; top:9px; left:0; right:0; height:4px; border-radius:3px; background:color-mix(in srgb, var(--line) 80%, transparent); }
+.bullet .fill{ position:absolute; top:8px; left:0; height:6px; border-radius:3px; }
+.bullet .fill.pos{ background:var(--pos); } .bullet .fill.neg{ background:var(--neg); }
+.bullet .ly{ position:absolute; top:4px; width:2px; height:14px; background:var(--faint); opacity:.85; border-radius:1px; }
+.bullet .num{ position:absolute; top:0; right:0; font-size:.6rem; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums; opacity:0; transition:opacity .1s; background:var(--panel); padding-left:4px; }
+.sb-row:hover .bullet .num{ opacity:1; }
+.chev{ color:var(--faint); font-weight:800; padding-right:8px; }
+
+/* ======================= 2 · HEAT GRID ======================= */
+.hg-wrap{ min-width:100%; }
+.hg-head, .hg-row{ display:grid; align-items:stretch; }
+.hg-head{ position:sticky; top:-14px; z-index:4; background:var(--panel); border-bottom:1px solid var(--line-strong); }
+.hg-h{ font-size:.57rem; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:800; padding:9px 6px; text-align:center; cursor:pointer; user-select:none; line-height:1.15; border-left:1px solid color-mix(in srgb,var(--line) 50%,transparent); }
+.hg-h.name{ text-align:left; padding-left:12px; border-left:0; position:sticky; left:0; background:var(--panel); z-index:5; }
+.hg-h.sorted{ color:var(--blue); }
+.hg-row{ border-bottom:1px solid color-mix(in srgb, var(--line) 55%, transparent); cursor:pointer; }
+.hg-name{ display:flex; align-items:center; gap:9px; padding:0 10px 0 12px; min-width:0; position:sticky; left:0; background:var(--panel); z-index:2; border-right:1px solid var(--line); }
+.hg-row:hover .hg-name{ background:color-mix(in srgb, var(--blue) 5%, var(--panel)); }
+.hg-cell{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; padding:9px 4px; border-left:1px solid rgba(255,255,255,.35); min-height:46px; }
+body.dark .hg-cell{ border-left-color:rgba(0,0,0,.18); }
+.hg-cell .hv{ font-size:.68rem; font-weight:700; font-variant-numeric:tabular-nums; }
+.hg-cell .hd{ font-size:.56rem; font-weight:700; opacity:.9; font-variant-numeric:tabular-nums; }
+.legend{ display:flex; align-items:center; gap:8px; padding:10px 4px 2px; font-size:.64rem; color:var(--faint); }
+.legend .scale{ display:flex; height:10px; border-radius:3px; overflow:hidden; width:210px; }
+.legend .scale span{ flex:1; }
+
+/* ======================= 3 · METRIC COLUMNS ======================= */
+.mc-board{ display:flex; gap:12px; align-items:flex-start; overflow-x:auto; padding-bottom:6px; }
+.mc-col{ flex:0 0 214px; background:color-mix(in srgb, var(--bg) 55%, var(--panel)); border:1px solid var(--line); border-radius:11px; display:flex; flex-direction:column; max-height:560px; }
+.mc-colh{ padding:10px 12px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.mc-colh .ttl{ font-size:.72rem; font-weight:800; color:var(--ink); }
+.mc-colh .rm{ border:0; background:transparent; color:var(--faint); cursor:pointer; font-size:.9rem; line-height:1; padding:0 2px; }
+.mc-colh .rm:hover{ color:var(--neg); }
+.mc-list{ padding:8px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+.mc-chip{ display:flex; align-items:center; gap:8px; padding:7px 9px; background:var(--panel); border:1px solid var(--line); border-radius:8px; cursor:pointer; transition:border-color .1s, transform .05s; }
+.mc-chip:hover{ border-color:var(--line-strong); }
+.mc-chip.hl{ border-color:var(--blue); box-shadow:0 0 0 2px var(--blue-soft); }
+.mc-chip.dim{ opacity:.32; }
+.mc-rank{ flex-shrink:0; width:20px; text-align:center; font-size:.64rem; font-weight:800; color:var(--faint); font-variant-numeric:tabular-nums; }
+.mc-body{ flex:1 1 auto; min-width:0; }
+.mc-nm{ font-size:.72rem; font-weight:650; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-val{ font-size:.62rem; color:var(--faint); font-variant-numeric:tabular-nums; }
+.mc-delta{ flex-shrink:0; font-size:.66rem; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.mc-delta.pos{ color:var(--pos); } .mc-delta.neg{ color:var(--neg); }
+.mc-add{ flex:0 0 auto; align-self:flex-start; }
+.mc-add .addbtn{ border:1px dashed var(--line-strong); background:transparent; color:var(--muted); border-radius:11px; padding:10px 14px; font-size:.74rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+.mc-add .addbtn:hover{ color:var(--ink); border-color:var(--muted); }
+.mc-menu{ margin-top:6px; width:210px; background:var(--panel); border:1px solid var(--line-strong); border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,.14); padding:8px; display:grid; grid-template-columns:1fr; gap:4px; max-height:300px; overflow:auto; }
+.mc-menu button{ text-align:left; border:1px solid var(--line); background:var(--panel); color:var(--muted); border-radius:7px; padding:6px 9px; font-size:.7rem; font-weight:650; cursor:pointer; }
+.mc-menu button.on{ border-color:var(--blue-soft); background:var(--blue-soft); color:var(--blue); }
+.mc-menu button:hover{ border-color:var(--line-strong); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pgh">
+    <div>
+      <h1>Performance Explorer — layout experiments</h1>
+      <p>One level at a time: see every KPI for all <b>groups</b>, pick one to drop into its <b>categories</b>, then <b>vendors</b>, then <b>items</b>. Filter and sort anywhere; breadcrumb climbs back up. Three "table-like but not a table" layouts — flip between them.</p>
+    </div>
+    <button class="darktog" id="darkTog">◐ Dark</button>
+  </div>
+
+  <div class="stage">
+    <div class="bar">
+      <div class="crumbs" id="crumbs"></div>
+      <div class="ctrls">
+        <div class="switch" id="switch">
+          <button data-lay="sparkbar" class="active">▚ Sparkbar rows</button>
+          <button data-lay="heatgrid">▦ Heat grid</button>
+          <button data-lay="metric">▤ Metric columns</button>
+        </div>
+        <div class="search">
+          <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <input id="filter" placeholder="Filter…" />
+        </div>
+        <select class="sel" id="sortSel" title="Sort by"></select>
+        <select class="sel" id="modeSel" title="Value or change">
+          <option value="value">Value</option>
+          <option value="delta">Δ vs LY</option>
+        </select>
+        <button class="dirbtn" id="dirBtn" title="Sort direction">↓</button>
+      </div>
+    </div>
+    <div class="canvas" id="canvas"></div>
+    <p class="hint" id="hint"></p>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================ KPI catalogue ============================ */
+const KPIS = [
+  { key:"sales",   label:"Sales",           fmt:"moneyM", unit:"%",  up:true  },
+  { key:"units",   label:"Units",           fmt:"numM",   unit:"%",  up:true  },
+  { key:"aiv",     label:"Avg Item Value",  fmt:"money2", unit:"%",  up:true  },
+  { key:"agpPct",  label:"AGP %",           fmt:"pct",    unit:"pp", up:true  },
+  { key:"agpDol",  label:"AGP $",           fmt:"moneyM", unit:"%",  up:true  },
+  { key:"cogs",    label:"COGS",            fmt:"moneyM", unit:"%",  up:false },
+  { key:"allow",   label:"Allowances",      fmt:"moneyM", unit:"%",  up:true  },
+  { key:"deadnet", label:"Deadnet Cost",    fmt:"moneyM", unit:"%",  up:false },
+  { key:"mix",     label:"Sales Mix %",     fmt:"pct",    unit:"pp", up:true  },
+  { key:"bog",     label:"BOG %",           fmt:"pct",    unit:"pp", up:true  },
+  { key:"markdown",label:"Markdown %",      fmt:"pct",    unit:"pp", up:false },
+  { key:"msMulo",  label:"Mkt Share MULO+", fmt:"pct",    unit:"pp", up:true  },
+  { key:"msFood",  label:"Mkt Share Food",  fmt:"pct",    unit:"pp", up:true  },
+  { key:"turns",   label:"Inv Turns",       fmt:"turns",  unit:"%",  up:true  },
+  { key:"oos",     label:"Out-of-Stock %",  fmt:"pct",    unit:"pp", up:false },
+];
+const KPI = Object.fromEntries(KPIS.map(k=>[k.key,k]));
+
+/* ============================ deterministic RNG ============================ */
+function rng(str){
+  let h = 1779033703 ^ str.length;
+  for(let i=0;i<str.length;i++){ h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h<<13)|(h>>>19); }
+  return ()=>{ h = Math.imul(h ^ (h>>>16), 2246822507); h = Math.imul(h ^ (h>>>13), 3266489909); return ((h ^= h>>>16)>>>0)/4294967296; };
+}
+
+/* ============================ fresh, richer seed ============================ */
+const DEPT = "Center Store";
+const GROUPS = [
+  { name:"36 · Refrigerated Dairy", sales:292.3, tilt: 0.10, cats:["Yogurt","Fluid Milk","Butter & Margarine","Creamers","Cottage Cheese","Sour Cream","Refrigerated Juice"] },
+  { name:"37 · Cheese",             sales:161.7, tilt: 0.20, cats:["Natural Chunk","Shredded","Slices","Cream Cheese","Snack Cheese","Deli Specialty"] },
+  { name:"38 · Refrigerated Meals", sales:112.9, tilt: 0.44, cats:["Lunchmeat","Hot Dogs","Dough","Dips & Spreads","Fresh Pasta","Prepared Entrées"] },
+  { name:"35 · Eggs",               sales: 72.4, tilt:-0.55, cats:["Shell Eggs","Specialty Eggs","Egg Substitutes"] },
+  { name:"40 · Plant-Based",        sales: 58.6, tilt: 0.72, cats:["Alt Milk","Alt Meat","Alt Cheese","Tofu & Tempeh","Alt Yogurt"] },
+  { name:"41 · Beverages Chilled",  sales: 97.1, tilt:-0.18, cats:["Cold Brew","Kombucha","Sports Drinks","Functional Shots","Chilled Tea"] },
+];
+const VENDORS = ["Danone","General Mills","Chobani","Kraft Heinz","Land O'Lakes","Tillamook","Private Label","Sargento","Cargill","Hormel","Oatly","Chic Foods","Fairlife","Silk"];
+const DESC = ["Core","Value","Premium","Organic","Family","Snack","Light","Classic","Grass-Fed","Zero"];
+
+function baseVal(k,node,r){
+  const s = node.sales;
+  switch(k.key){
+    case "sales":   return s;
+    case "units":   return s/(3+r()*2);
+    case "aiv":     return 3+r()*4;
+    case "agpPct":  return 33+r()*14;
+    case "agpDol":  return s*(0.28+r()*0.12);
+    case "cogs":    return s*(0.58+r()*0.12);
+    case "allow":   return s*(0.06+r()*0.07);
+    case "deadnet": return s*(0.45+r()*0.14);
+    case "mix":     return node.mix!=null? node.mix : 2+r()*22;
+    case "bog":     return 26+r()*30;
+    case "markdown":return 8+r()*26;
+    case "msMulo":  return 15+r()*12;
+    case "msFood":  return 27+r()*12;
+    case "turns":   return 8+r()*22;
+    case "oos":     return 1.5+r()*7;
+  }
+}
+function buildKpis(node){
+  const r = rng(node.name+"|"+node.sales.toFixed(2)+"|"+node.kind);
+  node.kpi = {};
+  KPIS.forEach(k=>{
+    const noise = (r()-0.5)*11;
+    const fm = node.tilt*8 + noise;              // favourable magnitude (+good / -bad)
+    const dir = k.up ? Math.sign(fm) : -Math.sign(fm);
+    let d = Math.abs(fm)*dir;                     // favourability-signed change
+    const value = baseVal(k,node,r);
+    let ly;
+    if(k.unit==="%"){ ly = value/(1+d/100); }
+    else { ly = value - d; }
+    node.kpi[k.key] = { value, ly, deltaNum:d };
+  });
+}
+
+let NID=0;
+function mk(name,sales,tilt,kind,mix){ const n={ id:"n"+(NID++), name, sales, tilt, kind, mix }; buildKpis(n); return n; }
+function splitSales(total,n,seed){ const r=rng(seed); const w=Array.from({length:n},()=>0.5+r()); const sum=w.reduce((a,b)=>a+b,0); return w.map(x=>+(total*x/sum).toFixed(1)); }
+const clampT=(t)=>Math.max(-0.95,Math.min(0.95,t));
+
+function buildTree(){
+  NID=0;
+  const root = mk(DEPT, GROUPS.reduce((a,g)=>a+g.sales,0), GROUPS.reduce((a,g)=>a+g.tilt,0)/GROUPS.length, "dept");
+  root.children = GROUPS.map(g=>{
+    const gn = mk(g.name, g.sales, g.tilt, "group");
+    const cs = splitSales(g.sales, g.cats.length, g.name);
+    gn.children = g.cats.map((c,ci)=>{
+      const ct = clampT(g.tilt*0.55 + (rng(c+g.name)()-0.5)*0.9);
+      const cn = mk(c, cs[ci], ct, "category", +(100*cs[ci]/g.sales).toFixed(1));
+      const nV = 4 + Math.floor(rng(c+"nv")()*2);           // 4-5 vendors
+      const vs = splitSales(cs[ci], nV, c+"|v");
+      cn.children = vs.map((sv,vi)=>{
+        const vt = clampT(ct*0.6 + (rng(c+vi+"v")()-0.5)*0.95);
+        const vname = VENDORS[(vi*3+ci)%VENDORS.length];
+        const vn = mk(vname, sv, vt, "vendor");
+        const nI = 6 + Math.floor(rng(vname+vi+ci+"ni")()*7);// 6-12 items
+        const is = splitSales(sv, nI, vname+"|i"+vi+ci);
+        const tag = vname.split(" ")[0];
+        vn.children = is.map((iv,ii)=>{
+          const it = clampT(vt*0.7 + (rng(vname+ii+ci+"it")()-0.5)*0.95);
+          const inm = c+" — "+tag+" "+DESC[ii%DESC.length]+(ii>=DESC.length? " "+(Math.floor(ii/DESC.length)+1):"");
+          const item = mk(inm, iv, it, "item");
+          item.ncrc = "NCRC "+(100000+Math.floor(rng(inm+ii)()*899999));
+          return item;
+        });
+        return vn;
+      });
+      return cn;
+    });
+    return gn;
+  });
+  return root;
+}
+const ROOT = buildTree();
+
+/* ============================ formatting ============================ */
+function fmtVal(k,v){
+  switch(k.fmt){
+    case "moneyM": return "$"+v.toFixed(1)+"M";
+    case "numM":   return v.toFixed(1)+"M";
+    case "money2": return "$"+v.toFixed(2);
+    case "pct":    return v.toFixed(1)+"%";
+    case "turns":  return v.toFixed(1)+"×";
+  }
+}
+function fmtDelta(k,kp){
+  const s = kp.deltaNum>=0? "+":"−", a=Math.abs(kp.deltaNum);
+  const u = k.unit==="pp"?"pp":"%";
+  return s+a.toFixed(1)+u;
+}
+const KINDS = { group:"G", category:"C", vendor:"V", item:"I", dept:"Σ" };
+const childKind = { dept:"group", group:"category", category:"vendor", vendor:"item" };
+const posneg = (kp)=> kp.deltaNum>=0? "pos":"neg";
+const arrow  = (kp)=> kp.deltaNum>=0? "▲":"▼";
+
+/* ============================ state ============================ */
+const state = {
+  path:[ROOT],
+  layout:"sparkbar",
+  sort:{ key:"sales", mode:"value", dir:-1 },
+  filter:"",
+  metricKeys:["agpDol","sales","units","markdown","msMulo","turns"],
+  hlEntity:null,
+};
+
+const $ = (s)=>document.querySelector(s);
+const canvas = $("#canvas");
+const cur = ()=> state.path[state.path.length-1];
+
+function siblings(){
+  let arr = (cur().children||[]).slice();
+  if(state.filter){ const q=state.filter.toLowerCase(); arr = arr.filter(n=>n.name.toLowerCase().includes(q)); }
+  return arr;
+}
+function sortBy(arr, key, mode, dir){
+  return arr.slice().sort((a,b)=>{
+    const x = mode==="delta"? a.kpi[key].deltaNum : a.kpi[key].value;
+    const y = mode==="delta"? b.kpi[key].deltaNum : b.kpi[key].value;
+    return (x-y)*dir;
+  });
+}
+function drill(node){ if(node.children && node.children.length){ state.path.push(node); state.hlEntity=null; render(); } }
+function upTo(i){ state.path = state.path.slice(0,i+1); state.hlEntity=null; render(); }
+
+/* ============================ chrome ============================ */
+function renderCrumbs(){
+  const parts=[];
+  state.path.forEach((n,i)=>{
+    if(i) parts.push('<span class="sep">▸</span>');
+    const last = i===state.path.length-1;
+    const cls = i===0? "crumb home":(last?"crumb here":"crumb");
+    const label = i===0? DEPT : n.name;
+    parts.push(`<span class="${cls}" data-up="${i}">${label}</span>`);
+  });
+  const kind = childKind[cur().kind];
+  const n = siblings().length;
+  parts.push(`<span class="lvlchip">${n} ${kind}${n===1?"":"s"}</span>`);
+  $("#crumbs").innerHTML = parts.join("");
+}
+function syncControls(){
+  const ss=$("#sortSel");
+  if(!ss.dataset.built){ ss.innerHTML = KPIS.map(k=>`<option value="${k.key}">${k.label}</option>`).join(""); ss.dataset.built="1"; }
+  ss.value = state.sort.key;
+  $("#modeSel").value = state.sort.mode;
+  $("#dirBtn").textContent = state.sort.dir<0? "↓":"↑";
+  const metric = state.layout==="metric";
+  $("#sortSel").style.display = metric? "none":"";
+  $("#dirBtn").style.display  = metric? "none":"";
+  document.querySelectorAll("#switch button").forEach(b=>b.classList.toggle("active", b.dataset.lay===state.layout));
+}
+
+/* ============================ 1 · SPARKBAR ROWS ============================ */
+function renderSparkbar(){
+  const rows = sortBy(siblings(), state.sort.key, state.sort.mode, state.sort.dir);
+  if(!rows.length){ canvas.innerHTML='<div class="empty">No matches at this level.</div>'; return; }
+  const cols = KPIS;
+  const grid = `260px repeat(${cols.length}, minmax(84px,1fr))`;
+  // per-KPI max among current rows (for bar scale)
+  const maxV = {}; cols.forEach(k=>{ maxV[k.key] = Math.max(...rows.map(n=>Math.max(n.kpi[k.key].value, n.kpi[k.key].ly)),0.0001); });
+
+  const head = `<div class="sb-head" style="grid-template-columns:${grid}">
+      <div class="sb-h name">Name</div>
+      ${cols.map(k=>`<div class="sb-h ${state.sort.key===k.key?"sorted":""}" data-sort="${k.key}" title="${k.label} — click to sort">${k.label}</div>`).join("")}
+    </div>`;
+
+  const body = rows.map(n=>{
+    const drillable = !!(n.children && n.children.length);
+    const cells = cols.map(k=>{
+      const kp=n.kpi[k.key], m=maxV[k.key];
+      const w = Math.max(3, Math.min(100, kp.value/m*100));
+      const ly = Math.max(0, Math.min(100, kp.ly/m*100));
+      return `<div class="sb-cell"><div class="bullet" title="${k.label}: ${fmtVal(k,kp.value)} (${fmtDelta(k,kp)} vs LY ${fmtVal(k,kp.ly)})">
+          <div class="track"></div>
+          <div class="fill ${posneg(kp)}" style="width:${w}%"></div>
+          <div class="ly" style="left:calc(${ly}% - 1px)"></div>
+          <div class="num">${fmtVal(k,kp.value)}</div>
+        </div></div>`;
+    }).join("");
+    return `<div class="sb-row" data-drill="${n.id}" style="grid-template-columns:${grid}">
+        <div class="sb-name"><span class="tag t-${n.kind}">${KINDS[n.kind]}</span>
+          <span class="sb-nm">${n.name}${n.ncrc?`<small>${n.ncrc}</small>`:""}</span>
+          ${drillable?'<span class="chev" style="margin-left:auto">›</span>':""}
+        </div>${cells}</div>`;
+  }).join("");
+
+  canvas.innerHTML = head + body;
+}
+
+/* ============================ 2 · HEAT GRID ============================ */
+function heatStyle(kp){
+  const d=kp.deltaNum, mag=Math.min(1, Math.abs(d)/9);
+  const rgb = d>=0? getCss("--heatPos"):getCss("--heatNeg");
+  const a = 0.10 + mag*0.72;
+  const light = mag>0.5? "#ffffff" : "var(--ink)";
+  return `background:rgba(${rgb},${a.toFixed(2)});color:${light};`;
+}
+function getCss(v){ return getComputedStyle(document.body).getPropertyValue(v).trim(); }
+function renderHeat(){
+  const rows = sortBy(siblings(), state.sort.key, state.sort.mode, state.sort.dir);
+  if(!rows.length){ canvas.innerHTML='<div class="empty">No matches at this level.</div>'; return; }
+  const cols = KPIS;
+  const grid = `220px repeat(${cols.length}, minmax(58px,1fr))`;
+  const head = `<div class="hg-head" style="grid-template-columns:${grid}">
+      <div class="hg-h name">Name</div>
+      ${cols.map(k=>`<div class="hg-h ${state.sort.key===k.key?"sorted":""}" data-sort="${k.key}" title="${k.label}">${k.label}</div>`).join("")}
+    </div>`;
+  const body = rows.map(n=>{
+    const drillable=!!(n.children&&n.children.length);
+    const cells = cols.map(k=>{
+      const kp=n.kpi[k.key];
+      return `<div class="hg-cell" style="${heatStyle(kp)}" title="${k.label}: ${fmtVal(k,kp.value)} (${fmtDelta(k,kp)})">
+          <span class="hv">${fmtVal(k,kp.value)}</span><span class="hd">${arrow(kp)} ${fmtDelta(k,kp)}</span>
+        </div>`;
+    }).join("");
+    return `<div class="hg-row" data-drill="${n.id}" style="grid-template-columns:${grid}">
+        <div class="hg-name"><span class="tag t-${n.kind}">${KINDS[n.kind]}</span>
+          <span class="sb-nm">${n.name}</span>${drillable?'<span class="chev" style="margin-left:auto">›</span>':""}
+        </div>${cells}</div>`;
+  }).join("");
+  const legend = `<div class="legend"><span>Worse vs LY</span>
+      <div class="scale">${Array.from({length:11},(_,i)=>{const d=(i-5)/5*9; return `<span style="${heatStyle({deltaNum:d})}"></span>`;}).join("")}</div>
+      <span>Better vs LY</span> · <span style="margin-left:auto">colour = Δ vs last year; number = current value</span></div>`;
+  canvas.innerHTML = `<div class="hg-wrap">${head}${body}</div>${legend}`;
+}
+
+/* ============================ 3 · METRIC COLUMNS ============================ */
+function renderMetric(){
+  const base = siblings();
+  if(!base.length){ canvas.innerHTML='<div class="empty">No matches at this level.</div>'; return; }
+  const cols = state.metricKeys.map(key=>{
+    const k=KPI[key];
+    const ranked = sortBy(base, key, state.sort.mode, -1); // best first
+    return { k, ranked };
+  });
+  const board = cols.map(({k,ranked})=>{
+    const chips = ranked.map((n,i)=>{
+      const kp=n.kpi[k.key], drillable=!!(n.children&&n.children.length);
+      return `<div class="mc-chip" data-ent="${n.id}" data-drill="${drillable?n.id:""}">
+          <span class="mc-rank">${i+1}</span>
+          <span class="mc-body"><span class="mc-nm">${n.name}</span><span class="mc-val">${fmtVal(k,kp.value)}</span></span>
+          <span class="mc-delta ${posneg(kp)}">${arrow(kp)} ${fmtDelta(k,kp)}</span>
+        </div>`;
+    }).join("");
+    return `<div class="mc-col">
+        <div class="mc-colh"><span class="ttl">${k.label}</span><button class="rm" data-rmcol="${k.key}" title="Remove">×</button></div>
+        <div class="mc-list">${chips}</div>
+      </div>`;
+  }).join("");
+  const menu = `<div class="mc-col mc-add">
+      <button class="addbtn" id="addColBtn">＋ Add metric</button>
+      <div class="mc-menu" id="addMenu" style="display:none">
+        ${KPIS.map(k=>`<button data-addcol="${k.key}" class="${state.metricKeys.includes(k.key)?"on":""}">${state.metricKeys.includes(k.key)?"✓ ":""}${k.label}</button>`).join("")}
+      </div></div>`;
+  canvas.innerHTML = `<div class="mc-board">${board}${menu}</div>`;
+  applyHighlight();
+}
+function applyHighlight(){
+  const chips = canvas.querySelectorAll(".mc-chip");
+  chips.forEach(c=>{
+    c.classList.toggle("hl", state.hlEntity && c.dataset.ent===state.hlEntity);
+    c.classList.toggle("dim", state.hlEntity && c.dataset.ent!==state.hlEntity);
+  });
+}
+
+/* ============================ render dispatch ============================ */
+function render(){
+  renderCrumbs(); syncControls();
+  $("#hint").innerHTML = ({
+    sparkbar:"Each KPI is a bar (length = value vs the biggest sibling); the grey notch is last year, the bar is green/red for the change. Hover a row for exact numbers; click a column header to sort; click a row to drill in.",
+    heatgrid:"Every cell is coloured by its change vs last year — scan for a row that's red across the board, or a column everyone's losing. Click a header to sort, a row to drill in.",
+    metric:"Each column ranks all entities on one metric (best on top, by the Value/Δ toggle). Hover a name to trace it across every column; click to drill in. Add or drop metrics on the right."
+  })[state.layout];
+  if(state.layout==="sparkbar") renderSparkbar();
+  else if(state.layout==="heatgrid") renderHeat();
+  else renderMetric();
+}
+
+/* ============================ events ============================ */
+$("#crumbs").addEventListener("click", e=>{ const c=e.target.closest("[data-up]"); if(c) upTo(+c.dataset.up); });
+$("#switch").addEventListener("click", e=>{ const b=e.target.closest("[data-lay]"); if(b){ state.layout=b.dataset.lay; render(); } });
+$("#filter").addEventListener("input", e=>{ state.filter=e.target.value; render(); });
+$("#sortSel").addEventListener("change", e=>{ state.sort.key=e.target.value; render(); });
+$("#modeSel").addEventListener("change", e=>{ state.sort.mode=e.target.value; render(); });
+$("#dirBtn").addEventListener("click", ()=>{ state.sort.dir*=-1; render(); });
+
+canvas.addEventListener("click", e=>{
+  // header sort (sparkbar / heat)
+  const h = e.target.closest("[data-sort]");
+  if(h){ const k=h.dataset.sort; if(state.sort.key===k) state.sort.dir*=-1; else {state.sort.key=k; state.sort.dir=-1;} render(); return; }
+  // metric add/remove
+  const rm = e.target.closest("[data-rmcol]");
+  if(rm){ state.metricKeys=state.metricKeys.filter(x=>x!==rm.dataset.rmcol); render(); return; }
+  const addBtn = e.target.closest("#addColBtn");
+  if(addBtn){ const m=$("#addMenu"); m.style.display=m.style.display==="none"?"grid":"none"; return; }
+  const add = e.target.closest("[data-addcol]");
+  if(add){ const key=add.dataset.addcol; const i=state.metricKeys.indexOf(key); i>=0? state.metricKeys.splice(i,1):state.metricKeys.push(key); render(); const m=$("#addMenu"); if(m) m.style.display="grid"; return; }
+  // drill
+  const d = e.target.closest("[data-drill]");
+  if(d && d.dataset.drill){ const node=findNode(d.dataset.drill); if(node) drill(node); }
+});
+canvas.addEventListener("mouseover", e=>{
+  if(state.layout!=="metric") return;
+  const c=e.target.closest(".mc-chip"); const id=c?c.dataset.ent:null;
+  if(id!==state.hlEntity){ state.hlEntity=id; applyHighlight(); }
+});
+canvas.addEventListener("mouseleave", ()=>{ if(state.layout==="metric" && state.hlEntity){ state.hlEntity=null; applyHighlight(); } });
+
+function findNode(id){ let f=null; (function w(n){ if(n.id===id)f=n; (n.children||[]).forEach(w); })(cur()); return f; }
+
+$("#darkTog").addEventListener("click", ()=>{ document.body.classList.toggle("dark"); render(); });
+
+render();
+</script>
+</body>
+</html>

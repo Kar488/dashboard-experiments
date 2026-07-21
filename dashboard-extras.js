@@ -1008,10 +1008,28 @@
     store: "All Stores",
     compareDivision: "",          // "" means compare to LY (default)
     selectedMetric: "sales",      // active chart metric chip
-    expandedPeriod: null,         // 1..13 when a period is expanded inline
+    expandedPeriod: null,         // 1..13 when a period is expanded inline (P&L slide)
     weekMode: "fiscal",           // "fiscal" | "promo" — week scheme labels
     searchKind: "cig",            // "cig" | "upc" | "ncrc"
-    searchValue: ""               // typed search value (narrows table data)
+    searchValue: "",              // typed search value (narrows table data)
+    slide: 0,                     // active deck slide: 0 KPI Trends · 1 P&L · 2 Store Analysis
+    kpi: {                        // KPI Trends slide — hierarchy scope + time scale
+      depts: [],                  // seeded with the owned departments below
+      asms: [], groups: [], cats: [], classes: [], subs: [],
+      scale: "period",            // "week" | "period" | "quarter"
+      expandedPeriod: null,       // 1..13 → 4 weeks inline
+      expandedQuarter: null,      // 0..3 → its periods inline
+      sortBy: "",                 // "" chronological, else a KPI label — reorders the time columns
+      sortDir: "desc"
+    },
+    sa: {                         // Store Analysis slide — filters + column sort
+      depts: [], districts: [], stores: [],
+      sortBy: "num",              // "num" | "loc" | "district" | a KPI label
+      sortDir: "asc"
+    },
+    heatPalette: "sage",          // diverging cell-tint palette, shared by all 3 slides
+    openMsel: null,               // which multi-select popup is open, e.g. "kpi.depts"
+    mselQ: ""                     // its type-ahead query
   };
   let wplCollapsed = false;
 
@@ -1026,6 +1044,185 @@
     "Jewel-Osco Division", "Shaw's and Star Market Division", "Mid-Atlantic Division",
     "United Division"
   ];
+
+  // ---- merch hierarchy + store dimensions for the KPI Trends / Store Analysis slides.
+  // Everything carries a code AND a name (mirrors the real hierarchy); departments run
+  // past 50 so the picker defaults to the 1–2 you own and type-aheads the rest — same
+  // UX as the 52-week plan constraints page.
+  const WPL_DEPTS = (() => {
+    const names = [
+      "Grocery", "Frozen Foods", "Dairy", "Produce", "Meat", "Seafood", "Service Deli",
+      "Floral", "Liquor", "Beer & Wine", "General Merchandise", "Health & Beauty",
+      "Pharmacy", "Candy", "Snacks", "Beverages", "Water & Sparkling", "Coffee & Tea",
+      "Cereal & Breakfast", "Baking", "Spices & Seasonings", "Canned Goods",
+      "Condiments & Sauces", "Pasta & Grains", "International Foods", "Natural & Organic",
+      "Baby Care", "Pet Care", "Paper Goods", "Cleaning Supplies", "Laundry",
+      "Personal Care", "Cosmetics", "Vitamins & Supplements", "First Aid", "Kitchenware",
+      "Small Appliances", "Seasonal", "Toys", "Stationery", "Automotive", "Hardware",
+      "Garden", "Sporting Goods", "Electronics", "Books & Magazines", "Greeting Cards",
+      "Party Supplies", "Ice Cream", "Cheese Shop", "Sushi", "Salad Bar", "Hot Foods", "Catering"
+    ];
+    const list = [
+      { code: "370", name: "Deli/Prepared Foods", owned: true },
+      { code: "380", name: "Bakery", owned: true }
+    ];
+    let code = 100;
+    names.forEach((n) => { code += 5; while (code === 370 || code === 380) code += 5; list.push({ code: String(code), name: n }); });
+    return list.sort((a, b) => Number(a.code) - Number(b.code));
+  })();
+  const WPL_OWNED_DEPTS = WPL_DEPTS.filter((d) => d.owned).map((d) => d.code);
+  wplState.kpi.depts = WPL_OWNED_DEPTS.slice();
+  wplState.sa.depts = WPL_OWNED_DEPTS.slice();
+
+  const WPL_ASMS = [
+    { code: "A01", name: "Maria Gonzalez" }, { code: "A02", name: "Derek Holt" },
+    { code: "A03", name: "Priya Natarajan" }, { code: "A04", name: "Sam Whitfield" },
+    { code: "A05", name: "Elaine Cho" }, { code: "A06", name: "Marcus Reed" },
+    { code: "A07", name: "Anna Kowalski" }, { code: "A08", name: "Jordan Ellis" },
+    { code: "A09", name: "Tom Delgado" }, { code: "A10", name: "Rachel Kim" },
+    { code: "A11", name: "Victor Osei" }, { code: "A12", name: "Dana Brooks" }
+  ];
+  const dim = ([code, name]) => ({ code, name });
+  // Linked hierarchy: department → category → class → sub-class. The owned
+  // departments carry curated category names; every other department gets a
+  // deterministic generated tree so the cascade always resolves. Each child
+  // picker only offers options under the levels selected above it.
+  const WPL_HIER = (() => {
+    const groups = [], cats = [], classes = [], subs = [];
+    // department → groups (same level the Performance Explorer drills, e.g. "35 · Eggs") → categories
+    const CURATED = {
+      "370": [
+        ["Hot Case", ["Rotisserie", "Fried Chicken", "Hot Sides", "Soups"]],
+        ["Meals & Sandwiches", ["Sandwiches", "Prepared Meals"]],
+        ["Entertaining", ["Party Trays", "Sushi"]]
+      ],
+      "380": [
+        ["Fresh Bakery", ["Artisan Bread", "Bagels & Rolls"]],
+        ["Sweet Goods", ["Cakes & Cupcakes", "Donuts & Pastries", "Seasonal Bakery"]]
+      ]
+    };
+    const GEN_GROUPS = [["Core Range", ["Core", "Value"]], ["Specialty Range", ["Specialty", "Seasonal"]]];
+    const CLASS_POOL = ["Core", "Specialty", "Organic", "Premium", "Value", "Private Label", "National Brand", "Local"];
+    const SUB_POOL = ["Everyday", "Multipack", "Club Pack", "Single Serve", "Grab & Go", "Limited Time", "New Item", "Family Pack"];
+    let gSeq = 10;
+    WPL_DEPTS.forEach((d) => {
+      const tree = CURATED[d.code] || GEN_GROUPS.map(([gn, cs]) => [gn, cs.map((n) => `${d.name} ${n}`)]);
+      let ci = 0;
+      tree.forEach(([gName, catNames]) => {
+        const gCode = String(gSeq++);
+        groups.push({ code: gCode, name: gName, dept: d.code });
+        catNames.forEach((nm) => {
+          ci++;
+          const cCode = d.code + String(ci);
+          cats.push({ code: cCode, name: nm, dept: d.code, group: gCode });
+          const nCls = 2 + (hashCode(cCode) % 2);
+          for (let k = 0; k < nCls; k++) {
+            const clCode = cCode + String(k + 1);
+            classes.push({ code: clCode, name: CLASS_POOL[(hashCode(cCode) + k * 3) % CLASS_POOL.length], cat: cCode });
+            const nSub = 2 + (hashCode(clCode) % 2);
+            for (let s = 0; s < nSub; s++) {
+              subs.push({ code: clCode + String(s + 1), name: SUB_POOL[(hashCode(clCode) + s * 5) % SUB_POOL.length], cls: clCode });
+            }
+          }
+        });
+      });
+    });
+    return { groups, cats, classes, subs };
+  })();
+  function kpiGroupOptions() {
+    return WPL_HIER.groups.filter((g) => wplState.kpi.depts.indexOf(g.dept) >= 0);
+  }
+  function kpiCatOptions() {
+    const sel = wplState.kpi.groups;
+    const avail = sel.length ? sel : kpiGroupOptions().map((g) => g.code);
+    const ok = {};
+    avail.forEach((g) => { ok[g] = 1; });
+    return WPL_HIER.cats.filter((c) => ok[c.group]);
+  }
+  function kpiClassOptions() {
+    const sel = wplState.kpi.cats;
+    const avail = sel.length ? sel : kpiCatOptions().map((c) => c.code);
+    const ok = {};
+    avail.forEach((c) => { ok[c] = 1; });
+    return WPL_HIER.classes.filter((c) => ok[c.cat]);
+  }
+  function kpiSubOptions() {
+    const sel = wplState.kpi.classes;
+    const avail = sel.length ? sel : kpiClassOptions().map((c) => c.code);
+    const ok = {};
+    avail.forEach((c) => { ok[c] = 1; });
+    return WPL_HIER.subs.filter((s) => ok[s.cls]);
+  }
+  // parent selection changed → drop child picks that fell out of scope
+  function pruneKpiHierarchy() {
+    const grpOk = {};
+    kpiGroupOptions().forEach((g) => { grpOk[g.code] = 1; });
+    wplState.kpi.groups = wplState.kpi.groups.filter((g) => grpOk[g]);
+    const catOk = {};
+    kpiCatOptions().forEach((c) => { catOk[c.code] = 1; });
+    wplState.kpi.cats = wplState.kpi.cats.filter((c) => catOk[c]);
+    const clsOk = {};
+    kpiClassOptions().forEach((c) => { clsOk[c.code] = 1; });
+    wplState.kpi.classes = wplState.kpi.classes.filter((c) => clsOk[c]);
+    const subOk = {};
+    kpiSubOptions().forEach((s) => { subOk[s.code] = 1; });
+    wplState.kpi.subs = wplState.kpi.subs.filter((s) => subOk[s]);
+  }
+  const WPL_DISTRICTS = [
+    ["D-01", "Chicago North"], ["D-02", "Chicago South"], ["D-03", "Chicago West"], ["D-04", "North Shore"],
+    ["D-05", "Northwest Suburbs"], ["D-06", "West Suburbs"], ["D-07", "South Suburbs"], ["D-08", "Northwest Indiana"]
+  ].map(dim);
+  const WPL_STORES = [
+    ["0018", "Lincoln Park, IL", "D-01"], ["0022", "Lakeview, IL", "D-01"], ["0034", "Evanston, IL", "D-04"],
+    ["0041", "Skokie, IL", "D-04"], ["0049", "Wilmette, IL", "D-04"], ["0058", "Naperville, IL", "D-06"],
+    ["0063", "Aurora, IL", "D-06"], ["0071", "Wheaton, IL", "D-06"], ["0077", "Oak Park, IL", "D-03"],
+    ["0084", "Cicero, IL", "D-03"], ["0092", "Berwyn, IL", "D-03"], ["0103", "Orland Park, IL", "D-07"],
+    ["0111", "Tinley Park, IL", "D-07"], ["0118", "Oak Lawn, IL", "D-07"], ["0125", "Hammond, IN", "D-08"],
+    ["0132", "Merrillville, IN", "D-08"], ["0139", "Schererville, IN", "D-08"], ["0146", "Arlington Heights, IL", "D-05"],
+    ["0153", "Palatine, IL", "D-05"], ["0160", "Schaumburg, IL", "D-05"], ["0167", "Des Plaines, IL", "D-05"],
+    ["0174", "Mount Prospect, IL", "D-05"], ["0181", "Downers Grove, IL", "D-06"], ["0188", "Lombard, IL", "D-06"],
+    ["0195", "Elmhurst, IL", "D-03"], ["0202", "Hyde Park, IL", "D-02"], ["0209", "Beverly, IL", "D-02"],
+    ["0216", "Bridgeport, IL", "D-02"]
+  ].map(([num, loc, district]) => ({ num, loc, district }));
+
+  // Retail calendar quarters over the 13 periods (Q4 carries the 13th).
+  const WPL_QUARTERS = [
+    { label: "Q1", periods: [1, 2, 3] }, { label: "Q2", periods: [4, 5, 6] },
+    { label: "Q3", periods: [7, 8, 9] }, { label: "Q4", periods: [10, 11, 12, 13] }
+  ];
+
+  const WPL_SLIDES = [
+    { key: "kpi", title: "KPI Trends", tag: "Hierarchy scope · weekly / period / quarter", sub: "KPIs across your merch hierarchy. Filter department, ASM, category, class and sub-class; switch the time scale, sort by any KPI, and expand periods to weeks." },
+    { key: "pl", title: "Weekly P&L", tag: "P&L by period · expand weeks", sub: "P&L by period. Click a period column header to expand its 4 weeks inline, or swipe to the other views." },
+    { key: "stores", title: "Store Analysis", tag: "Same KPIs by store · district view", sub: "The KPI Trends measures by store, with store number, location and district. Filter by department, district and store; click a column header to sort." }
+  ];
+
+  // Store picker options — scoped to the selected districts, like the hierarchy cascade.
+  function saStoreOptions() {
+    const districts = wplState.sa.districts;
+    return WPL_STORES
+      .filter((s) => !districts.length || districts.indexOf(s.district) >= 0)
+      .map((s) => ({ code: s.num, name: s.loc }));
+  }
+  function pruneSaStores() {
+    const ok = {};
+    saStoreOptions().forEach((s) => { ok[s.code] = 1; });
+    wplState.sa.stores = wplState.sa.stores.filter((c) => ok[c]);
+  }
+
+  // Multi-select registry — one config per type-ahead picker on the KPI / Store slides.
+  // `items` is a function so the cascaded pickers resolve against the current parent picks.
+  const WPL_MSELS = {
+    "kpi.depts":     { label: "Department", noun: "departments", owned: true, items: () => WPL_DEPTS, min: 1, allLabel: "", get: () => wplState.kpi.depts, set: (v) => { wplState.kpi.depts = v; pruneKpiHierarchy(); } },
+    "kpi.asms":      { label: "ASM", noun: "ASMs", items: () => WPL_ASMS, min: 0, allLabel: "All ASMs", get: () => wplState.kpi.asms, set: (v) => { wplState.kpi.asms = v; } },
+    "kpi.groups":    { label: "Group", noun: "groups in scope", items: kpiGroupOptions, min: 0, allLabel: "All groups", get: () => wplState.kpi.groups, set: (v) => { wplState.kpi.groups = v; pruneKpiHierarchy(); } },
+    "kpi.cats":      { label: "Category", noun: "categories in scope", items: kpiCatOptions, min: 0, allLabel: "All categories", get: () => wplState.kpi.cats, set: (v) => { wplState.kpi.cats = v; pruneKpiHierarchy(); } },
+    "kpi.classes":   { label: "Class", noun: "classes in scope", items: kpiClassOptions, min: 0, allLabel: "All classes", get: () => wplState.kpi.classes, set: (v) => { wplState.kpi.classes = v; pruneKpiHierarchy(); } },
+    "kpi.subs":      { label: "Sub-class", noun: "sub-classes in scope", items: kpiSubOptions, min: 0, allLabel: "All sub-classes", get: () => wplState.kpi.subs, set: (v) => { wplState.kpi.subs = v; } },
+    "sa.depts":      { label: "Department", noun: "departments", owned: true, items: () => WPL_DEPTS, min: 1, allLabel: "", get: () => wplState.sa.depts, set: (v) => { wplState.sa.depts = v; } },
+    "sa.districts":  { label: "District", noun: "districts", items: () => WPL_DISTRICTS, min: 0, allLabel: "All districts", get: () => wplState.sa.districts, set: (v) => { wplState.sa.districts = v; pruneSaStores(); } },
+    "sa.stores":     { label: "Store", noun: "stores in scope", items: saStoreOptions, min: 0, allLabel: "All stores", get: () => wplState.sa.stores, set: (v) => { wplState.sa.stores = v; } }
+  };
 
   // Metric chips that drive the trend chart. Each metric has its own data
   // shape (e.g. Sales = $M, Units = K, AGP% = %). Real provider would map
@@ -1112,17 +1309,20 @@
     { label: "Gross Profit",           kind: "money",  group: "pl", emphasis: true },
     { label: "Retail Allowances",      kind: "money",  group: "pl" },
     { label: "Real GP + Other Revenue",kind: "money",  group: "pl", emphasis: true },
-    // KPI items — per user spec
+    // KPI items — mirrors the Performance Explorer column set
     { label: "Sales",                  kind: "money",  group: "kpi" },
     { label: "Units",                  kind: "units",  group: "kpi" },
+    { label: "AIV",                    kind: "dollar", group: "kpi" },
     { label: "AGP %",                  kind: "pct",    group: "kpi" },
     { label: "AGP $",                  kind: "money",  group: "kpi" },
     { label: "COGS",                   kind: "money",  group: "kpi" },
     { label: "Allowances",             kind: "money",  group: "kpi" },
     { label: "Deadnet Cost",           kind: "money",  group: "kpi" },
     { label: "Sales Mix",              kind: "pct",    group: "kpi" },
-    { label: "BOG",                    kind: "pct",    group: "kpi" },
-    { label: "Markdown",               kind: "money",  group: "kpi", negative: true },
+    { label: "BOG %",                  kind: "pct",    group: "kpi" },
+    { label: "Markdown %",             kind: "pct",    group: "kpi", negative: true },
+    { label: "MKT Share MULO+",        kind: "pct",    group: "kpi" },
+    { label: "MKT Share Food",         kind: "pct",    group: "kpi" },
     { label: "Discount Depth",         kind: "pct",    group: "kpi", negative: true },
     { label: "CPI - P",                kind: "pct",    group: "kpi" },
     { label: "CPI - W",                kind: "pct",    group: "kpi" }
@@ -1146,7 +1346,9 @@
     const searchF = searchScopeFactor();
     if (metric.kind === "pct") {
       const cur = 40 + ((seed % 26) - 8);
-      const lyBase = cur + ((seed % 5) - 2);
+      // small, sign-mixed LY offsets so the vs-LY tint field reads like the
+      // Performance Explorer (mostly light, both directions)
+      const lyBase = cur + ((seed % 5) - 2) * 0.6;
       const ly = wplState.compareDivision ? Number((lyBase * compareFactor).toFixed(1)) : lyBase;
       return { current: cur, ly, deltaPct: cur - ly, isPp: true };
     }
@@ -1163,7 +1365,8 @@
       return { current: cur, ly, deltaPct: ly ? ((cur - ly) / ly) * 100 : 0, deltaDollar: (cur - ly) * 1000 };
     }
     const cur = (3.5 + ((seed % 38) - 10) / 10) * searchF;
-    const lyBase = (cur - 0.18 + ((seed % 5) - 2) / 40);
+    // relative deltas −4%…+4%, mixed sign — matches the explorer's tint spread
+    const lyBase = cur * (1 + ((seed % 9) - 4) / 100);
     const ly = wplState.compareDivision ? lyBase * compareFactor : lyBase;
     return { current: cur * 1e6, ly: ly * 1e6, deltaPct: ly ? ((cur - ly) / ly) * 100 : 0, deltaDollar: (cur - ly) * 1e6 };
   }
@@ -1198,48 +1401,84 @@
     // from the dropdown and a single header chip would suffice if needed.
     return wplState.compareDivision ? "DIV" : "LY";
   }
+  // Four data lines per cell, exactly like the Performance Explorer heat grid:
+  // CY value · LY value · relative Δ% · (absolute Δ in the metric's unit).
   function formatPeriodCell(metric, cell) {
-    let primary = "-";
-    if (metric.kind === "pct") primary = `${cell.current.toFixed(1)}%`;
-    else if (metric.kind === "dollar") primary = `$${cell.current.toFixed(2)}`;
-    else if (metric.kind === "units") primary = `${cell.current.toFixed(0)}K`;
-    else primary = fmtMoney(cell.current);
-    const dir = cell.deltaPct >= 0 ? "positive" : "negative";
-    const deltaText = cell.isPp ? fmtPct(cell.deltaPct, true)
-      : cell.deltaDollar != null ? `${cell.deltaDollar >= 0 ? "+" : ""}${metric.kind === "units" ? fmtUnits(cell.deltaDollar) : fmtMoney(cell.deltaDollar)}`
-      : fmtPct(cell.deltaPct);
-    const lyText = metric.kind === "pct" ? `${cell.ly.toFixed(1)}%`
-      : metric.kind === "dollar" ? `$${cell.ly.toFixed(2)}`
-      : metric.kind === "units" ? `${cell.ly.toFixed(0)}K`
-      : fmtMoney(cell.ly);
+    const fmtVal = (v) => metric.kind === "pct" ? `${v.toFixed(1)}%`
+      : metric.kind === "dollar" ? `$${v.toFixed(2)}`
+      : metric.kind === "units" ? `${v.toFixed(0)}K`
+      : fmtMoney(v);
+    const diff = cell.current - cell.ly;
+    const relPct = cell.ly ? (diff / Math.abs(cell.ly)) * 100 : 0;
+    const pctStr = `${relPct < 0 ? "−" : ""}${Math.abs(relPct).toFixed(1)}%`;
+    const sign = diff >= 0 ? "+" : "−";
+    const absStr = metric.kind === "pct" ? `${sign}${Math.abs(diff).toFixed(1)}pp`
+      : metric.kind === "dollar" ? `${sign}$${Math.abs(diff).toFixed(2)}`
+      : metric.kind === "units" ? `${sign}${fmtUnits(Math.abs(diff) * 1000)}`
+      : `${sign}${fmtMoney(Math.abs(diff))}`;
+    const dir = diff >= 0 ? "positive" : "negative";
     return `
       <div class="wpl-cell">
-        <span class="wpl-value">${primary}</span>
-        <span class="wpl-delta ${dir}">${deltaText}</span>
-        <span class="wpl-ly">${compareLabel()} ${lyText}</span>
+        <span class="wpl-value">${fmtVal(cell.current)}</span>
+        <span class="wpl-ly">${fmtVal(cell.ly)}</span>
+        <span class="wpl-delta ${dir}">${pctStr}</span>
+        <span class="wpl-dabs ${dir}">(${absStr})</span>
       </div>
     `;
+  }
+
+  // Soft diverging heat tint per cell — same palettes + alpha formula as the
+  // Performance Explorer heat grid: alpha grows with |Δ vs LY|, capped so it
+  // never glares. Returns an inline style for the td.
+  const WPL_PALETTES = {
+    none:     { label: "None — clean table" },
+    sage:     { pos: "96,150,120",  neg: "198,132,116", label: "Sage / Clay" },
+    teal:     { pos: "90,158,150",  neg: "205,123,102", label: "Teal / Terracotta" },
+    bluamber: { pos: "86,132,190",  neg: "206,154,86",  label: "Blue / Amber (colour-blind safe)" },
+    indigo:   { pos: "108,128,196", neg: "214,124,120", label: "Indigo / Coral" },
+    emerald:  { pos: "88,156,118",  neg: "190,110,80",  label: "Emerald / Rust" },
+    steel:    { pos: "104,146,152", neg: "186,138,140", label: "Muted steel / Rose" },
+    slate:    { pos: "118,140,172", neg: "198,168,96",  label: "Slate / Gold (colour-blind safe)" },
+    ocean:    { pos: "92,150,168",  neg: "202,140,110", label: "Ocean / Sand" },
+    classic:  { pos: "110,160,110", neg: "200,110,105", label: "Classic green / red (muted)" },
+    mono:     { pos: "120,150,178", neg: "150,158,168", label: "Mono blue (single-hue)" }
+  };
+  function wplHeatStyle(cell) {
+    const p = WPL_PALETTES[wplState.heatPalette] || WPL_PALETTES.sage;
+    if (!p.pos) return "";
+    // Magnitude is the RELATIVE % change vs LY for every metric kind — the same
+    // basis the Performance Explorer uses, so equal palettes render equal colours
+    // (tinting rate metrics by raw pp made them read far darker than the explorer).
+    const d = cell.ly != null
+      ? (cell.ly ? ((cell.current - cell.ly) / Math.abs(cell.ly)) * 100 : 0)
+      : (Number(cell.deltaPct) || 0);
+    const mag = Math.min(1, Math.abs(d) / 9);
+    const rgb = d >= 0 ? p.pos : p.neg;
+    return `background:rgba(${rgb},${(0.05 + mag * 0.5).toFixed(3)});`;
+  }
+  function wplPaletteHTML() {
+    return `
+      <label class="wpl-heat-picker"><span>Palette</span>
+        <select data-wpl-palette>
+          ${Object.keys(WPL_PALETTES).map((k) => `<option value="${k}" ${wplState.heatPalette === k ? "selected" : ""}>${WPL_PALETTES[k].label}</option>`).join("")}
+        </select>
+      </label>`;
+  }
+  function wplHeatLegendHTML() {
+    if (!(WPL_PALETTES[wplState.heatPalette] || WPL_PALETTES.sage).pos) {
+      return `<div class="wpl-heat-legend"><span class="wpl-heat-note">Clean table — no heat colouring.</span></div>`;
+    }
+    const stops = Array.from({ length: 11 }, (_, i) => {
+      const d = ((i - 5) / 5) * 9;
+      return `<span style="${wplHeatStyle({ deltaPct: d })}"></span>`;
+    }).join("");
+    return `<div class="wpl-heat-legend"><span>Worse</span><div class="wpl-heat-scale">${stops}</div><span>Better vs ${compareLabel()}</span><span class="wpl-heat-note">Every cell is tinted by its change vs last year.</span></div>`;
   }
 
   function renderWeeklyPLPanel() {
     const host = document.getElementById("weeklyPLPanel");
     if (!host) return;
-    const periodCount = 13;
-    const expanded = wplState.expandedPeriod;
-    // When a period is expanded, replace its single column with 4 sub-week
-    // columns inline. Other periods stay visible.
-    // columnPlan is the ordered set of {kind:"period"|"week", periodIdx, weekIdx?}
-    const columnPlan = [];
-    for (let p = 1; p <= periodCount; p++) {
-      if (expanded === p) {
-        for (let w = 0; w < 4; w++) {
-          columnPlan.push({ kind: "week", periodIdx: p, weekIdx: w });
-        }
-      } else {
-        columnPlan.push({ kind: "period", periodIdx: p });
-      }
-    }
-    const currentMetric = activeMetric();
+    const slide = WPL_SLIDES[wplState.slide] || WPL_SLIDES[0];
     host.innerHTML = `
       <!-- Hidden legacy stubs so the original app.js render calls still find their targets without throwing. -->
       <div id="weeklyTrend" hidden></div>
@@ -1247,7 +1486,7 @@
       <div class="panel-heading promo-exec-heading">
         <div>
           <h2>Weekly P&amp;L and KPI Trends</h2>
-          <p id="trendSubtitle">Pick a metric chip to switch the trend chart. Click a period column header to expand its 4 weeks inline.</p>
+          <p id="trendSubtitle">${slide.sub}</p>
         </div>
         <div class="detail-actions trend-search">
           <button class="export-button" type="button" data-wpl-export>Export weekly data</button>
@@ -1258,58 +1497,78 @@
       <div class="promo-exec-summary" id="wplSummary" ${wplCollapsed ? "" : "hidden"}>${wplCollapsed ? renderWplSummary() : ""}</div>
 
       <div id="wplBody" ${wplCollapsed ? "hidden" : ""}>
-      <div class="wpl-chart-wrap">
-        <header class="wpl-chart-head">
-          <strong>${currentMetric.label} &mdash; 52 week trend</strong>
-          <div class="wpl-legend">
-            <span class="legend-actual"></span>Actual
-            <span class="legend-forecast"></span>Forecast / LY
-          </div>
-        </header>
-        <div class="wpl-chip-row" aria-label="Trend metric and week scheme">
-          <div class="wpl-metric-capsule" role="tablist" aria-label="Trend metric">
-            ${chartMetrics.map((m) => `
-              <button type="button" class="wpl-capsule-opt ${wplState.selectedMetric === m.key ? "active" : ""}" data-wpl-chart-metric="${m.key}">${m.label}</button>
-            `).join("")}
-          </div>
-          <div class="wpl-week-mode" role="group" aria-label="Week scheme">
-            <span>Weeks</span>
-            <div class="wpl-metric-capsule wpl-metric-capsule-sm">
-              <button type="button" class="wpl-capsule-opt ${wplState.weekMode === "fiscal" ? "active" : ""}" data-wpl-week-mode="fiscal">Fiscal</button>
-              <button type="button" class="wpl-capsule-opt ${wplState.weekMode === "promo" ? "active" : ""}" data-wpl-week-mode="promo">Promo</button>
-            </div>
-          </div>
+      <!-- Swipeable deck: P&L, KPI Trends and Store Analysis are separate slides. The tab
+           cards show every available view; drag / trackpad-swipe the deck (no scrollbar) or
+           click a tab. Inside a slide the wide table pans first — the deck takes over at
+           the table's edge, same feel as the 52-week plan grid. -->
+      <div class="wpl-deck-navrow">
+        <div class="wpl-deck-nav" role="tablist" aria-label="Weekly P&L views">
+          ${WPL_SLIDES.map((s, i) => `
+            <button type="button" role="tab" class="wpl-deck-tab ${i === wplState.slide ? "is-active" : ""}" data-wpl-slide="${i}" aria-selected="${i === wplState.slide}" title="${escapeAttr(s.tag)}">
+              <span class="wpl-deck-tab-num">${i + 1}</span>
+              <span class="wpl-deck-tab-title">${s.title}</span>
+            </button>`).join("")}
         </div>
-        <div id="wplChartHost" class="wpl-chart-host"></div>
+        <span class="wpl-deck-swipehint">Swipe or drag sideways to switch views</span>
+        ${wplPaletteHTML()}
       </div>
+      <div class="wpl-deck" id="wplDeck">
+        <div class="wpl-deck-track">
+          <section class="wpl-slide" aria-label="KPI Trends">${renderKpiSlideHTML()}</section>
+          <section class="wpl-slide" aria-label="Weekly P&L">${renderPlSlideHTML()}</section>
+          <section class="wpl-slide" aria-label="Store Analysis">${renderStoreSlideHTML()}</section>
+        </div>
+      </div>
+      ${wplHeatLegendHTML()}
+      </div><!-- /#wplBody -->
+    `;
+    if (!wplCollapsed) {
+      mountWplChart();
+      bindWplDeck();
+      snapWplDeck(false);   // restore the active slide instantly (scroll-based, no transform)
+      if (!window.__wplDeckResizeBound) {
+        window.__wplDeckResizeBound = true;
+        window.addEventListener("resize", () => snapWplDeck(false));
+      }
+      // pin the store Total row directly under the (sticky) header, like the
+      // Performance Explorer's rolled-up top row
+      const storeHead = host.querySelector(".wpl-store-table thead");
+      if (storeHead) {
+        const h = Math.max(0, Math.round(storeHead.getBoundingClientRect().height) - 1);
+        host.querySelectorAll(".wpl-store-totalrow th, .wpl-store-totalrow td").forEach((el) => { el.style.top = h + "px"; });
+      }
+      // keep the open type-ahead usable across full re-renders (checkbox picks re-render the panel)
+      if (wplState.openMsel) {
+        const inp = host.querySelector(`[data-wpl-msel-search="${wplState.openMsel}"]`);
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+      }
+    }
+  }
 
-      <div class="wpl-table-filters" aria-label="Period table filters">
+  // ------------------------------------------ slide 1 — Weekly P&L
+  function plColumnPlan() {
+    // When a period is expanded, replace its single column with 4 sub-week
+    // columns inline. Other periods stay visible.
+    const plan = [];
+    for (let p = 1; p <= 13; p++) {
+      if (wplState.expandedPeriod === p) for (let w = 0; w < 4; w++) plan.push({ kind: "week", periodIdx: p, weekIdx: w });
+      else plan.push({ kind: "period", periodIdx: p });
+    }
+    return plan;
+  }
+  function renderPlSlideHTML() {
+    const columnPlan = plColumnPlan();
+    const expanded = wplState.expandedPeriod;
+    return `
+      <div class="wpl-table-filters" aria-label="P&L table filters">
         <span class="wpl-table-filters-label">Filter table by:</span>
         <label class="wpl-field"><span>Category</span><select data-wpl-filter="category">${categoryOptions.map((v) => `<option ${wplState.category === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-        <label class="wpl-field"><span>Class</span><select data-wpl-filter="klass">${classOptions.map((v) => `<option ${wplState.klass === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-        <label class="wpl-field"><span>Vendor</span><select data-wpl-filter="vendor">${vendorOptions.map((v) => `<option ${wplState.vendor === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-        <label class="wpl-field"><span>Store</span><select data-wpl-filter="store">${storeOptions.map((v) => `<option ${wplState.store === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-        <label class="wpl-field"><span>Compare to</span><select data-wpl-filter="compareDivision">${divisionOptions.map((v) => `<option value="${v}" ${wplState.compareDivision === v ? "selected" : ""}>${v || "LY period"}</option>`).join("")}</select></label>
-        <div class="wpl-search-field">
-          <label class="wpl-field">
-            <span>Search</span>
-            <div class="wpl-search-control">
-              <select data-wpl-filter="searchKind">
-                <option value="cig" ${wplState.searchKind === "cig" ? "selected" : ""}>CIG</option>
-                <option value="upc" ${wplState.searchKind === "upc" ? "selected" : ""}>UPC</option>
-                <option value="ncrc" ${wplState.searchKind === "ncrc" ? "selected" : ""}>NCRC</option>
-              </select>
-              <input type="search" placeholder="Type ${wplState.searchKind ? wplState.searchKind.toUpperCase() : "id"}..." value="${escapeAttr(wplState.searchValue || "")}" data-wpl-filter="searchValue" />
-            </div>
-          </label>
-        </div>
       </div>
-
       <div class="wpl-table-wrap">
         <table class="wpl-period-table">
           <thead>
             <tr>
-              <th class="wpl-rowname">P&amp;L / KPI</th>
+              <th class="wpl-rowname">P&amp;L</th>
               ${columnPlan.map((col) => col.kind === "period"
                 ? `<th class="wpl-period-th"><button type="button" class="wpl-period-btn ${expanded === col.periodIdx ? "is-expanded" : ""}" data-wpl-period="${col.periodIdx}">P${col.periodIdx}</button></th>`
                 : `<th class="wpl-week-col ${col.weekIdx === 3 ? "wpl-week-last" : ""} ${col.weekIdx === 0 ? "wpl-week-first" : ""}">
@@ -1321,13 +1580,349 @@
             </tr>
           </thead>
           <tbody>
-            ${renderWplBody(columnPlan)}
+            ${metricRowsHTML(wplMetrics.filter((m) => m.group === "pl"), columnPlan, null, "wpl-row-pl")}
           </tbody>
         </table>
+      </div>`;
+  }
+
+  // ------------------------------------------ slide 2 — KPI Trends
+  function kpiSig() {
+    const k = wplState.kpi;
+    return [k.asms.join(","), k.depts.join(","), k.groups.join(","), k.cats.join(","), k.classes.join(","), k.subs.join(",")].join("|");
+  }
+  function kpiColumnPlan() {
+    const k = wplState.kpi, plan = [];
+    if (k.scale === "week") {
+      for (let p = 1; p <= 13; p++) for (let w = 0; w < 4; w++) plan.push({ kind: "week", periodIdx: p, weekIdx: w });
+      return plan;
+    }
+    if (k.scale === "period") {
+      for (let p = 1; p <= 13; p++) {
+        if (k.expandedPeriod === p) for (let w = 0; w < 4; w++) plan.push({ kind: "week", periodIdx: p, weekIdx: w });
+        else plan.push({ kind: "period", periodIdx: p });
+      }
+      return plan;
+    }
+    // quarter scale: an expanded quarter shows its periods; a period inside it can
+    // expand further into its 4 weeks (same drill as the 52-week plan grid).
+    WPL_QUARTERS.forEach((q, qi) => {
+      if (k.expandedQuarter !== qi) { plan.push({ kind: "quarter", qIdx: qi }); return; }
+      q.periods.forEach((p, pj) => {
+        if (k.expandedPeriod === p) for (let w = 0; w < 4; w++) plan.push({ kind: "week", periodIdx: p, weekIdx: w, qFirst: pj === 0 && w === 0 });
+        else plan.push({ kind: "period", periodIdx: p, qFirst: pj === 0 });
+      });
+    });
+    return plan;
+  }
+  function kpiHeaderCells(plan) {
+    const k = wplState.kpi;
+    return plan.map((col) => {
+      if (col.kind === "quarter") {
+        return `<th class="wpl-period-th"><button type="button" class="wpl-period-btn" data-wpl-kpi-quarter="${col.qIdx}" title="Expand ${WPL_QUARTERS[col.qIdx].label} into its periods">${WPL_QUARTERS[col.qIdx].label}</button></th>`;
+      }
+      if (col.kind === "period") {
+        return `<th class="wpl-period-th ${col.qFirst ? "wpl-week-first" : ""}">
+            <button type="button" class="wpl-period-btn ${k.expandedPeriod === col.periodIdx ? "is-expanded" : ""}" data-wpl-kpi-period="${col.periodIdx}" title="Expand P${col.periodIdx} into its 4 weeks">P${col.periodIdx}</button>
+            ${col.qFirst ? `<button type="button" class="wpl-week-close" data-wpl-kpi-quarter-close aria-label="Collapse quarter">&times;</button>` : ""}
+          </th>`;
+      }
+      const close = col.qFirst
+        ? `<button type="button" class="wpl-week-close" data-wpl-kpi-quarter-close aria-label="Collapse quarter">&times;</button>`
+        : (col.weekIdx === 0 && k.scale !== "week" ? `<button type="button" class="wpl-week-close" data-wpl-kpi-period-close aria-label="Collapse P${col.periodIdx}">&times;</button>` : "");
+      return `<th class="wpl-week-col ${col.weekIdx === 3 ? "wpl-week-last" : ""} ${col.weekIdx === 0 ? "wpl-week-first" : ""}">
+          <span class="wpl-week-label">${weekLabel(col)}</span>
+          ${close}
+        </th>`;
+    }).join("");
+  }
+  function renderKpiSlideHTML() {
+    const k = wplState.kpi;
+    let plan = kpiColumnPlan();
+    // Sort the time columns by the chosen KPI (best → worst), instead of
+    // chronologically. Expanding a period/quarter resets to chronological.
+    const sortMetric = k.sortBy ? wplMetrics.find((m) => m.group === "kpi" && m.label === k.sortBy) : null;
+    if (sortMetric) {
+      const sig = kpiSig();
+      const periodCells = Array.from({ length: 13 }, (_, pi) => scaledCell(sortMetric, periodCellValue(sortMetric, pi), sig));
+      const valFor = (col) => col.kind === "quarter" ? quarterCellValue(sortMetric, col.qIdx, periodCells).current
+        : col.kind === "period" ? periodCells[col.periodIdx - 1].current
+        : weekCellValue(sortMetric, periodCells[col.periodIdx - 1], col.periodIdx, col.weekIdx).current;
+      plan = plan.slice().sort((a, b) => (valFor(b) - valFor(a)) * (k.sortDir === "asc" ? -1 : 1));
+    }
+    const scales = [["week", "Weekly"], ["period", "Period"], ["quarter", "Quarter"]];
+    const scaleNoun = k.scale === "week" ? "weeks" : k.scale === "quarter" ? "quarters" : "periods";
+    return `
+      <div class="wpl-table-filters wpl-kpi-filters" aria-label="KPI trend filters">
+        <span class="wpl-table-filters-label">Scope:</span>
+        ${renderWplMsel("kpi.asms")}
+        ${renderWplMsel("kpi.depts")}
+        ${renderWplMsel("kpi.groups")}
+        ${renderWplMsel("kpi.cats")}
+        ${renderWplMsel("kpi.classes")}
+        ${renderWplMsel("kpi.subs")}
+        <div class="wpl-field wpl-scale-field"><span>Time scale</span>
+          <div class="wpl-metric-capsule wpl-metric-capsule-sm">
+            ${scales.map(([key, label]) => `<button type="button" class="wpl-capsule-opt ${wplState.kpi.scale === key ? "active" : ""}" data-wpl-kpi-scale="${key}">${label}</button>`).join("")}
+          </div>
+        </div>
+        <label class="wpl-field wpl-sort-field"><span>Sort ${scaleNoun} by</span>
+          <div class="wpl-sort-control">
+            <select data-wpl-kpi-sort>
+              <option value="" ${k.sortBy ? "" : "selected"}>Chronological</option>
+              ${wplMetrics.filter((m) => m.group === "kpi").map((m) => `<option value="${escapeAttr(m.label)}" ${k.sortBy === m.label ? "selected" : ""}>${m.label}</option>`).join("")}
+            </select>
+            <button type="button" class="wpl-sort-dir" data-wpl-kpi-sortdir ${k.sortBy ? "" : "disabled"} title="${k.sortDir === "asc" ? "Lowest first — click for highest first" : "Highest first — click for lowest first"}">${k.sortDir === "asc" ? "&#8593;" : "&#8595;"}</button>
+          </div>
+        </label>
       </div>
-      </div><!-- /#wplBody -->
-    `;
-    if (!wplCollapsed) mountWplChart();
+      <div class="wpl-table-wrap">
+        <table class="wpl-period-table wpl-kpi-table">
+          <thead>
+            <tr><th class="wpl-rowname">KPI</th>${kpiHeaderCells(plan)}<th class="total-col">Total</th></tr>
+          </thead>
+          <tbody>
+            ${metricRowsHTML(wplMetrics.filter((m) => m.group === "kpi"), plan, kpiSig(), "wpl-row-kpi")}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // ------------------------------------------ slide 3 — Store Analysis
+  function storeCellValue(metric, store, sig) {
+    const base = periodCellValue(metric, hashCode(store.num + metric.label) % 13);
+    if (metric.kind === "pct") {
+      const shift = ((hashCode(sig + store.num + metric.label) % 11) - 5) * 0.5;
+      const cur = base.current + shift, ly = base.ly + shift * 0.7;
+      return { current: cur, ly, deltaPct: cur - ly, isPp: true };
+    }
+    if (metric.kind === "dollar") {
+      // rate-style metric (AIV): a store varies around the division number — never share-scaled
+      const shift = ((hashCode(sig + store.num + metric.label) % 11) - 5) * 0.05;
+      const cur = base.current + shift, ly = base.ly + shift * 0.6;
+      return { current: cur, ly, deltaDollar: cur - ly, deltaPct: ly ? ((cur - ly) / Math.abs(ly)) * 100 : 0 };
+    }
+    // each store carries a 2–5% share of the division-level number, then the
+    // department scope scales it — deterministic, so filters re-query stably.
+    const share = 0.02 + (hashCode(store.num + metric.label) % 30) / 1000;
+    const f = 0.3 + (hashCode(sig) % 60) / 100;
+    const cur = base.current * share * f, ly = base.ly * share * f;
+    return { current: cur, ly, deltaDollar: cur - ly, deltaPct: ly ? ((cur - ly) / Math.abs(ly)) * 100 : 0 };
+  }
+  function renderStoreSlideHTML() {
+    const sa = wplState.sa;
+    const kpiCols = wplMetrics.filter((m) => m.group === "kpi");
+    const districtName = {};
+    WPL_DISTRICTS.forEach((d) => { districtName[d.code] = d.name; });
+    const sig = "sa|" + sa.depts.join(",");
+    // filter → compute cells once → sort by the active column
+    let rows = WPL_STORES
+      .filter((s) => !sa.districts.length || sa.districts.indexOf(s.district) >= 0)
+      .filter((s) => !sa.stores.length || sa.stores.indexOf(s.num) >= 0)
+      .map((s) => ({ s, cells: kpiCols.map((m) => storeCellValue(m, s, sig)) }));
+    const metricIdx = kpiCols.findIndex((m) => m.label === sa.sortBy);
+    const keyFor = (r) => sa.sortBy === "num" ? r.s.num
+      : sa.sortBy === "loc" ? r.s.loc
+      : sa.sortBy === "district" ? r.s.district
+      : metricIdx >= 0 ? r.cells[metricIdx].current
+      : r.s.num;
+    rows = rows.slice().sort((a, b) => {
+      const ka = keyFor(a), kb = keyFor(b);
+      const cmp = typeof ka === "number" ? ka - kb : String(ka).localeCompare(String(kb));
+      return sa.sortDir === "asc" ? cmp : -cmp;
+    });
+    const arrow = (key) => sa.sortBy === key ? `<span class="wpl-sa-arrow">${sa.sortDir === "asc" ? "&#9650;" : "&#9660;"}</span>` : "";
+    const sortTh = (key, label, cls) => `<th class="${cls || ""}"><button type="button" class="wpl-sa-sort ${sa.sortBy === key ? "is-sorted" : ""}" data-wpl-sa-sort="${escapeAttr(key)}" title="Sort by ${escapeAttr(label)}">${label}${arrow(key)}</button></th>`;
+    // Rollup across the visible stores — summed for $/unit KPIs, sales-weighted
+    // average for rates (same convention as the Performance Explorer total row).
+    const totalCells = kpiCols.map((m, i) => {
+      const salesW = rows.map((r) => r.cells[0].current);
+      const wSum = salesW.reduce((a, v) => a + v, 0) || 1;
+      if (m.kind === "pct") {
+        const cur = rows.reduce((a, r, ri) => a + r.cells[i].current * salesW[ri], 0) / wSum;
+        const ly = rows.reduce((a, r, ri) => a + r.cells[i].ly * salesW[ri], 0) / wSum;
+        return { current: cur, ly, deltaPct: cur - ly, isPp: true };
+      }
+      const cur = rows.reduce((a, r) => a + r.cells[i].current, 0);
+      const ly = rows.reduce((a, r) => a + r.cells[i].ly, 0);
+      return { current: cur, ly, deltaDollar: cur - ly, deltaPct: ly ? ((cur - ly) / Math.abs(ly)) * 100 : 0 };
+    });
+    return `
+      <div class="wpl-table-filters wpl-kpi-filters" aria-label="Store analysis filters">
+        <span class="wpl-table-filters-label">Scope:</span>
+        ${renderWplMsel("sa.depts")}
+        ${renderWplMsel("sa.districts")}
+        ${renderWplMsel("sa.stores")}
+        <span class="wpl-store-count">${rows.length} of ${WPL_STORES.length} stores</span>
+      </div>
+      <div class="wpl-table-wrap wpl-store-wrap">
+        <table class="wpl-period-table wpl-store-table">
+          <thead>
+            <tr>
+              ${sortTh("num", "Store #", "wpl-rowname")}
+              ${sortTh("loc", "Location", "wpl-store-loc")}
+              ${sortTh("district", "District", "wpl-store-dist")}
+              ${kpiCols.map((m) => sortTh(m.label, m.label, "wpl-store-kpi-th")).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="wpl-store-totalrow">
+              <th class="wpl-rowname wpl-store-num">Total</th>
+              <td class="wpl-store-loc">${rows.length} store${rows.length === 1 ? "" : "s"}</td>
+              <td class="wpl-store-dist">${sa.districts.length ? sa.districts.join(", ") : "All districts"}</td>
+              ${kpiCols.map((m, i) => `<td>${formatPeriodCell(m, totalCells[i])}</td>`).join("")}
+            </tr>
+            ${rows.map(({ s, cells }) => `
+              <tr class="wpl-row" data-wpl-store="${s.num}">
+                <th class="wpl-rowname wpl-store-num">${s.num}</th>
+                <td class="wpl-store-loc">${s.loc}</td>
+                <td class="wpl-store-dist">${s.district} · ${districtName[s.district] || ""}</td>
+                ${kpiCols.map((m, i) => `<td style="${wplHeatStyle(cells[i])}">${formatPeriodCell(m, cells[i])}</td>`).join("")}
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // ------------------------------------------ shared type-ahead multi-select
+  // Chips-in-field + searchable checkbox popup, same UX as the 52-week plan
+  // constraints category picker (np-msel). Configured via WPL_MSELS.
+  function wplMselListHTML(key) {
+    const cfg = WPL_MSELS[key], items = cfg.items(), sel = cfg.get();
+    const q = (wplState.openMsel === key ? wplState.mselQ : "").trim().toLowerCase();
+    const row = (it) => `<label class="wpl-msel-row"><input type="checkbox" data-wpl-msel-opt="${key}" data-code="${escapeAttr(it.code)}" ${sel.indexOf(it.code) >= 0 ? "checked" : ""}><span class="wpl-msel-code">${it.code}</span><span class="wpl-msel-name">${escapeHtml(it.name)}</span>${it.owned ? '<em class="wpl-msel-badge">Yours</em>' : ""}</label>`;
+    if (!q) {
+      if (cfg.owned) {
+        const owned = items.filter((i) => i.owned);
+        const extraSel = items.filter((i) => !i.owned && sel.indexOf(i.code) >= 0);
+        return `<div class="wpl-msel-sect">Your departments · ${owned.length}</div>` + owned.map(row).join("") +
+          (extraSel.length ? `<div class="wpl-msel-sect">Also selected</div>` + extraSel.map(row).join("") : "") +
+          `<div class="wpl-msel-hint">Type above to search all ${items.length} departments by code or name</div>`;
+      }
+      const shown = items.slice(0, 14);
+      return shown.map(row).join("") + (items.length > shown.length ? `<div class="wpl-msel-hint">+${items.length - shown.length} more — type to search</div>` : "");
+    }
+    const hits = items.filter((i) => (i.code + " " + i.name).toLowerCase().indexOf(q) >= 0);
+    const shown = hits.slice(0, 40);
+    return `<div class="wpl-msel-sect">Matches · ${hits.length}</div>` +
+      (shown.map(row).join("") || `<div class="wpl-msel-hint">No ${cfg.noun} match your search</div>`) +
+      (hits.length > shown.length ? `<div class="wpl-msel-hint">+${hits.length - shown.length} more — keep typing to narrow</div>` : "");
+  }
+  function renderWplMsel(key) {
+    const cfg = WPL_MSELS[key], sel = cfg.get(), items = cfg.items();
+    const byCode = {};
+    items.forEach((i) => { byCode[i.code] = i; });
+    const open = wplState.openMsel === key;
+    const chips = sel.length
+      ? sel.slice(0, 2).map((code) => {
+          const nm = byCode[code] ? byCode[code].name : code;
+          const removable = sel.length > cfg.min;
+          return `<span class="wpl-msel-chip">${escapeHtml(nm)}${removable ? `<button type="button" class="wpl-msel-x" data-wpl-msel-x="${key}" data-code="${escapeAttr(code)}" aria-label="Remove ${escapeAttr(nm)}">&times;</button>` : ""}</span>`;
+        }).join("") + (sel.length > 2 ? `<span class="wpl-msel-morechip">+${sel.length - 2}</span>` : "")
+      : `<span class="wpl-msel-all">${cfg.allLabel}</span>`;
+    return `
+      <div class="wpl-field wpl-msel" data-wpl-msel="${key}">
+        <span>${cfg.label}</span>
+        <div class="wpl-msel-field" role="button" tabindex="0" data-wpl-msel-toggle="${key}" aria-haspopup="listbox" aria-expanded="${open}">${chips}<span class="wpl-msel-caret">&#9662;</span></div>
+        <div class="wpl-msel-pop" ${open ? "" : "hidden"}>
+          <input type="text" class="wpl-msel-search" data-wpl-msel-search="${key}" placeholder="Search ${items.length} ${cfg.noun} — code or name…" value="${escapeAttr(open ? wplState.mselQ : "")}" autocomplete="off" />
+          <div class="wpl-msel-list" data-wpl-msel-list="${key}">${wplMselListHTML(key)}</div>
+          <div class="wpl-msel-foot"><span>${sel.length ? `${sel.length} selected` : cfg.allLabel}</span>${sel.length > cfg.min ? `<button type="button" class="wpl-link-btn" data-wpl-msel-clear="${key}">${cfg.min ? "Reset to yours" : "Clear"}</button>` : ""}</div>
+        </div>
+      </div>`;
+  }
+
+  // ------------------------------------------ deck: tabs + drag/trackpad swipe
+  // The deck is positioned via scrollLeft, NEVER via transform: a persistent
+  // transform puts the whole deck on a compositing layer and Chrome then drops
+  // subpixel antialiasing for every glyph inside — text goes soft/thin compared
+  // to the Performance Explorer table. Scrolling keeps native crisp rendering.
+  const WPL_DECK_GAP = 28;   // px of daylight between cards mid-swipe (matches .wpl-deck-track gap)
+  function wplDeckStep() {
+    const deck = document.getElementById("wplDeck");
+    return (deck ? deck.clientWidth : 0) + WPL_DECK_GAP;
+  }
+  function snapWplDeck(smooth) {
+    const deck = document.getElementById("wplDeck");
+    if (deck) deck.scrollTo({ left: wplState.slide * wplDeckStep(), behavior: smooth ? "smooth" : "auto" });
+  }
+  function goToWplSlide(i) {
+    i = Math.max(0, Math.min(WPL_SLIDES.length - 1, i));
+    wplState.slide = i;
+    snapWplDeck(true);
+    document.querySelectorAll("[data-wpl-slide]").forEach((b) => {
+      const on = Number(b.dataset.wplSlide) === i;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-selected", String(on));
+    });
+    const sub = document.getElementById("trendSubtitle");
+    if (sub) sub.textContent = WPL_SLIDES[i].sub;
+  }
+  function bindWplDeck() {
+    const deck = document.getElementById("wplDeck");
+    if (!deck) return;
+    let down = false, drag = false, sx = 0, sy = 0, pid = null, startSlide = 0, width = 1, tableEl = null, tsl = 0, leftover = 0;
+    deck.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("input, select, button, a, .wpl-msel-pop")) return;
+      down = true; drag = false; leftover = 0;
+      sx = e.clientX; sy = e.clientY; pid = e.pointerId;
+      width = deck.clientWidth || 1; startSlide = wplState.slide;
+      tableEl = e.target.closest(".wpl-table-wrap");
+      tsl = tableEl ? tableEl.scrollLeft : 0;
+    });
+    deck.addEventListener("pointermove", (e) => {
+      if (!down) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!drag) {
+        if (Math.abs(dx) < 6 || Math.abs(dx) <= Math.abs(dy)) return;   // vertical intent → native scroll
+        drag = true; deck.classList.add("is-grab");
+        try { deck.setPointerCapture(pid); } catch (_) { /* ignore */ }
+      }
+      e.preventDefault();
+      // pan the inner table first; only the spill past its edge moves the deck
+      leftover = dx;
+      if (tableEl) {
+        const max = tableEl.scrollWidth - tableEl.clientWidth;
+        const want = tsl - dx;
+        const clamped = Math.max(0, Math.min(max, want));
+        tableEl.scrollLeft = clamped;
+        leftover = dx - (tsl - clamped);
+      }
+      const step = width + WPL_DECK_GAP;
+      const base = startSlide * step;
+      deck.scrollLeft = Math.max(0, Math.min((WPL_SLIDES.length - 1) * step, base - leftover));
+    });
+    const end = () => {
+      if (drag) {
+        deck.classList.remove("is-grab");
+        deck.__suppressClick = true;
+        goToWplSlide(Math.abs(leftover) > width * 0.18 ? startSlide - Math.sign(leftover) : startSlide);
+      }
+      down = false; drag = false; tableEl = null;
+    };
+    deck.addEventListener("pointerup", end);
+    deck.addEventListener("pointercancel", end);
+    deck.addEventListener("click", (e) => { if (deck.__suppressClick) { e.stopPropagation(); e.preventDefault(); deck.__suppressClick = false; } }, true);
+    // horizontal trackpad swipe advances the deck; inside a table the table pans
+    // natively first and the deck only takes over once the table hits its edge.
+    let wheelAcc = 0, wheelLock = 0;
+    deck.addEventListener("wheel", (e) => {
+      if (!e.deltaX || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      const wrap = e.target.closest(".wpl-table-wrap");
+      if (wrap) {
+        const max = wrap.scrollWidth - wrap.clientWidth;
+        const atEdge = e.deltaX > 0 ? wrap.scrollLeft >= max - 1 : wrap.scrollLeft <= 1;
+        if (!atEdge) { wheelAcc = 0; return; }
+      }
+      e.preventDefault();
+      const now = Date.now();
+      if (now < wheelLock) return;
+      wheelAcc += e.deltaX;
+      if (Math.abs(wheelAcc) > 160) {
+        goToWplSlide(wplState.slide + Math.sign(wheelAcc));
+        wheelAcc = 0; wheelLock = now + 650;
+      }
+    }, { passive: false });
   }
 
   // Collapsed summary for the Weekly P&L panel. Deliberately avoids the
@@ -1387,9 +1982,6 @@
 
     const scopeChips = [
       ["Category", wplState.category],
-      ["Class", wplState.klass],
-      ["Vendor", wplState.vendor],
-      ["Store", wplState.store],
       ["Compare", wplState.compareDivision || "LY period"]
     ].map(([k, v]) => `<span class="wpl-summary-chip"><span class="wpl-summary-chip-k">${k}</span><span class="wpl-summary-chip-v">${escapeHtml(String(v))}</span></span>`).join("");
 
@@ -1418,15 +2010,51 @@
     return `W${(col.periodIdx - 1) * 4 + col.weekIdx + 1}`;
   }
 
-  function renderWplBody(columnPlan) {
-    let html = "";
-    let lastGroup = null;
-    wplMetrics.forEach((metric) => {
-      if (metric.group !== lastGroup) {
-        html += `<tr class="wpl-section-row"><th colspan="${columnPlan.length + 2}">${metric.group === "pl" ? "P&L" : "KPI"}</th></tr>`;
-        lastGroup = metric.group;
-      }
-      const periodCells = Array.from({ length: 13 }, (_, pi) => periodCellValue(metric, pi));
+  // Deterministic re-query effect for the KPI hierarchy scope: money/units scale,
+  // percentages shift a little. sig is the joined filter selections.
+  function scaledCell(metric, cell, sig) {
+    if (sig == null) return cell;
+    if (metric.kind === "pct") {
+      const shift = ((hashCode(sig + metric.label) % 9) - 4) * 0.35;
+      const cur = cell.current + shift, ly = cell.ly + shift * 0.8;
+      return { current: cur, ly, deltaPct: cur - ly, isPp: true };
+    }
+    const f = 0.3 + (hashCode(sig + metric.label) % 60) / 100;
+    const cur = cell.current * f, ly = cell.ly * f;
+    return { current: cur, ly, deltaDollar: cur - ly, deltaPct: ly ? ((cur - ly) / Math.abs(ly)) * 100 : 0, isPp: false };
+  }
+  // synthesised week cell — vary the period cell by ±5% per sub-week; the LY
+  // side gets its own small wobble so each week tints individually instead of
+  // the whole period rendering as one uniform colour block
+  function weekCellValue(metric, base, periodIdx, weekIdx) {
+    const weekSeed = hashCode(metric.label + "w" + periodIdx + weekIdx);
+    const factor = (metric.kind === "pct" ? 1 : 0.25) + (weekSeed % 5) * 0.02;
+    const cur = base.current * factor;
+    const ly = base.ly * factor * (1 + (((weekSeed >> 2) % 7) - 3) / 150);
+    return {
+      current: cur, ly,
+      deltaDollar: cur - ly,
+      deltaPct: ly ? ((cur - ly) / Math.abs(ly)) * 100 : 0,
+      isPp: metric.kind === "pct"
+    };
+  }
+  // quarter = its periods summed (averaged for percentages)
+  function quarterCellValue(metric, qIdx, periodCells) {
+    const cells = WPL_QUARTERS[qIdx].periods.map((p) => periodCells[p - 1]);
+    if (metric.kind === "pct") {
+      const cur = cells.reduce((a, c) => a + c.current, 0) / cells.length;
+      const ly = cells.reduce((a, c) => a + c.ly, 0) / cells.length;
+      return { current: cur, ly, deltaPct: cur - ly, isPp: true };
+    }
+    const cur = cells.reduce((a, c) => a + c.current, 0);
+    const ly = cells.reduce((a, c) => a + c.ly, 0);
+    return { current: cur, ly, deltaDollar: cur - ly, deltaPct: ly ? ((cur - ly) / Math.abs(ly)) * 100 : 0 };
+  }
+  // Shared row builder for the P&L and KPI slides: one row per metric across a
+  // column plan of quarter / period / week columns, plus the Total column.
+  function metricRowsHTML(metrics, columnPlan, sig, rowClassExtra) {
+    return metrics.map((metric) => {
+      const periodCells = Array.from({ length: 13 }, (_, pi) => scaledCell(metric, periodCellValue(metric, pi), sig));
       const totalCurrent = periodCells.reduce((acc, c) => acc + (metric.kind === "pct" ? c.current / 13 : c.current), 0);
       const totalLy = periodCells.reduce((acc, c) => acc + (metric.kind === "pct" ? c.ly / 13 : c.ly), 0);
       const totalCell = {
@@ -1436,34 +2064,29 @@
         deltaPct: ((totalCurrent - totalLy) / Math.max(Math.abs(totalLy), 1)) * 100,
         isPp: metric.kind === "pct"
       };
+      // Emphasis rows (Gross Profit, Real GP + Other Revenue) are totals — they
+      // keep their flat sky-blue shading and never take the heat tint.
+      const tint = metric.emphasis ? () => "" : wplHeatStyle;
       const cellsHtml = columnPlan.map((col) => {
-        if (col.kind === "period") {
-          return `<td>${formatPeriodCell(metric, periodCells[col.periodIdx - 1])}</td>`;
+        if (col.kind === "quarter") {
+          const qc = quarterCellValue(metric, col.qIdx, periodCells);
+          return `<td class="wpl-quarter-cell" style="${tint(qc)}">${formatPeriodCell(metric, qc)}</td>`;
         }
-        // synthesised week cell — vary period cell by ±5% per sub-week
-        const weekSeed = hashCode(metric.label + "w" + col.periodIdx + col.weekIdx);
         const base = periodCells[col.periodIdx - 1];
-        const factor = (metric.kind === "pct" ? 1 : 0.25) + (weekSeed % 5) * 0.02;
-        const cur = base.current * factor / (metric.kind === "pct" ? 1 : 1);
-        const ly  = base.ly * factor / (metric.kind === "pct" ? 1 : 1);
-        const weekCell = {
-          current: metric.kind === "pct" ? cur : cur,
-          ly: metric.kind === "pct" ? ly : ly,
-          deltaDollar: cur - ly,
-          deltaPct: ly ? ((cur - ly) / Math.abs(ly)) * 100 : 0,
-          isPp: metric.kind === "pct"
-        };
-        return `<td class="wpl-week-cell ${col.weekIdx === 0 ? "wpl-week-first" : ""} ${col.weekIdx === 3 ? "wpl-week-last" : ""}">${formatPeriodCell(metric, weekCell)}</td>`;
+        if (col.kind === "period") {
+          return `<td${col.qFirst ? ' class="wpl-week-first"' : ""} style="${tint(base)}">${formatPeriodCell(metric, base)}</td>`;
+        }
+        const wc = weekCellValue(metric, base, col.periodIdx, col.weekIdx);
+        return `<td class="wpl-week-cell ${col.weekIdx === 0 ? "wpl-week-first" : ""} ${col.weekIdx === 3 ? "wpl-week-last" : ""}" style="${tint(wc)}">${formatPeriodCell(metric, wc)}</td>`;
       }).join("");
       const rowClass = [
         "wpl-row",
         metric.indent ? "wpl-row-indent" : "",
         metric.emphasis ? "wpl-row-emphasis" : "",
-        metric.group === "pl" ? "wpl-row-pl" : "wpl-row-kpi"
+        rowClassExtra || ""
       ].join(" ");
-      html += `<tr class="${rowClass}" data-wpl-metric="${escapeAttr(metric.label)}"><th class="wpl-rowname">${metric.label}</th>${cellsHtml}<td class="total-col">${formatPeriodCell(metric, totalCell)}</td></tr>`;
-    });
-    return html;
+      return `<tr class="${rowClass}" data-wpl-metric="${escapeAttr(metric.label)}"><th class="wpl-rowname">${metric.label}</th>${cellsHtml}<td class="total-col">${formatPeriodCell(metric, totalCell)}</td></tr>`;
+    }).join("");
   }
 
   function escapeAttr(s) {
@@ -1579,6 +2202,35 @@
   function bindWplEvents() {
     wireWplContextMenu();
     document.addEventListener("change", (event) => {
+      // Multi-select checkbox pick (KPI / Store slide type-aheads)
+      const mselOpt = event.target.closest("[data-wpl-msel-opt]");
+      if (mselOpt) {
+        const cfg = WPL_MSELS[mselOpt.dataset.wplMselOpt];
+        const code = mselOpt.dataset.code;
+        const sel = cfg.get().slice();
+        const ix = sel.indexOf(code);
+        if (ix >= 0) { if (sel.length <= cfg.min) { renderWeeklyPLPanel(); return; } sel.splice(ix, 1); }
+        else sel.push(code);
+        cfg.set(sel);
+        renderWeeklyPLPanel();
+        return;
+      }
+      // Heat palette — shared across all three slides
+      const palette = event.target.closest("[data-wpl-palette]");
+      if (palette) {
+        wplState.heatPalette = palette.value;
+        renderWeeklyPLPanel();
+        return;
+      }
+      // KPI Trends: sort the time columns by a KPI (clears any expansion)
+      const kpiSort = event.target.closest("[data-wpl-kpi-sort]");
+      if (kpiSort) {
+        wplState.kpi.sortBy = kpiSort.value;
+        wplState.kpi.expandedPeriod = null;
+        wplState.kpi.expandedQuarter = null;
+        renderWeeklyPLPanel();
+        return;
+      }
       const filter = event.target.closest("[data-wpl-filter]");
       if (filter) {
         const key = filter.dataset.wplFilter;
@@ -1586,9 +2238,27 @@
         renderWeeklyPLPanel();
       }
     });
+    // Close any open multi-select popup when clicking outside it
+    document.addEventListener("mousedown", (event) => {
+      if (wplState.openMsel && !event.target.closest(".wpl-msel")) {
+        wplState.openMsel = null;
+        wplState.mselQ = "";
+        renderWeeklyPLPanel();
+      }
+    });
     // Live search-value input: debounce-light, re-render the table on input.
     let searchTimer = null;
     document.addEventListener("input", (event) => {
+      // Type-ahead inside a multi-select popup — refresh just the list so the
+      // input keeps focus and caret.
+      const mselSearch = event.target.closest("[data-wpl-msel-search]");
+      if (mselSearch) {
+        const key = mselSearch.dataset.wplMselSearch;
+        wplState.mselQ = mselSearch.value;
+        const list = document.querySelector(`[data-wpl-msel-list="${key}"]`);
+        if (list) list.innerHTML = wplMselListHTML(key);
+        return;
+      }
       const filter = event.target.closest("[data-wpl-filter='searchValue']");
       if (filter) {
         wplState.searchValue = filter.value;
@@ -1634,6 +2304,90 @@
       }
     });
     document.addEventListener("click", (event) => {
+      // Deck tab — slide between P&L, KPI Trends and Store Analysis
+      const tab = event.target.closest("[data-wpl-slide]");
+      if (tab) { goToWplSlide(Number(tab.dataset.wplSlide)); return; }
+      // Multi-select: chip remove, clear/reset, field open/close
+      const mselX = event.target.closest("[data-wpl-msel-x]");
+      if (mselX) {
+        const cfg = WPL_MSELS[mselX.dataset.wplMselX];
+        const sel = cfg.get().filter((c) => c !== mselX.dataset.code);
+        if (sel.length >= cfg.min) { cfg.set(sel); renderWeeklyPLPanel(); }
+        return;
+      }
+      const mselClear = event.target.closest("[data-wpl-msel-clear]");
+      if (mselClear) {
+        const cfg = WPL_MSELS[mselClear.dataset.wplMselClear];
+        cfg.set(cfg.min ? WPL_OWNED_DEPTS.slice() : []);
+        renderWeeklyPLPanel();
+        return;
+      }
+      const mselToggle = event.target.closest("[data-wpl-msel-toggle]");
+      if (mselToggle) {
+        const key = mselToggle.dataset.wplMselToggle;
+        wplState.openMsel = wplState.openMsel === key ? null : key;
+        wplState.mselQ = "";
+        renderWeeklyPLPanel();
+        return;
+      }
+      // KPI Trends slide: sort direction, time scale + quarter/period drill
+      const kpiSortDir = event.target.closest("[data-wpl-kpi-sortdir]");
+      if (kpiSortDir) {
+        wplState.kpi.sortDir = wplState.kpi.sortDir === "asc" ? "desc" : "asc";
+        renderWeeklyPLPanel();
+        return;
+      }
+      const scaleBtn = event.target.closest("[data-wpl-kpi-scale]");
+      if (scaleBtn) {
+        wplState.kpi.scale = scaleBtn.dataset.wplKpiScale;
+        wplState.kpi.expandedPeriod = null;
+        wplState.kpi.expandedQuarter = null;
+        renderWeeklyPLPanel();
+        return;
+      }
+      // Store Analysis: column-header sort (click again to flip direction)
+      const saSort = event.target.closest("[data-wpl-sa-sort]");
+      if (saSort) {
+        const key = saSort.dataset.wplSaSort;
+        if (wplState.sa.sortBy === key) {
+          wplState.sa.sortDir = wplState.sa.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          wplState.sa.sortBy = key;
+          // identity columns read naturally ascending; KPI columns biggest-first
+          wplState.sa.sortDir = (key === "num" || key === "loc" || key === "district") ? "asc" : "desc";
+        }
+        renderWeeklyPLPanel();
+        return;
+      }
+      const kpiQuarter = event.target.closest("[data-wpl-kpi-quarter]");
+      if (kpiQuarter) {
+        wplState.kpi.expandedQuarter = Number(kpiQuarter.dataset.wplKpiQuarter);
+        wplState.kpi.expandedPeriod = null;
+        wplState.kpi.sortBy = "";
+        renderWeeklyPLPanel();
+        return;
+      }
+      const kpiQuarterClose = event.target.closest("[data-wpl-kpi-quarter-close]");
+      if (kpiQuarterClose) {
+        wplState.kpi.expandedQuarter = null;
+        wplState.kpi.expandedPeriod = null;
+        renderWeeklyPLPanel();
+        return;
+      }
+      const kpiPeriod = event.target.closest("[data-wpl-kpi-period]");
+      if (kpiPeriod) {
+        const p = Number(kpiPeriod.dataset.wplKpiPeriod);
+        wplState.kpi.expandedPeriod = wplState.kpi.expandedPeriod === p ? null : p;
+        wplState.kpi.sortBy = "";
+        renderWeeklyPLPanel();
+        return;
+      }
+      const kpiPeriodClose = event.target.closest("[data-wpl-kpi-period-close]");
+      if (kpiPeriodClose) {
+        wplState.kpi.expandedPeriod = null;
+        renderWeeklyPLPanel();
+        return;
+      }
       // Chart metric chip
       const chartChip = event.target.closest("[data-wpl-chart-metric]");
       if (chartChip) {
