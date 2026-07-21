@@ -1801,6 +1801,49 @@
     return blocks;
   };
 
+  R.incrementality_cohort = (id, e) => {
+    // Causal treated-vs-comparison read. The KPI rows come from the measures
+    // the QUESTION enumerates ("changes in sales, units, trips, ...") — no
+    // fixed list; unrecognized asks fall back to the standard KPI set.
+    const ask = e.rawAsk || "";
+    const rng = rngFor(id + ask.length);
+    const m = ask.match(/(?:changes? in|impact on|effects? on|lift in)\s+([^?.]{10,240}?)(?=\s+(?:were|was|caused|compared|after|due|from)\b|[?.]|$)/i);
+    const kpis = (m ? m[1].split(/,|\band\b/).map((s) => s.trim()).filter((s) => s && s.length < 40) : [])
+      .slice(0, 10);
+    const rows = (kpis.length >= 2 ? kpis : ["sales per household", "units", "trips", "basket size", "retention"]).map((k, i) => {
+      const r = rngFor(id, 30 + i);
+      const conf = ["High", "Medium", "High", "Medium", "Low"][i % 5];
+      if (/penetration|retention|share|breadth/i.test(k)) {
+        const c = rr(r, 0.1, 0.6), lift = rr(r, -0.005, 0.03);
+        return [k, fmt.pct(c + lift), fmt.pct(c), fmt.pts(lift), conf];
+      }
+      if (/sales|profit|basket|spend|revenue/i.test(k)) {
+        const c = rr(r, 40, 420), lift = rr(r, -0.01, 0.09);
+        return [k, "$" + (c * (1 + lift)).toFixed(2), "$" + c.toFixed(2), fmt.spct(lift), conf];
+      }
+      const c = rr(r, 2, 40), lift = rr(r, -0.01, 0.11);
+      return [k, (c * (1 + lift)).toFixed(1), c.toFixed(1), fmt.spct(lift), conf];
+    });
+    const subsidy = rr(rng, 0.5, 0.72);
+    const blocks = [];
+    blocks.push(H(`Redemption drove genuinely incremental trips and breadth in this read, but ~${fmt.pct(subsidy, 0)} of treated sales would likely have occurred anyway — the net economics stay positive after offer cost.`));
+    blocks.push(TB("Per-KPI incremental read — treated vs matched comparison — ILLUSTRATIVE",
+      ["KPI", "Treated (redeemers)", "Matched comparison", "Incremental lift", "Confidence"], rows));
+    blocks.push(BU([
+      `Subsidy vs incremental: ~${fmt.pct(subsidy, 0)} of treated-linked sales read as subsidized (would have happened without the offer); the genuinely incremental movement concentrates in frequency-type KPIs rather than spend-per-trip.`,
+      "Comparison design: eligible households that did not redeem, matched on prior spend, trip frequency, and household characteristics — the same controls the question names."
+    ]));
+    blocks.push(GAPBOX([
+      "Not traceable yet: household-grain outcomes with a treatment link (who redeemed, who was eligible) are not onboarded — the cohorts and matched comparisons above cannot be built from current tables.",
+      "This request has been logged against the gap backlog; when the household/offer-redemption feed lands, the same question returns real numbers with no other change."
+    ]));
+    blocks.push(FU([
+      "Want the store/item-level read around these offers (the data we DO have) as a partial proxy?",
+      "Should the household offer-redemption feed be added to the onboarding backlog?"
+    ]));
+    return blocks;
+  };
+
   R.complex_diagnostic = (id, e) => {
     // Partial execution: EVERY supportable section runs; blocked areas are
     // stated in merchant language. Never one card + a routing map.
@@ -2211,7 +2254,11 @@
     }
     if (bestCat) { e.domain = bestDom; e.cat = bestCat; }
     else for (const [dom, smics] of Object.entries(POOLS.smics)) {
-      if (smics.some((s) => t.includes(s.toLowerCase().slice(0, 8)))) { e.domain = dom; e.cat = smics.find((s) => t.includes(s.toLowerCase().slice(0, 8))); break; }
+      // fallback: the category's FIRST WORD as a whole word ("laundry" →
+      // LAUNDRY DETERGENT). Never a raw prefix — "households" must not
+      // match HOUSEHOLD CLEANERS.
+      const hit = smics.find((s) => { const w = s.toLowerCase().split(" ")[0]; return w.length >= 4 && new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(t); });
+      if (hit) { e.domain = dom; e.cat = hit; break; }
     }
     for (const [abbr, canonical] of Object.entries(VENDOR_SYN)) {
       if (t.includes(abbr)) { e.vendor = canonical; break; }
@@ -2406,6 +2453,9 @@
     // concept-coverage guard: if the question's core concepts exist in no
     // archetype, never force-fit the nearest pattern.
     const UNCOVERED = [
+      // causal treated-vs-comparison asks (offer redemption, promo exposure,
+      // program participation) — a cohort design, never a single-metric card
+      [/would not otherwise( have)? occurred|controlling for|did not redeem|non-?redeem|\bredemption\b|\bredeem(ed|ing)?\b|matched (non-)?(households|stores|shoppers|customers)|treatment group|control group/i, "incrementality_cohort"],
       [/facings?|planogram|shelf[- ]?(width|space|productivity)|days of supply|out-of-stock|\boos\b|pack[- ]?out|spaced relative/i, "novel_analysis"],
       [/basket (affinity|analysis)|penetration|switching|loyalty segment|trip (mission|frequency)|share of wallet/i, "novel_analysis"],
       [/exclusiv|(household|hh\b).*(overlap|exclusiv)|overlap.*promo|promo.*overlap/i, "household_exclusivity"],
@@ -3200,7 +3250,7 @@
     const stages = el("div", "stages");
     bubble.appendChild(stages);
     scrollDown();
-    const willConstruct = match.tier === 3 && match.guarded && match.arch === "novel_analysis" && LLM.live;
+    const willConstruct = match.tier === 3 && match.guarded && ["novel_analysis", "incrementality_cohort"].includes(match.arch) && LLM.live;
     const willInfer = match.tier === 3 && !match.guarded && LLM.live;
     let liveRow = null;
     if (willConstruct || willInfer) {
