@@ -14,12 +14,19 @@ const root = __dirname;
 // is gitignored on purpose — never commit keys (GitHub secret scanning
 // auto-reports pushed OpenAI keys for revocation).
 try {
-  const envFile = fs.readFileSync(path.join(root, ".env"), "utf8");
-  envFile.split("\n").forEach((line) => {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.+?)\s*$/);
-    if (m && !m[1].startsWith("#") && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  const buf = fs.readFileSync(path.join(root, ".env"));
+  // PowerShell can write UTF-16 (`>` / Out-File) — decode it, don't parse garbage
+  const envFile = (buf[0] === 0xFF && buf[1] === 0xFE) ? buf.toString("utf16le") : buf.toString("utf8");
+  const loaded = [];
+  envFile.split(/\r?\n/).forEach((line) => {
+    const m = line.replace(/^\uFEFF/, "").match(/^\s*([A-Z0-9_]+)\s*=\s*(.+?)\s*$/);
+    if (m && !m[1].startsWith("#") && !process.env[m[1]]) { process.env[m[1]] = m[2].replace(/^["']|["']$/g, ""); loaded.push(m[1]); }
+    else if (m && process.env[m[1]]) loaded.push(m[1] + " (already set in environment)");
   });
-  console.log("Loaded .env config");
+  // name WHICH settings loaded (never the values) — "Loaded .env config"
+  // alone hid the case where the file existed but nothing parsed
+  if (loaded.length) console.log("Loaded .env config: " + loaded.join(", "));
+  else console.warn("WARNING: .env file found but nothing could be parsed from it — expected plain lines like OPENAI_API_KEY=sk-... (plain text, no smart quotes)");
 } catch { /* no .env file — env vars only */ }
 const types = {
   ".html": "text/html; charset=utf-8",
