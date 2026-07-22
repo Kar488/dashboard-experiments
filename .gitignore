@@ -10,3 +10,4 @@ _pdfx.js
 node_modules/
 data/constructed-templates.json
 .env
+data/resolved-questions.json

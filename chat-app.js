@@ -3152,7 +3152,7 @@
   // pre-dates the merchant-content schema OR was built under an older
   // construct contract (e.g. before the answer-first validator) — either
   // way it re-constructs once on next use and upserts under the same id.
-  const SPEC_VERSION = 2;
+  const SPEC_VERSION = 3;
   const specIsStale = (spec) => !specHasMerchantContent(spec) || (spec.spec_version || 1) < SPEC_VERSION;
   function registerConstructed(spec) {
     if (!spec || !spec.id) return false;
@@ -3261,7 +3261,10 @@
       else if (s.example) blocks.push(NOTE(s.example));
     });
     blocks.push(NOTE(`Illustrative values — ${untraceable.length ? "key inputs for this analysis aren't onboarded yet (flip “Data lineage” for the exact feeds and status of every figure)" : "pending validation against live data"}. This response shape was constructed for this question and registered — similar questions now answer instantly.`));
-    blocks.push(FU(["Adjust this template's sections or columns before it hardens into the registry?", "Which piece should run on real data first?"]));
+    // follow-ups are MERCHANT drill-downs authored by the constructor for
+    // this content — never template/pipeline governance questions
+    blocks.push(FU((spec.follow_ups || []).length ? spec.follow_ups.slice(0, 3)
+      : [`Drill into the top ${ (spec.sections || []).find((s) => s.type === "table" && s.row_entity) ? (spec.sections.find((s) => s.type === "table" && s.row_entity).row_entity) : "row" }s driving this?`, "Cut this by division to localize it?"]));
     return blocks;
   }
 
@@ -3278,8 +3281,15 @@
     if (forcedId) spec.id = forcedId;
     spec.original_question = (forcedId && CONSTRUCTED[forcedId] && CONSTRUCTED[forcedId].original_question) || text;
     registerConstructed(spec);
-    fetch("/api/registry/constructed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }).catch(() => {});
+    // persistence is VERIFIED, not fire-and-forget — a silent write failure
+    // would re-construct every session with no visible cause
+    let persisted = false, registryCount = null;
+    try {
+      const pr = await fetch("/api/registry/constructed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) });
+      if (pr.ok) { persisted = true; registryCount = (await pr.json()).count; }
+    } catch { /* persisted stays false */ }
     return { ...match, arch: spec.id, live: true, constructed: true, model: spec._meta.model,
+      persisted, registryCount,
       specVersion: spec.spec_version || null,
       latency: (match.latency || 0) + spec._meta.latency_ms,
       llm: { confidence: null, usage: { input_tokens: spec._meta.input_tokens, output_tokens: spec._meta.output_tokens } } };
@@ -3294,8 +3304,13 @@
   const FORCE_SIM = new URLSearchParams(location.search).has("simulate");
   if (!FORCE_SIM) fetch("/api/llm/status").then((r) => r.json()).then((s) => { LLM = s; }).catch(() => {});
   else LLM = { live: false, model: "simulated", reason: "?simulate=1 — deterministic eval mode" };
-  // load previously constructed templates — the registry grows at runtime
-  fetch("/api/registry/constructed").then((r) => r.json()).then((list) => (list || []).forEach(registerConstructed)).catch(() => {});
+  // load previously constructed templates — the registry grows at runtime —
+  // then the cached tier-3 resolutions (which may reference constructed ids)
+  fetch("/api/registry/constructed").then((r) => r.json()).then((list) => (list || []).forEach(registerConstructed)).catch(() => {})
+    .then(() => fetch("/api/registry/resolutions")).then((r) => r.json()).then((list) => (list || []).forEach((rr2) => {
+      if (rr2 && rr2.text && ARCHETYPES[rr2.archetype] && !QINDEX.some((x) => x.norm === norm(rr2.text)))
+        QINDEX.push({ id: 900 + QINDEX.length, a: rr2.archetype, e: rr2.e || {}, text: rr2.text, norm: norm(rr2.text), toks: tokens(rr2.text) });
+    })).catch(() => {});
 
   // Built at CALL time — runtime-constructed templates must appear in the
   // catalog immediately, or the resolver re-constructs duplicates of them.
@@ -3349,6 +3364,13 @@
       if (out.needs_clarification && out.clarification_question) {
         arch = "clarify";
         e.llmClarify = out.clarification_question;
+      }
+      // cache the resolution — the same (or similar) question next time is
+      // a T1/T2 registry hit, not another model call. Constructed templates
+      // already register themselves; this covers resolves to EXISTING ones.
+      if (arch !== "clarify" && ARCHETYPES[arch] && (out.confidence == null || out.confidence >= 0.5) && !QINDEX.some((x) => x.norm === norm(text))) {
+        QINDEX.push({ id: 900 + QINDEX.length, a: arch, e, text, norm: norm(text), toks: tokens(text) });
+        fetch("/api/registry/resolutions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, archetype: arch, e }) }).catch(() => {});
       }
       return { ...match, arch, e, live: true, model: out._meta.model,
         latency: out._meta.latency_ms || (Date.now() - started),
@@ -3414,7 +3436,7 @@
       try {
         match = { ...(await constructAndRegister(matchedSpec.original_question || matchedSpec.canonical_question || text, match, match.arch)), upgraded: true };
         upRow.classList.remove("running"); upRow.classList.add("done");
-        upRow.innerHTML = `<span class="dot"></span>${esc(`Registered template pre-dated the current spec schema — upgraded via ${match.model}, upserted under the same id (one-time)`)} <span class="stage-ms">${match.latency} ms</span>`;
+        upRow.innerHTML = `<span class="dot"></span>${esc(`Registered template pre-dated the current spec schema — upgraded via ${match.model}, ${match.persisted ? "upserted in the registry (one-time; survives restart)" : "⚠ registry write FAILED — the upgrade will re-run next session (check the server console)"}`)} <span class="stage-ms">${match.latency} ms</span>`;
         // an outdated server can't stamp the current spec version — the
         // upgrade will re-run until the server process is restarted; say so
         if (!match.specVersion || match.specVersion < SPEC_VERSION) {
@@ -3428,8 +3450,8 @@
       match.tier === 1 ? { label: `Intent matched — registry exact hit`, ms: 240 }
         : match.tier === 2 ? { label: `Intent matched — nearest neighbor (${match.score.toFixed(2)})`, ms: 380 }
           : match.guarded ? { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one (SIMULATED — ${LLM.live ? "live status not confirmed at send time" : "no API key configured"}; with a live key the model constructs and registers a real template)`, ms: 950 }
-          : match.upgraded ? { label: `Registered template upgraded to the current spec schema via ${match.model} — upserted under the same id`, ms: 160 }
-          : match.constructed ? { label: `Outside every registered template — NEW contract constructed via ${match.model} and registered for reuse`, ms: 160 }
+          : match.upgraded ? { label: `Registered template upgraded to the current spec schema via ${match.model} — ${match.persisted ? `upserted in the registry (${match.registryCount} templates; survives restart)` : "⚠ registry write FAILED — will re-construct next session (check the server console)"}`, ms: 160 }
+          : match.constructed ? { label: `Outside every registered template — NEW contract constructed via ${match.model}; ${match.persisted ? `registered for reuse (registry now ${match.registryCount} templates; survives restart)` : "⚠ registry write FAILED — will re-construct next session (check the server console)"}`, ms: 160 }
           : match.live ? { label: `No direct hit — contract inferred via ${match.model} (live call, 3 nearest archetypes injected)`, ms: 120 }
           : { label: match.llmError ? `Live inference FAILED (${match.llmError}) — SIMULATED deterministic fallback` : `No direct hit — inferring contract via fast-LLM (SIMULATED — no API key configured)`, ms: 900 },
       { label: `Answer contract built — ${ARCHETYPES[match.arch].name}`, ms: 320 },

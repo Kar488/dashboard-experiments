@@ -130,6 +130,17 @@ function writeConstructed(list) {
   fs.writeFileSync(CONSTRUCTED_PATH, JSON.stringify(list, null, 2));
 }
 
+// Resolution cache: questions the live tier-3 resolver mapped to an EXISTING
+// archetype. Cached so the same (or similar) question hits T1/T2 next time
+// instead of paying another model call — resolve once, register, reuse.
+const RESOLVED_PATH = path.join(root, "data", "resolved-questions.json");
+function readResolved() {
+  try { return JSON.parse(fs.readFileSync(RESOLVED_PATH, "utf8")); } catch { return []; }
+}
+function writeResolved(list) {
+  fs.writeFileSync(RESOLVED_PATH, JSON.stringify(list.slice(-1000), null, 2));
+}
+
 function constructSchema(knownTables) {
   return {
     type: "object",
@@ -155,6 +166,11 @@ function constructSchema(knownTables) {
           required: ["type", "title", "columns", "row_entity", "purpose", "example", "example_rows"],
           additionalProperties: false
         }
+      },
+      follow_ups: {
+        type: "array",
+        items: { type: "string" },
+        description: "2-3 follow-up questions a MERCHANT would naturally ask next to drill into THIS content — referencing the entities/measures shown (e.g. 'Which divisions drove the trip lift?', 'Does the basket expansion hold for own-brand items?'). NEVER template/pipeline governance ('adjust this template', 'run on real data', 'registry')."
       },
       lineage: {
         type: "array",
@@ -192,7 +208,7 @@ function constructSchema(knownTables) {
         }
       }
     },
-    required: ["id", "name", "style", "intent", "canonical_question", "sections", "lineage", "derived", "gaps"],
+    required: ["id", "name", "style", "intent", "canonical_question", "sections", "follow_ups", "lineage", "derived", "gaps"],
     additionalProperties: false
   };
 }
@@ -200,7 +216,7 @@ function constructSchema(knownTables) {
 // Bump when the construct contract changes in a way that makes previously
 // registered specs render wrong — the client re-constructs older specs on
 // first use (chat-app.js SPEC_VERSION must match).
-const CONSTRUCT_SPEC_VERSION = 2;
+const CONSTRUCT_SPEC_VERSION = 3;
 
 // Deterministic ANSWER-FIRST validator on the constructor's output — the
 // same idea as the response judge, applied to the template itself. The
@@ -217,6 +233,10 @@ function constructViolations(spec) {
       v.push("headline leads with refusal/gap language — it MUST state the illustrative answer first (lead with the number, e.g. 'General Mills averages ~42 sq ft per cereal aisle across Jewel stores'); the not-yet-traceable honesty lives in lineage[] and gaps[]");
     }
   });
+  (spec.follow_ups || []).forEach((f) => {
+    if (/template|registry|schema|pipeline|lineage|real data|onboard/i.test(f)) v.push(`follow-up "${f}" is pipeline governance — follow-ups are MERCHANT drill-downs into the content shown (name the entities/measures from the sections)`);
+  });
+  if (!(spec.follow_ups || []).length) v.push("follow_ups is empty — provide 2-3 merchant drill-down questions referencing the content shown");
   return v;
 }
 
@@ -230,7 +250,7 @@ async function constructTemplate(body) {
     "You are the template CONSTRUCTOR for a merchant Q&A response-contract layer (grocery merchandising: divisions, vendors, SMIC categories, NCRCs, fiscal periods, promotions, allowances, AGP).",
     "A question has fallen outside every registered response template. Construct a NEW template for its intent family — not a one-off answer: the template will be REGISTERED and reused for future questions of this kind.",
     "ANSWER-FIRST (hard rule): this layer is the response BUILDER. The merchant-visible sections show the TARGET-SHAPE ANSWER with illustrative values — the number, ranking, or comparison the merchant asked for — even when the inputs are not onboarded yet. The headline example STATES the illustrative answer (lead with the value); it must NEVER contain 'cannot', 'not measurable', 'not traceable', 'data gap', or any refusal. Honesty lives EXCLUSIVELY in the lineage[]/derived[]/gaps[] fields (the UI renders those in the data-lineage panel and adds one gap note automatically).",
-    "MERCHANT/DEBUG SEPARATION (hard rule): merchant tables carry measures, entities, comparisons, and actions — NEVER columns like 'Status', 'Traceable inputs', 'Table lineage', 'Required columns', and NEVER 'scope and data availability' style tables. That content belongs only in lineage[].",
+    "MERCHANT/DEBUG SEPARATION (hard rule): merchant tables carry measures, entities, comparisons, and actions — NEVER columns like 'Status', 'Traceable inputs', 'Table lineage', 'Required columns', and NEVER 'scope and data availability' style tables. That content belongs only in lineage[]. follow_ups are drill-downs a merchant would ask about THIS content ('Which divisions drove the trip lift?'), never questions about the template or the pipeline.",
     "Rules: sections define the target answer shape (headline first; 2-4 tables max; concrete column headers a merchant would act on). Lineage maps ONLY to the onboarded tables listed below — any concept they don't carry (planograms, inventory positions, labor, household data...) must be a NOT_TRACEABLE lineage row naming the missing feed, and its derived metrics must have status 'gap'. Never invent tables.",
     "CRITICAL — the merchant sees example/example_rows, not purpose: every headline/bullets/note section MUST carry `example` written as the finished merchant answer with illustrative values (a real sentence like 'NorCal refrigerated dairy shows 3 items at elevated out-of-stock risk and 2 at overstock risk over the next 4 weeks'), never writing instructions. Every table section MUST carry `example_rows` that are internally coherent: actions match their rationales, risk tables actually rank (include rank/severity/risk-type columns when the ask is a risk ranking), impacts carry explicit direction labels, entities are distinct. purpose is for the pipeline; example is for the merchant.",
     "",
@@ -417,6 +437,28 @@ const server = http.createServer((request, response) => {
 
   if (url.pathname === "/api/registry/constructed" && request.method === "GET") {
     sendJson(response, 200, readConstructed());
+    return;
+  }
+
+  if (url.pathname === "/api/registry/resolutions" && request.method === "GET") {
+    sendJson(response, 200, readResolved());
+    return;
+  }
+
+  if (url.pathname === "/api/registry/resolutions" && request.method === "POST") {
+    readJsonBody(request).then((body) => {
+      try {
+        if (!body || typeof body.text !== "string" || typeof body.archetype !== "string") throw new Error("text and archetype are required");
+        const list = readResolved();
+        if (!list.some((r) => r.text === body.text)) {
+          list.push({ text: body.text.slice(0, 2000), archetype: body.archetype, e: body.e || {}, resolved_at: new Date().toISOString() });
+          writeResolved(list);
+        }
+        sendJson(response, 200, { cached: true, count: list.length });
+      } catch (error) {
+        sendJson(response, 400, { error: error.message });
+      }
+    });
     return;
   }
 
