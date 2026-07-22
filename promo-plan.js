@@ -200,6 +200,9 @@
       .replace(/'/g, "&#39;");
   }
   function escapeAttr(value) { return escapeHtml(value); }
+  // Corporate Item Group id — a stable 9-digit system id derived from the NCRC. Execution shows
+  // CIG as the identifier (not NCRC); the NCRC stays the internal value/search key.
+  function cigForNcrc(ncrc) { const s = String(ncrc == null ? "" : ncrc); let h = 0; for (let i = 0; i < s.length; i++) h = ((h * 31) + s.charCodeAt(i)) >>> 0; return "CIG " + (100000000 + (h % 900000000)); }
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
 
   function displayTacticCode(code) {
@@ -2795,10 +2798,12 @@
     // the recommendations table, so a top-level PA filter just duplicates
     // navigation the user already has.
     const allNcrcs = options.allNcrcs || options.ncrcs || [];
+    // CIG is the identifier only in manual-override mode; system-recommended stays on NCRC.
+    const idManual = promoDetailState.planMode === "manual";
     return `
       <div class="pd-selector-row" role="group" aria-label="Optional filters">
         ${renderTypeaheadField("vendor", "VENDOR", promoDetailState.vendorInput, options.vendors || [], (vendor) => ({ value: vendor, label: vendor }), { placeholder: "Search vendor..." })}
-        ${renderTypeaheadField("ncrc", "NCRC", promoDetailState.ncrcInput, allNcrcs, (row) => ({ value: row.ncrc, label: `${row.ncrc} - ${row.item} ${row.packSize || ""}`.trim(), sub: row.packSize, matchText: `${row.ncrc} ${row.item} ${row.packSize || ""} ${row.vendor || ""}` }), { placeholder: "Search NCRC..." })}
+        ${renderTypeaheadField("ncrc", idManual ? "CIG" : "NCRC", promoDetailState.ncrcInput, allNcrcs, (row) => ({ value: row.ncrc, label: `${idManual ? cigForNcrc(row.ncrc) : row.ncrc} - ${row.item} ${row.packSize || ""}`.trim(), sub: row.packSize, matchText: `${cigForNcrc(row.ncrc)} ${row.ncrc} ${row.item} ${row.packSize || ""} ${row.vendor || ""}` }), { placeholder: idManual ? "Search CIG..." : "Search NCRC..." })}
       </div>
     `;
   }
@@ -2852,12 +2857,12 @@
     // pagination — jump via search, orient via sticky vendor headers.
     const q = (promoDetailState.worklistSearch || "").trim().toLowerCase();
     const filtered = worklist.map((item, index) => ({ item, index }))
-      .filter(({ item }) => !q || `${item.ncrc} ${item.item} ${item.vendor}`.toLowerCase().indexOf(q) >= 0);
+      .filter(({ item }) => !q || `${cigForNcrc(item.ncrc)} ${item.ncrc} ${item.item} ${item.vendor}`.toLowerCase().indexOf(q) >= 0);
     const groupOrder = [];
     const byVendor = {};
     filtered.forEach((e) => { const v = e.item.vendor || "—"; if (!byVendor[v]) { byVendor[v] = []; groupOrder.push(v); } byVendor[v].push(e); });
     const scopeSub = promoDetailState.planMode === "manual"
-      ? `All NCRCs${promoDetailState.vendor ? ` &middot; ${escapeHtml(promoDetailState.vendor)}` : ""}`
+      ? `All CIGs${promoDetailState.vendor ? ` &middot; ${escapeHtml(promoDetailState.vendor)}` : ""}`
       : `${escapeHtml(promoDetailState.velocityKind === "sales" ? "Sales" : "AGP")} velocity, Bin ${promoDetailState.bin}${promoDetailState.vendor ? ` &middot; ${escapeHtml(promoDetailState.vendor)}` : ""}`;
     return `
       <aside class="pd-worklist">
@@ -2873,7 +2878,7 @@
         <p class="pd-worklist-sub">${scopeSub}</p>
         <div class="pd-worklist-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>
-          <input type="text" placeholder="Search NCRC, item or vendor&hellip;" value="${escapeAttr(promoDetailState.worklistSearch || "")}" data-pd-worklist-search />
+          <input type="text" placeholder="Search ${promoDetailState.planMode === "manual" ? "CIG" : "NCRC"}, item or vendor&hellip;" value="${escapeAttr(promoDetailState.worklistSearch || "")}" data-pd-worklist-search />
           ${q ? `<button type="button" class="pd-worklist-search-clear" data-pd-worklist-search-clear aria-label="Clear search">&times;</button>` : ""}
         </div>
         <div class="pd-worklist-viewport">
@@ -2971,7 +2976,7 @@
       <button type="button" role="option" class="pd-worklist-item ${isActive ? "active" : ""} ${inCart ? "confirmed" : ""}" data-pd-worklist-index="${index}">
         <span class="pd-wl-status" aria-hidden="true">${inCart ? "&#10003;" : (index + 1)}</span>
         <span class="pd-wl-body">
-          <span class="pd-wl-ncrc">${escapeHtml(item.ncrc)}</span>
+          <span class="pd-wl-ncrc">${escapeHtml(promoDetailState.planMode === "manual" ? cigForNcrc(item.ncrc) : item.ncrc)}</span>
           <span class="pd-wl-name">${escapeHtml(item.item)} <em>${escapeHtml(item.packSize || "")}</em></span>
           <span class="pd-wl-rec">Rec: ${escapeHtml(item.recommendedOfferLabel || "-")}</span>
         </span>
@@ -3367,7 +3372,7 @@
         <div class="pd-section-head pd-rec-head">
           <div>
             <h3>Price areas</h3>
-            <p>One row per price area for ${escapeHtml(data.item.ncrc)}. Override a row to break from the default; reset to snap it back.</p>
+            <p>One row per price area for ${escapeHtml(cigForNcrc(data.item.ncrc))}. Override a row to break from the default; reset to snap it back.</p>
           </div>
         </div>
         <div class="pd-pa-table-wrap">
