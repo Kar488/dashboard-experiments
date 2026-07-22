@@ -197,6 +197,29 @@ function constructSchema(knownTables) {
   };
 }
 
+// Bump when the construct contract changes in a way that makes previously
+// registered specs render wrong — the client re-constructs older specs on
+// first use (chat-app.js SPEC_VERSION must match).
+const CONSTRUCT_SPEC_VERSION = 2;
+
+// Deterministic ANSWER-FIRST validator on the constructor's output — the
+// same idea as the response judge, applied to the template itself. The
+// merchant-visible fields must carry the answer; traceability belongs in
+// lineage[]/derived[]/gaps[], which the debug panel renders.
+function constructViolations(spec) {
+  const v = [];
+  (spec.sections || []).forEach((s) => {
+    if (s.type === "table") {
+      if (/lineage|traceab|availab|data gap|feed status/i.test(s.title || "")) v.push(`table "${s.title}" is lineage/availability content — merchant tables must carry the ANSWER (the measure asked for, its comparison or breakdown); traceability goes in the lineage[] field`);
+      (s.columns || []).forEach((c) => { if (/status|traceab|lineage|table lineage|required columns|feed/i.test(c)) v.push(`column "${c}" is pipeline metadata — move it to lineage[]; merchant columns are measures, entities, comparisons, actions`); });
+    }
+    if (s.type === "headline" && /cannot|not (be )?(measured|determined|answered)|not traceable|unavailable|no data|is a data gap/i.test(s.example || "")) {
+      v.push("headline leads with refusal/gap language — it MUST state the illustrative answer first (lead with the number, e.g. 'General Mills averages ~42 sq ft per cereal aisle across Jewel stores'); the not-yet-traceable honesty lives in lineage[] and gaps[]");
+    }
+  });
+  return v;
+}
+
 async function constructTemplate(body) {
   const question = String(body.question || "").slice(0, 3000);
   const knownTables = Array.isArray(body.known_tables) ? body.known_tables : [];
@@ -206,7 +229,9 @@ async function constructTemplate(body) {
   const system = [
     "You are the template CONSTRUCTOR for a merchant Q&A response-contract layer (grocery merchandising: divisions, vendors, SMIC categories, NCRCs, fiscal periods, promotions, allowances, AGP).",
     "A question has fallen outside every registered response template. Construct a NEW template for its intent family — not a one-off answer: the template will be REGISTERED and reused for future questions of this kind.",
-    "Rules: sections define the target answer shape (headline first; 2-4 tables max; concrete column headers a merchant would act on). Lineage maps ONLY to the onboarded tables listed below — any concept they don't carry (planograms, inventory positions, labor, household data...) must be a NOT_TRACEABLE lineage row naming the missing feed, and its derived metrics must have status 'gap'. Never invent tables. The template must still render a full target-shape answer; honesty lives in the status marks.",
+    "ANSWER-FIRST (hard rule): this layer is the response BUILDER. The merchant-visible sections show the TARGET-SHAPE ANSWER with illustrative values — the number, ranking, or comparison the merchant asked for — even when the inputs are not onboarded yet. The headline example STATES the illustrative answer (lead with the value); it must NEVER contain 'cannot', 'not measurable', 'not traceable', 'data gap', or any refusal. Honesty lives EXCLUSIVELY in the lineage[]/derived[]/gaps[] fields (the UI renders those in the data-lineage panel and adds one gap note automatically).",
+    "MERCHANT/DEBUG SEPARATION (hard rule): merchant tables carry measures, entities, comparisons, and actions — NEVER columns like 'Status', 'Traceable inputs', 'Table lineage', 'Required columns', and NEVER 'scope and data availability' style tables. That content belongs only in lineage[].",
+    "Rules: sections define the target answer shape (headline first; 2-4 tables max; concrete column headers a merchant would act on). Lineage maps ONLY to the onboarded tables listed below — any concept they don't carry (planograms, inventory positions, labor, household data...) must be a NOT_TRACEABLE lineage row naming the missing feed, and its derived metrics must have status 'gap'. Never invent tables.",
     "CRITICAL — the merchant sees example/example_rows, not purpose: every headline/bullets/note section MUST carry `example` written as the finished merchant answer with illustrative values (a real sentence like 'NorCal refrigerated dairy shows 3 items at elevated out-of-stock risk and 2 at overstock risk over the next 4 weeks'), never writing instructions. Every table section MUST carry `example_rows` that are internally coherent: actions match their rationales, risk tables actually rank (include rank/severity/risk-type columns when the ask is a risk ranking), impacts carry explicit direction labels, entities are distinct. purpose is for the pipeline; example is for the merchant.",
     "",
     "Onboarded tables: " + knownTables.join(", "),
@@ -214,33 +239,50 @@ async function constructTemplate(body) {
   ].join("\n");
 
   const started = Date.now();
-  if (T3_PROVIDER === "openai") {
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: T3_MODEL,
-        reasoning_effort: "low",
-        max_completion_tokens: 4500,
-        messages: [{ role: "system", content: system }, { role: "user", content: "Construct the template for:\n" + question }],
-        response_format: { type: "json_schema", json_schema: { name: "constructed_template", strict: true, schema: constructSchema(knownTables) } }
-      })
+  const callOnce = async (extraMessages) => {
+    const messages = [{ role: "user", content: "Construct the template for:\n" + question }].concat(extraMessages);
+    if (T3_PROVIDER === "openai") {
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: T3_MODEL,
+          reasoning_effort: "low",
+          max_completion_tokens: 4500,
+          messages: [{ role: "system", content: system }].concat(messages),
+          response_format: { type: "json_schema", json_schema: { name: "constructed_template", strict: true, schema: constructSchema(knownTables) } }
+        })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${(data.error && data.error.message) || "request failed"}`);
+      const parsed = JSON.parse(data.choices[0].message.content);
+      return { ...parsed, _meta: { provider: "openai", model: data.model, latency_ms: Date.now() - started, input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } };
+    }
+    const response = await getAnthropic().messages.create({
+      model: T3_MODEL,
+      max_tokens: 3000,
+      system,
+      output_config: { format: { type: "json_schema", schema: constructSchema(knownTables) } },
+      messages
     });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${(data.error && data.error.message) || "request failed"}`);
-    const parsed = JSON.parse(data.choices[0].message.content);
-    return { ...parsed, _meta: { provider: "openai", model: data.model, latency_ms: Date.now() - started, input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } };
+    const textBlock = response.content.find((b) => b.type === "text");
+    const parsed = JSON.parse(textBlock ? textBlock.text : "{}");
+    return { ...parsed, _meta: { provider: "anthropic", model: response.model, latency_ms: Date.now() - started, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
+  };
+
+  let out = await callOnce([]);
+  const violations = constructViolations(out);
+  if (violations.length) {
+    // one corrective round with the violations named — deterministic
+    // enforcement, not a hope that the prompt was enough
+    out = await callOnce([
+      { role: "assistant", content: JSON.stringify(Object.fromEntries(Object.entries(out).filter(([k]) => k !== "_meta"))) },
+      { role: "user", content: "Your template violated the ANSWER-FIRST / merchant-debug-separation rules:\n- " + violations.join("\n- ") + "\nRewrite the template fixing every violation. Merchant sections show the illustrative ANSWER; traceability goes only in lineage[]/derived[]/gaps[]." }
+    ]);
+    out._meta.retried_for = violations;
   }
-  const response = await getAnthropic().messages.create({
-    model: T3_MODEL,
-    max_tokens: 3000,
-    system,
-    output_config: { format: { type: "json_schema", schema: constructSchema(knownTables) } },
-    messages: [{ role: "user", content: "Construct the template for:\n" + question }]
-  });
-  const textBlock = response.content.find((b) => b.type === "text");
-  const parsed = JSON.parse(textBlock ? textBlock.text : "{}");
-  return { ...parsed, _meta: { provider: "anthropic", model: response.model, latency_ms: Date.now() - started, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
+  out.spec_version = CONSTRUCT_SPEC_VERSION;
+  return out;
 }
 
 async function t3Resolve(body) {

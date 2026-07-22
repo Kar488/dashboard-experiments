@@ -3029,12 +3029,18 @@
   // example_rows — it can only render via generic heuristics. That is the
   // GENERAL staleness signal (any template, any question family).
   const specHasMerchantContent = (spec) => (spec.sections || []).some((s) => s.example || (Array.isArray(s.example_rows) && s.example_rows.length));
+  // Keep in sync with server CONSTRUCT_SPEC_VERSION. A spec is stale when it
+  // pre-dates the merchant-content schema OR was built under an older
+  // construct contract (e.g. before the answer-first validator) — either
+  // way it re-constructs once on next use and upserts under the same id.
+  const SPEC_VERSION = 2;
+  const specIsStale = (spec) => !specHasMerchantContent(spec) || (spec.spec_version || 1) < SPEC_VERSION;
   function registerConstructed(spec) {
     if (!spec || !spec.id) return false;
     // Upsert rule: an id already registered may only be REPLACED when the
-    // incoming spec adds merchant content the stored one lacks (an upgrade).
-    // Design-time archetypes and current-schema specs are never overwritten.
-    if (ARCHETYPES[spec.id] && !(CONSTRUCTED[spec.id] && !specHasMerchantContent(CONSTRUCTED[spec.id]) && specHasMerchantContent(spec))) return false;
+    // stored spec is stale and the incoming one is current (an upgrade).
+    // Design-time archetypes and current specs are never overwritten.
+    if (ARCHETYPES[spec.id] && !(CONSTRUCTED[spec.id] && specIsStale(CONSTRUCTED[spec.id]) && !specIsStale(spec))) return false;
     CONSTRUCTED[spec.id] = spec;
     ARCHETYPES[spec.id] = {
       name: spec.name + " · constructed at runtime",
@@ -3278,7 +3284,7 @@
     // re-construct it ONCE under the same id and upsert. Every stale spec in
     // any user's registry self-heals on first use; reuse stays instant after.
     const matchedSpec = CONSTRUCTED[match.arch];
-    if (matchedSpec && !specHasMerchantContent(matchedSpec) && LLM.live) {
+    if (matchedSpec && specIsStale(matchedSpec) && LLM.live) {
       const upRow = el("div", "stage running", `<span class="dot"></span>${esc(`This registered template pre-dates the current response-spec schema — upgrading it via ${LLM.model} (one-time; upserted under the same id)…`)}`);
       stages.appendChild(upRow);
       scrollDown();
