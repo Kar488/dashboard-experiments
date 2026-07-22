@@ -2848,6 +2848,60 @@
     return asks;
   }
 
+  // ---------------------------------------------------------- auto-repair
+  // "A failed check triggers regeneration in production" — this IS that
+  // regeneration, prototyped: deterministic repairers keyed by check id run
+  // BEFORE display, then the judge re-runs on the repaired blocks. The tag
+  // reports what was rewired. Unanswerable asks repair by EXPLICIT
+  // disclosure in merchant language (the honest fix for a data gap);
+  // mechanical defects (sort order, arithmetic) repair by recomputation.
+  function repairResponse(blocks, judge, e) {
+    const failed = judge.filter((c) => !c.pass);
+    if (!failed.length) return { blocks, repaired: [] };
+    const out = blocks.map((b) => b.t === "table" ? { ...b, rows: (b.rows || []).map((r) => r.slice()) } : b);
+    const repaired = [];
+    for (const c of failed) {
+      if (c.id === "J1 sort-order") {
+        out.filter((b) => b.t === "table" && /sort|rank|worst|largest.*first/i.test(b.title || "")).forEach((t) => {
+          const data = t.rows.filter((r) => !/^TOTAL|^ENTERPRISE/i.test(String(r[0])));
+          const tail = t.rows.filter((r) => /^TOTAL|^ENTERPRISE/i.test(String(r[0])));
+          const ci = t.cols.map((c2, i) => i).find((i) => data.filter((r) => pNum(r[i]) !== null).length === data.length && i > 0);
+          if (ci === undefined) return;
+          const already = data.every((r, i) => i === 0 || pNum(r[ci]) <= pNum(data[i - 1][ci])) || data.every((r, i) => i === 0 || pNum(r[ci]) >= pNum(data[i - 1][ci]));
+          if (already) return;
+          const asc = /worst|decline|smallest/i.test(t.title || "");
+          data.sort((a, b) => asc ? pNum(a[ci]) - pNum(b[ci]) : pNum(b[ci]) - pNum(a[ci]));
+          t.rows = data.concat(tail);
+          repaired.push("J1 re-sorted “" + (t.title || "table") + "”");
+        });
+      } else if (c.id === "J2 arithmetic") {
+        out.filter((b) => b.t === "table").forEach((t) => {
+          const dollarCol = (re) => t.cols.findIndex((c2, i) => re.test(c2) && t.rows.every((r) => /^\s*[-+]?\$/.test(String(r[i]))));
+          const tyI = dollarCol(/TY$|TY /), lyI = dollarCol(/LY|YA|PY/), pcI = t.cols.findIndex((c2) => /% Change/i.test(c2));
+          if (tyI < 0 || lyI < 0 || pcI < 0) return;
+          t.rows.forEach((r) => {
+            const ty = pNum(r[tyI]), ly = pNum(r[lyI]);
+            if (ty === null || ly === null || !ly) return;
+            const pc = (ty / ly - 1) * 100;
+            r[pcI] = (pc >= 0 ? "+" : "") + pc.toFixed(1) + "%";
+          });
+        });
+        repaired.push("J2 recomputed % change from TY/LY");
+      } else if (c.id.startsWith("J6") && /UNANSWERED/.test(c.note || "")) {
+        const lines = c.note.replace("UNANSWERED: ", "").split("; ").map((m) =>
+          /^grain: UPC/i.test(m) ? "UPC-level rows need the UPC feed onboarded — shown at NCRC (price-group) grain, one level above UPC."
+            : /^grain: /i.test(m) ? m.replace(/^grain: /i, "") + "-grain detail isn't onboarded in this view — flip “Data lineage” for the feed status."
+            : /^metric: /i.test(m) ? m.replace(/^metric: /i, "") + " isn't in this view — ask for the full card to include it."
+            : m.replace(/^[a-z/ ]+: /i, "") + " — not covered in this view yet; ask for it explicitly.");
+        const note = NOTE("Asked but not shown: " + lines.join(" "));
+        const fuAt = out.findIndex((b) => b.t === "fu");
+        if (fuAt >= 0) out.splice(fuAt, 0, note); else out.push(note);
+        repaired.push("J6 explicit gap disclosure");
+      }
+    }
+    return { blocks: out, repaired };
+  }
+
   function runJudge(blocks, match, e, qText) {
     const checks = [];
     const tables = blocks.filter((b) => b.t === "table");
@@ -3408,6 +3462,12 @@
     const askScope = narrowAskScope(text);
     const isConstructed = /constructed at runtime/.test((ARCHETYPES[match.arch] || {}).name || "");
     if (askScope && !isConstructed) blocks = projectToAsk(blocks, askScope);
+    // judge BEFORE display: failed checks trigger the repair pass, and the
+    // judge re-runs on what the merchant will actually see. The response
+    // never ships with a repairable defect.
+    let judge = runJudge(blocks, match, match.e || {}, text);
+    const rep = judge.some((c) => !c.pass) ? repairResponse(blocks, judge, match.e || {}) : { blocks, repaired: [] };
+    if (rep.repaired.length) { blocks = rep.blocks; judge = runJudge(blocks, match, match.e || {}, text); }
     const body = el("div", "answer-body");
     bubble.appendChild(body);
     for (const b of blocks) {
@@ -3418,13 +3478,12 @@
       await sleep(b.t === "table" || b.t === "kv" ? 240 : 140);
       node.classList.add("shown");
     }
-    const judge = runJudge(blocks, match, match.e || {}, text);
     const jPass = judge.filter((c) => c.pass).length;
     // Never let "judge N/N ✓" imply a data-gap response answered the business
     // question — structure passing and the question being answerable differ.
     const hasGap = blocks.some((b) => (b.t === "gap" && (b.items || []).some((x) => /not traceable|not onboarded|blocked/i.test(x)))
       || (b.t === "note" && /aren't onboarded yet/i.test(b.text || "")));
-    bubble.appendChild(el("div", "mock-tag", `mock data · ${match.live ? `intent via ${match.model} (live)` : "answered"} in ${(elapsed / 1000).toFixed(1)}s ${match.live ? "" : "simulated "}(budget 30s) · judge ${jPass}/${judge.length} structure checks ${jPass === judge.length ? "✓" : "⚠"}${hasGap ? " · DATA GAP — the business question is not yet answerable from onboarded data; shape shown, values illustrative" : ""}`));
+    bubble.appendChild(el("div", "mock-tag", `mock data · ${match.live ? `intent via ${match.model} (live)` : "answered"} in ${(elapsed / 1000).toFixed(1)}s ${match.live ? "" : "simulated "}(budget 30s) · judge ${jPass}/${judge.length} structure checks ${jPass === judge.length ? "✓" : "⚠"}${rep.repaired.length ? ` · auto-repaired before display: ${rep.repaired.join("; ")}` : ""}${hasGap ? " · DATA GAP — the business question is not yet answerable from onboarded data; shape shown, values illustrative" : ""}`));
     bubble.appendChild(debugPanel(match, contract, judge));
     scrollDown();
   }
