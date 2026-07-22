@@ -1193,11 +1193,20 @@
       ];
     }
     if (e.mode === "top-ncrc") {
-      const raw = ["MAGNUM MINI CLASSIC 6CT", "MAGNUM DOUBLE CARAMEL 3CT", "MAGNUM ICE CREAM TUBS", "MAGNUM MINI ALMOND 6CT", "MAGNUM BARS SINGLES"]
-        .map((nm, i) => { const r = rngFor(id, 5 + i); const u = rr(r, 2e4, 9e4); return { nm, u, s: u * rr(r, 3.5, 5) }; })
-        .sort((a, b) => b.u - a.u);
+      // names derive from the RESOLVED entities — a category override must
+      // change the products, never leave the matched question's brand behind
+      const vpool = vendorsForCat(e);
+      const seen = new Set();
+      const raw = Array.from({ length: 5 }, (_, i) => {
+        const r = rngFor(id, 5 + i);
+        const u = rr(r, 2e4, 9e4);
+        let nm = ncrcName(e.vendor || vpool[i % vpool.length], e, r);
+        if (seen.has(nm)) nm += " " + ["12OZ", "16OZ", "6CT", "3CT", "8OZ"][i % 5];
+        seen.add(nm);
+        return { nm, u, s: u * rr(r, 3.5, 5) };
+      }).sort((a, b) => b.u - a.u);
       return [
-        H(`Top ${e.n} ${e.vendor} NCRCs by units in ${e.cat}, ${e.div} ${per(e)} — ${raw[0].nm} leads with ${fmt.units(raw[0].u)} units. Sorted by units.`),
+        H(`Top ${e.n || 5} ${e.vendor ? e.vendor + " " : ""}NCRCs by units in ${e.cat}, ${e.div} ${per(e)} — ${raw[0].nm} leads with ${fmt.units(raw[0].u)} units. Sorted by units.`),
         TB(`Top NCRCs — ${per(e)}, sorted by units`, ["NCRC", "Units", "Sales"], raw.map((x) => [x.nm, fmt.units(x.u), fmt.k(x.s)]))
       ];
     }
@@ -2404,23 +2413,39 @@
   // scope — and runtime-constructed entries store no entities at all, so
   // this pass is what fills them).
   function periodOverride(input, e) {
+    // EVERY override applies — never return early: a question naming a
+    // period AND a category must get both (early-return here once made
+    // "sour cream ... Q2 2025" keep the matched question's Apples category).
     const t = input.toLowerCase();
     const dv = DIVISION_SYN.find(([re]) => re.test(input));
     if (dv && String(e && e.div || "") !== dv[1]) e = { ...e, div: dv[1] };
     const q = t.match(/\bq([1-4])\s*(?:fy)?\s*(20\d\d|\d\d)?\b/);
-    if (q) return { ...e, period: `Q${q[1]} ${q[2] ? (q[2].length === 2 ? "20" + q[2] : q[2]) : ((e && e.period || "").match(/20\d\d/) || ["2025"])[0]}` };
     const p = t.match(/\bp(\d{1,2})\s+(20\d\d)\b/);
-    if (p) return { ...e, period: `P${p[1]} ${p[2]}` };
     const lw = t.match(/last\s*(\d{1,2})\s*w(?:ee)?ks?/);
-    if (lw) e = { ...e, period: `last ${lw[1]} weeks` };
+    if (q) e = { ...e, period: `Q${q[1]} ${q[2] ? (q[2].length === 2 ? "20" + q[2] : q[2]) : ((e && e.period || "").match(/20\d\d/) || ["2025"])[0]}` };
+    else if (p) e = { ...e, period: `P${p[1]} ${p[2]}` };
+    else if (lw) e = { ...e, period: `last ${lw[1]} weeks` };
     // category named in the input overrides the matched canonical's stored one
     for (const list of Object.values(POOLS.smics)) {
       const hit = list.find((sm) => input.toUpperCase().includes(sm));
-      if (hit && String(e.cat || e.smic || "").toUpperCase() !== hit) return { ...e, cat: hit, smic: hit };
-      if (hit) break;
+      if (hit) { if (String(e.cat || e.smic || "").toUpperCase() !== hit) e = { ...e, cat: hit, smic: hit }; break; }
+    }
+    // a stored vendor that doesn't sell the (possibly overridden) category is
+    // stale context from the matched question — drop it unless the user
+    // actually named it (never rank Magnum NCRCs inside SOUR CREAM)
+    if (e.vendor) {
+      const ci = catInfo(e.cat || e.smic);
+      const userNamed = t.includes(String(e.vendor).toLowerCase().split(" ")[0])
+        || Object.entries(VENDOR_SYN).some(([abbr, c]) => c === e.vendor && t.includes(abbr));
+      if (ci && Array.isArray(ci.v) && !ci.v.includes(e.vendor) && !userNamed) { e = { ...e }; delete e.vendor; }
     }
     return e;
   }
+
+  // Grain families for match scoring — "UPCs driving growth" must never
+  // resolve to a vendor ranking just because the other tokens overlap.
+  const GRAIN_FAMILIES = [/\b(upcs?|items?|ncrcs?|cigs?|products?)\b/i, /\bvendors?\b/i, /\bstores?\b/i, /\bdivisions?\b/i];
+  const grainFamily = (text) => { for (let i = 0; i < GRAIN_FAMILIES.length; i++) if (GRAIN_FAMILIES[i].test(text)) return i; return -1; };
 
   function matchQuestion(input) {
     const nIn = norm(input);
@@ -2430,9 +2455,21 @@
     const complex = detectComplex(input);
     if (complex) return complex;
     const toks = tokens(input);
+    // grain-aware nearest neighbor: same-grain candidates get a small
+    // boost, contradicting-grain candidates a larger penalty — a wrong
+    // grain drops below the T2 threshold and escalates to the resolver
+    // instead of force-fitting (general: applies to every template).
+    const qGrain = grainFamily(input);
     let best = null, bestScore = 0;
     for (const q of QINDEX) {
-      const s = similarity(toks, q);
+      let s = similarity(toks, q);
+      if (qGrain >= 0 && s > 0) {
+        const cg = grainFamily(q.text);
+        if (cg >= 0 && cg !== qGrain) s -= 0.12;
+        // boost only candidates already above the T2 threshold — the boost
+        // reorders viable matches, it must never promote a weak one over the line
+        else if (cg === qGrain && s >= 0.40) s += 0.06;
+      }
       if (s > bestScore) { bestScore = s; best = q; }
     }
     if (bestScore >= 0.92) return { tier: 1, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 3 };
