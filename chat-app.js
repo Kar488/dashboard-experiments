@@ -1203,8 +1203,20 @@
         let nm = ncrcName(e.vendor || vpool[i % vpool.length], e, r);
         if (seen.has(nm)) nm += " " + ["12OZ", "16OZ", "6CT", "3CT", "8OZ"][i % 5];
         seen.add(nm);
-        return { nm, u, s: u * rr(r, 3.5, 5) };
-      }).sort((a, b) => b.u - a.u);
+        const uLY = Math.round(u / (1 + rr(rngFor(id, 40 + i), 0.03, 0.18)));
+        return { nm, u, uLY, g: u - uLY, s: u * rr(r, 3.5, 5) };
+      });
+      // a growth ask ranks by CONTRIBUTION TO GROWTH with the comparison
+      // shown; a plain level ask ranks by units — same template, right lens
+      if (e.growthAsk) {
+        raw.sort((a, b) => b.g - a.g);
+        const tot = raw.reduce((a, x) => a + x.g, 0);
+        return [
+          H(`${raw[0].nm} leads unit growth in ${e.cat}, ${e.div} ${per(e)} at +${fmt.units(raw[0].g)} vs last year — the top ${e.n || 5} together added +${fmt.units(tot)} units.`),
+          TB(`Unit growth contributors — ${per(e)} vs prior year, sorted by growth`, ["NCRC", "Units TY", "Units LY", "Unit growth"], raw.map((x) => [x.nm, fmt.units(x.u), fmt.units(x.uLY), "+" + fmt.units(x.g)]))
+        ];
+      }
+      raw.sort((a, b) => b.u - a.u);
       return [
         H(`Top ${e.n || 5} ${e.vendor ? e.vendor + " " : ""}NCRCs by units in ${e.cat}, ${e.div} ${per(e)} — ${raw[0].nm} leads with ${fmt.units(raw[0].u)} units. Sorted by units.`),
         TB(`Top NCRCs — ${per(e)}, sorted by units`, ["NCRC", "Units", "Sales"], raw.map((x) => [x.nm, fmt.units(x.u), fmt.k(x.s)]))
@@ -2430,6 +2442,9 @@
       const hit = list.find((sm) => input.toUpperCase().includes(sm));
       if (hit) { if (String(e.cat || e.smic || "").toUpperCase() !== hit) e = { ...e, cat: hit, smic: hit }; break; }
     }
+    // a growth/decline/change ask must render a COMPARISON, not levels —
+    // shared flag any renderer can honor (and the judge enforces)
+    if (/\b(grow(th|ing|n)?|grew|gain(ing|s)?|increas(e|ing)|declin(e|ing)|drop(ping|s)?|chang(e|es|ed|ing))\b|vs (last|prior) year|yoy|year over year/i.test(t)) e = { ...e, growthAsk: true };
     // a stored vendor that doesn't sell the (possibly overridden) category is
     // stale context from the matched question — drop it unless the user
     // actually named it (never rank Magnum NCRCs inside SOUR CREAM)
@@ -2818,6 +2833,11 @@
     if (/(rank|top \d+|winning).*(item|upc|ncrc|cig|vendor|smic)|(item|upc|ncrc|cig|vendor|smic)s?.*rank/.test(q)) asks.push({ ask: "ranked entities", test: (t, tables) => tables.some((tb) => tb.rows.length >= 2) });
     if (/trend/.test(q)) asks.push({ ask: "trend comparison", test: (t) => /trend/i.test(t) });
     if (/total row/.test(q)) asks.push({ ask: "total row", test: (t, tables) => tables.some((tb) => tb.rows.some((r) => /^TOTAL/i.test(String(r[0])))) });
+    // growth/decline/change asks must show a COMPARISON (LY column, vs-prior,
+    // signed deltas) — a levels-only table never answers "what is growing"
+    if (/\b(growth|grew|growing|gains?|declin\w*|increas\w*|dropp?(ed|ing)?|chang(e|es|ed|ing))\b/i.test(q)) {
+      asks.push({ ask: "growth/change vs prior shown", test: (t) => /\bLY\b|last year|prior year|prior trend|vs prior|[+\-−]\$?[\d.]|\bpts\b|yoy/i.test(t) });
+    }
     // metric nouns named in the question must appear in the response
     [["take rate", /take rate/i], ["aiv", /aiv/i], ["agp", /agp/i], ["allowance", /allowance/i], ["markdown", /markdown|spend/i], ["cpi", /cpi/i], ["deadnet", /deadnet/i], ["bill-out gross", /bill.?out|bog/i], ["units", /unit/i]].forEach(([nm, re]) => {
       if (re.test(q)) asks.push({ ask: "metric: " + nm, test: (t) => re.test(t) });
