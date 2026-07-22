@@ -2799,6 +2799,14 @@
       const asks = extractAsks(qText);
       const missing = asks.filter((a) => { try { return !a.test(respText, tables, e); } catch { return false; } });
       checks.push({ id: "J6 ask-coverage", pass: missing.length === 0, note: missing.length ? "UNANSWERED: " + missing.map((m) => m.ask).join("; ") : `${asks.length} extracted asks all covered` });
+      // J7 answer-first: this layer BUILDS responses — the lead headline may
+      // never open with refusal/gap language (that honesty lives in the gap
+      // box and lineage panel). Clarification holds are exempt.
+      const lead = blocks.find((b) => b.t === "h");
+      if (lead && match.arch !== "clarify") {
+        const refuses = /\b(cannot|can['’]t)\b|not (be )?(measured|determined|answered)|not traceable|is a data gap/i.test(lead.text || "");
+        checks.push({ id: "J7 answer-first", pass: !refuses, note: refuses ? "headline leads with refusal/gap language — must state the illustrative answer; honesty belongs in the gap box + lineage" : "headline states the answer" });
+      }
     }
     // J1: any table declaring a sort must be monotonic in its change column
     let j1 = { id: "J1 sort-order", pass: true, note: "no sorted tables" };
@@ -3038,9 +3046,12 @@
   function registerConstructed(spec) {
     if (!spec || !spec.id) return false;
     // Upsert rule: an id already registered may only be REPLACED when the
-    // stored spec is stale and the incoming one is current (an upgrade).
+    // stored spec is stale and the incoming one carries merchant content —
+    // a fresh construct always beats a stale stored spec, even when an
+    // outdated server can't stamp the current spec_version (refusing it
+    // would loop the upgrade forever and keep showing the old content).
     // Design-time archetypes and current specs are never overwritten.
-    if (ARCHETYPES[spec.id] && !(CONSTRUCTED[spec.id] && specIsStale(CONSTRUCTED[spec.id]) && !specIsStale(spec))) return false;
+    if (ARCHETYPES[spec.id] && !(CONSTRUCTED[spec.id] && specIsStale(CONSTRUCTED[spec.id]) && specHasMerchantContent(spec))) return false;
     CONSTRUCTED[spec.id] = spec;
     ARCHETYPES[spec.id] = {
       name: spec.name + " · constructed at runtime",
@@ -3158,6 +3169,7 @@
     registerConstructed(spec);
     fetch("/api/registry/constructed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }).catch(() => {});
     return { ...match, arch: spec.id, live: true, constructed: true, model: spec._meta.model,
+      specVersion: spec.spec_version || null,
       latency: (match.latency || 0) + spec._meta.latency_ms,
       llm: { confidence: null, usage: { input_tokens: spec._meta.input_tokens, output_tokens: spec._meta.output_tokens } } };
   }
@@ -3292,6 +3304,12 @@
         match = { ...(await constructAndRegister(matchedSpec.original_question || matchedSpec.canonical_question || text, match, match.arch)), upgraded: true };
         upRow.classList.remove("running"); upRow.classList.add("done");
         upRow.innerHTML = `<span class="dot"></span>${esc(`Registered template pre-dated the current spec schema — upgraded via ${match.model}, upserted under the same id (one-time)`)} <span class="stage-ms">${match.latency} ms</span>`;
+        // an outdated server can't stamp the current spec version — the
+        // upgrade will re-run until the server process is restarted; say so
+        if (!match.specVersion || match.specVersion < SPEC_VERSION) {
+          const warn = el("div", "stage", `<span class="dot"></span>${esc("⚠ The SERVER is running an older build than the page — stop it (Ctrl+C) and run `node server.js` again to pick up the pulled code; until then templates construct under the previous contract")}`);
+          stages.appendChild(warn);
+        }
       } catch { upRow.remove(); /* keep the stale spec — heuristic fallback still renders */ }
     }
     const contract = buildContract(match, text);
