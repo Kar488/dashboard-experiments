@@ -70,6 +70,33 @@
   ];
   // pinned inputs: VLC · Promo cost (Reg / Deep) · Events (Store / Dig / S+D, toggled Reg↔Deep)
   const VLCCOL = { k: "vlc", label: "$/u", edit: true, dec: true, val: (o, e) => e.vlc.toFixed(2) };
+  // Send-to-buying units — merchant-entered quantity that goes to buying.
+  // Prefilled with the MAE-adjusted suggestion (predicted units + the learnt MAE
+  // across price areas); the hint line keeps both numbers visible.
+  const BUYUNITS = {};   // uid → entered units (K)
+  function buyMaePct(o) { return 0.05 + (Math.abs(NP.util.hashStr(o.uid + "|mae")) % 100) / 1000; }   // learnt 5–14.9%
+  function buySuggest(o, res) { const pred = res.units, mae = pred * buyMaePct(o); return { pred: pred, mae: mae, adj: pred + mae }; }
+  function buyCellHTML(o, res) {
+    const s = buySuggest(o, res), adjR = Math.round(s.adj);
+    const cur = BUYUNITS[o.uid], val = cur != null ? cur : adjR;
+    const edited = cur != null && Math.round(cur) !== adjR;
+    const tip = "Units to send for buying (K) — predicted " + NP.fmt.u(s.pred) + " · learnt MAE across price areas ±" + (buyMaePct(o) * 100).toFixed(1) + "% (" + NP.fmt.u(s.mae) + ") → MAE-adjusted " + NP.fmt.u(s.adj);
+    return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit npv2-fg-evc npv2-fg-buyc' + (edited ? " is-edited" : "") + '" data-cell="' + o.uid + ':buyUnits" title="' + esc(tip) + '">' +
+      '<input class="npv2-fg-input npv2-fg-buyin" type="text" inputmode="numeric" data-uid="' + o.uid + '" data-adj="' + adjR + '" value="' + Math.round(val) + '">' +
+      '<span class="npv2-fg-evsplit npv2-fg-buyhint">pred ' + NP.fmt.u(s.pred) + " · adj " + NP.fmt.u(s.adj) + "</span></div>";
+  }
+  function onBuyInput(e) {
+    const inp = e.target, uid = inp.dataset.uid, adj = +inp.dataset.adj;
+    const v = parseInt(String(inp.value).replace(/[^0-9]/g, ""), 10);
+    if (isNaN(v)) delete BUYUNITS[uid]; else BUYUNITS[uid] = v;
+    const cell = inp.closest(".npv2-fg-inc");
+    if (cell) cell.classList.toggle("is-edited", BUYUNITS[uid] != null && BUYUNITS[uid] !== adj);
+  }
+  function onBuyBlur(e) {
+    const inp = e.target, uid = inp.dataset.uid;
+    if (BUYUNITS[uid] == null) { inp.value = inp.dataset.adj; const cell = inp.closest(".npv2-fg-inc"); if (cell) cell.classList.remove("is-edited"); }
+    else inp.value = String(Math.round(BUYUNITS[uid]));
+  }
   // Promo cost (Reg / Deep) is now the DERIVED result of the allowance breakup — read-only
   const COSTCOLS = [
     { k: "deadNet", label: "Reg" },
@@ -83,10 +110,18 @@
     { k: "shipToStore", label: "Ship", edit: true }
   ];
   const ALWTITLE = { offInvoice: "off-invoice", scan: "scan", redemption: "redemption", shipToStore: "ship-to-store" };
-  // allowance group header doubles as the Regular↔Deep toggle (which promo cost you're breaking up)
-  function allowCap() {
-    const deep = NP.state.v2allowMode === "deep";
-    return 'Allowances · <button type="button" class="npv2-evtoggle" data-allowtoggle title="Enter the allowances for the regular or the deep-discount promo cost — click to switch">' + (deep ? "D" : "R") + " ⇄</button>";
+  // Regular + Deep shown SIDE BY SIDE when the viewport is wide enough — a merchant
+  // negotiating with a vendor can't keep flipping R⇄D mid-conversation. Below the
+  // threshold the groups fall back to the single toggled set. body.npv2-sbs mirrors
+  // the flag for the CSS (deep-group tint + pinned-block sizing).
+  const SBS_MQ = window.matchMedia ? window.matchMedia("(min-width: 1780px)") : null;
+  function sbsOn() { return !!(SBS_MQ && SBS_MQ.matches); }
+  // allowance group header doubles as the Regular↔Deep toggle (which promo cost you're
+  // breaking up) — in side-by-side mode both groups show, so it's a plain label
+  function allowCap(deep) {
+    if (sbsOn()) return "Allowances · " + (deep ? "Deep" : "Regular");
+    const d = NP.state.v2allowMode === "deep";
+    return 'Allowances · <button type="button" class="npv2-evtoggle" data-allowtoggle title="Enter the allowances for the regular or the deep-discount promo cost — click to switch">' + (d ? "D" : "R") + " ⇄</button>";
   }
   function deepLadderOf(o) { return window.NPViews && NPViews.deepEffective ? NPViews.deepEffective(o, NP.state.draft).ladder : NP.effective(o, NP.state.draft).ladder; }
   function deepCostOf(o) { return window.NPViews && NPViews.deepEffective ? NPViews.deepEffective(o, NP.state.draft).deadNet : NP.effective(o, NP.state.draft).deadNet; }
@@ -95,24 +130,24 @@
     const v = deep ? deepCostOf(o) : NP.effective(o, NP.state.draft).deadNet;
     return '<div class="npv2-fg-cell npv2-fg-costc" data-cost="' + o.uid + ":" + (deep ? "deep" : "reg") + '" title="Promo cost $/u — ' + (deep ? "deep-discount" : "regular") + ' weeks (built from the allowances)"><b>' + NP.fmt.price(v) + "</b></div>";
   }
-  function allowCellHTML(c, o, eDraft) {
+  function allowCellHTML(c, o, eDraft, deepArg) {
     if (c.soon) return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-soon" title="Redemption allowance ($/u) — coming later"><input class="npv2-fg-input" type="text" value="—" disabled></div>';
-    const deep = NP.state.v2allowMode === "deep";
+    const deep = sbsOn() ? !!deepArg : NP.state.v2allowMode === "deep";
     const lad = deep ? deepLadderOf(o) : eDraft.ladder;
     const dollar = (lad[c.k] || 0) * eDraft.vlc;
-    return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit" data-cell="' + o.uid + ":alw:" + c.k + '" title="' + esc((deep ? "Deep" : "Regular") + " " + (ALWTITLE[c.k] || c.k) + " allowance ($/u) — builds the promo cost") + '">' +
-      '<input class="npv2-fg-input npv2-fg-alwin" type="text" inputmode="decimal" data-uid="' + o.uid + '" data-alw="' + c.k + '" value="' + dollar.toFixed(2) + '"></div>';
+    return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit" data-cell="' + o.uid + ":alw:" + c.k + ":" + (deep ? "deep" : "reg") + '" title="' + esc((deep ? "Deep" : "Regular") + " " + (ALWTITLE[c.k] || c.k) + " allowance ($/u) — builds the promo cost") + '">' +
+      '<input class="npv2-fg-input npv2-fg-alwin" type="text" inputmode="decimal" data-uid="' + o.uid + '" data-alw="' + c.k + '" data-deep="' + (deep ? 1 : 0) + '" value="' + dollar.toFixed(2) + '"></div>';
   }
   // events — the merchant enters ONE total; the learnt store/digital/combined split
   // is shown underneath and edits are distributed proportionally to that split.
   function evSplitOf(e, deep) { return deep ? [e.deepEvents, e.deepDigEvents, e.deepBothEvents] : [e.events, e.digEvents, e.bothEvents]; }
   function evFields(deep) { return deep ? ["deepEvents", "deepDigEvents", "deepBothEvents"] : ["events", "digEvents", "bothEvents"]; }
-  function evCols() {
-    const deep = NP.state.v2evMode === "deep";
+  function evCols(deepArg) {
+    const deep = sbsOn() ? !!deepArg : NP.state.v2evMode === "deep";
     return [{ k: deep ? "deepEvTotal" : "evTotal", label: "Total / yr", edit: true, val: (o, e) => { const s = evSplitOf(e, deep); return String(s[0] + s[1] + s[2]); } }];
   }
-  function evCellHTML(o, eDraft) {
-    const deep = NP.state.v2evMode === "deep";
+  function evCellHTML(o, eDraft, deepArg) {
+    const deep = sbsOn() ? !!deepArg : NP.state.v2evMode === "deep";
     const sp = evSplitOf(eDraft, deep), tot = sp[0] + sp[1] + sp[2], k = deep ? "deepEvTotal" : "evTotal";
     const edited = evFields(deep).some((f) => NP.isEdited(o, f));
     return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit npv2-fg-evc' + (edited ? " is-edited" : "") + '" data-cell="' + o.uid + ":" + k + '" title="' + esc((deep ? "Deep-discount" : "Regular") + " promo events / yr — enter the total; the learnt store · digital · combined split underneath is kept proportional") + '">' +
@@ -129,10 +164,12 @@
     return parts;
   }
   const INTITLE = { vlc: "Vendor list cost / unit", deadNet: "Promo cost — regular weeks", deepDeadNet: "Promo cost — deep-discount weeks", events: "Regular store events / yr", digEvents: "Regular digital events / yr", bothEvents: "Regular store & digital / yr", deepEvents: "Deep store events / yr", deepDigEvents: "Deep digital events / yr", deepBothEvents: "Deep store & digital / yr" };
-  // events column header doubles as the Regular↔Deep toggle (events are coupled to the cost columns)
-  function evCap() {
-    const deep = NP.state.v2evMode === "deep";
-    return 'Events · <button type="button" class="npv2-evtoggle" data-evtoggle title="Editing events &amp; cost for regular or deep-discount weeks — click to switch">' + (deep ? "D" : "R") + " ⇄</button>";
+  // events column header doubles as the Regular↔Deep toggle (events are coupled to the
+  // cost columns) — in side-by-side mode both groups show, so it's a plain label
+  function evCap(deep) {
+    if (sbsOn()) return "Events · " + (deep ? "Deep" : "Regular");
+    const d = NP.state.v2evMode === "deep";
+    return 'Events · <button type="button" class="npv2-evtoggle" data-evtoggle title="Editing events &amp; cost for regular or deep-discount weeks — click to switch">' + (d ? "D" : "R") + " ⇄</button>";
   }
   function frontItems() {
     let items = NP.cat().items.slice();
@@ -193,10 +230,13 @@
       '<div class="npv2-fg-name"><b>' + esc(o.item) + " " + esc(o.pack) + '</b><span class="np-rc-id">' + esc(String(o.ncrc).replace(/^NCRC\s*/i, "")) + '</span><span class="np-rc-id npv2-fg-base">Base ' + NP.fmt.price(o.basePrice) + "</span></div>" +
       grpBody("out", OUTCOLS.map((c) => outCellHTML(c, res, ly)).join("")) +
       (inputsOn()
-        ? grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
+        ? grpBody("buy", buyCellHTML(o, res)) +
+          grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
           grpBody("cost", costCellHTML(o, false) + costCellHTML(o, true)) +
-          grpBody("alw", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft)).join("")) +
-          grpBody("ev", evCellHTML(o, eDraft))
+          grpBody("alw", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft, false)).join("")) +
+          (sbsOn() ? grpBody("alw npv2-fg-alwdeep", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft, true)).join("")) : "") +
+          grpBody("ev", evCellHTML(o, eDraft, false)) +
+          (sbsOn() ? grpBody("ev npv2-fg-evdeep", evCellHTML(o, eDraft, true)) : "")
         : "") +
       "</div></th>";
   }
@@ -205,10 +245,13 @@
       '<div class="npv2-fg-name npv2-fg-nameh">NCRC · item</div>' +
       grpHead("out", "Outputs vs LY", OUTCOLS) +
       (inputsOn()
-        ? grpHead("vlc", "List", [VLCCOL]) +
+        ? grpHead("buy", "Send to buying", [{ k: "buyUnits", label: "Units (K)", edit: true }]) +
+          grpHead("vlc", "List", [VLCCOL]) +
           grpHead("cost", "Promo cost $/u", COSTCOLS) +
-          grpHead("alw", allowCap(), ALLOWCOLS) +
-          grpHead("ev", evCap(), evCols())
+          grpHead("alw", allowCap(false), ALLOWCOLS) +
+          (sbsOn() ? grpHead("alw npv2-fg-alwdeep", allowCap(true), ALLOWCOLS) : "") +
+          grpHead("ev", evCap(false), evCols(false)) +
+          (sbsOn() ? grpHead("ev npv2-fg-evdeep", evCap(true), evCols(true)) : "")
         : "") +
       "</div></th>";
   }
@@ -217,18 +260,25 @@
   // type — the discount type is carried separately by c.val (offerValueShort)
   // and c.mech. STORE_TACTICS only ever produces item/bxgx/mb here.
   const TAC_LABEL = { item: "ID", bxgx: "BXGX", mb: "MB" };
+  const DEPTH_LABEL = { shallow: "Shallow", reg: "Regular", deep: "Deep" };
+  // absolute depth tier for the cell colour (NOT a vs-LY comparison): shallow <18% · regular · deep ≥27%
+  function depthTier(d) { return d >= 0.27 ? "deep" : d < 0.18 ? "shallow" : "reg"; }
   function ribbonCell(o, c, isEv, ixf, lyset, noAlw) {
-    // holiday is indicated on the week-number header only — no bar on every body cell
     const ev = "";
+    // holiday/event weeks get a ★ marker on the cell itself (not just the column header)
+    const evObj = isEv ? NP.RETAIL_EVENTS.find((x) => x.wk === c.week - 1) : null;
+    const holI = evObj ? '<span class="npv2-wk-hol" title="Holiday week · ' + esc(evObj.label) + '">★</span>' : "";
     const lock = NP.state.cf.approved && NP.state.cf.approved[o.uid + ":" + c.week] ? " is-lock" : "";
-    if (!c.promoted) return '<td class="npv2-fg-wk npv2-fg-none' + (c.locked ? " is-locked" : "") + ev + '" title="Wk ' + c.week + ' · no promo"></td>';
+    if (!c.promoted) return '<td class="npv2-fg-wk npv2-fg-none' + (c.locked ? " is-locked" : "") + ev + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" aria-label="Wk ' + c.week + ' · no promo · base &amp; cost">' +
+      '<button type="button" class="npv2-cell-toggle npv2-cell-toggle-add" data-ptoggle="' + o.uid + "|" + c.week + '|on" title="Add a promo this week" aria-label="Add promo to week ' + c.week + '">＋</button></td>';
     const mechL = c.mech ? NP.MECH_LABEL[c.mech] : "", w = c.week - 1;
     const tac = TAC_LABEL[c.store.className];
     const ixc = ixf === "cann" ? " is-cann" : ixf === "halo" ? " is-halo" : "";
     const noal = noAlw ? " is-noalw" : "";
-    // depth vs LY: ▲ deeper / ▼ shallower / = equal
-    const lyd = o.lyDepth || 0, over = c.depth - lyd, eq = Math.abs(over) < 0.012;
-    const arr = '<i class="npv2-wk-ar ' + (eq ? "is-eq" : over > 0 ? "is-deeper" : "is-shallower") + '">' + (eq ? "=" : over > 0 ? "▲" : "▼") + "</i>";
+    // depth tier by absolute discount depth → colour dot + left rail (not a vs-LY comparison)
+    const lyd = o.lyDepth || 0;
+    const dtier = depthTier(c.depth), dLbl = DEPTH_LABEL[dtier];
+    const depthDot = '<span class="npv2-dp-dot npv2-dp-' + dtier + '" title="' + dLbl + " depth · " + (c.depth * 100).toFixed(0) + '%"></span>';
     // LY status: repeats last year's week (show LY depth) vs a new/optimized placement
     const repeat = !!(lyset && lyset.has(w));
     const stHtml = repeat ? '<span class="npv2-wk-st st-rep">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-st st-new">new</span>';
@@ -242,7 +292,7 @@
     const mechLabel = tac ? '<div class="npv2-wk-mech">' + tac + "</div>" : "";
     // tooltip: the four facts once each — week · promotion type · tactic ·
     // discount type · offer label — then the existing depth/LY/digital/lock detail.
-    const tip = "Wk " + c.week + " · " + (fam === "simple" ? "Simple" : "Complex") + " · " + c.store.name + (mechL ? " · " + mechL : "") + (c.offer ? " · " + c.offer.label : "") + " · depth " + (c.depth * 100).toFixed(0) + "% vs LY " + (lyd * 100).toFixed(0) + "% (" + (eq ? "≈ same" : over > 0 ? "deeper" : "shallower") + ")" + (repeat ? " · repeats last year" : " · new / optimized placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
+    const tip = "Wk " + c.week + " · " + (fam === "simple" ? "Simple" : "Complex") + " · " + c.store.name + (mechL ? " · " + mechL : "") + (c.offer ? " · " + c.offer.label : "") + " · " + dLbl + " depth " + (c.depth * 100).toFixed(0) + "%" + (repeat ? " · repeats last year" : " · new / optimized placement") + (noAlw ? " · ⚠ on promo with no vendor allowance" : "") + (c.digital.length ? " · digital" : "") + (c.locked ? " · actual" : "") + (lock ? " · locked into plan" : "") + ixt + " — click for week detail";
     const sp = NP.fmt.price(NP.promoPriceOf(o, c.depth)), dp = NP.fmt.price(NP.promoPriceOf(o, digDepth));
     const lySp = NP.fmt.price(NP.promoPriceOf(o, lyd)), lyDp = NP.fmt.price(NP.promoPriceOf(o, Math.min(0.5, lyd + 0.06)));
     // optimized-placement indicator: new vs a repeat of last year
@@ -251,15 +301,17 @@
       : '<i class="npv2-wk-opt is-opt" title="optimized — new placement vs last year">✦</i>';
     const lockI = lock ? '<i class="npv2-wk-lk" title="locked into plan"></i>' : "";
     const warnI = noAlw ? '<i class="npv2-wk-warn" title="on promo, no vendor allowance">⚠</i>' : "";
-    return '<td class="npv2-fg-wk tactic-' + c.store.className + " npv2-fam-" + fam + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" title="' + esc(tip) + '">' +
-      '<div class="npv2-wk-c npv2-wk-pc">' +
+    // the hover-expand card replaces the native tooltip on promoted cells → aria-label only
+    return '<td class="npv2-fg-wk tactic-' + c.store.className + " npv2-fam-" + fam + (c.locked ? " is-locked" : "") + ev + ixc + lock + noal + '" data-mweek="' + o.uid + "|" + c.week + '" role="button" tabindex="0" aria-label="' + esc(tip) + '">' +
+      '<div class="npv2-wk-c npv2-wk-pc npv2-dp-' + dtier + '">' +
+        '<button type="button" class="npv2-cell-toggle" data-ptoggle="' + o.uid + "|" + c.week + '|off" title="Switch this week to no promo" aria-label="Set week ' + c.week + ' to no promo">∅</button>' +
         mechLabel +
         (c.val ? '<div class="npv2-wk-tok">' + esc(c.val) + "</div>" : "") +
         '<div class="npv2-wk-pr"><span class="npv2-wk-ch">S</span><b>' + sp + "</b></div>" +
         (repeat ? '<div class="npv2-wk-lp">LY ' + lySp + "</div>" : "") +
         (hasDig ? '<div class="npv2-wk-pr npv2-wk-prd"><span class="npv2-wk-ch npv2-wk-chd">D</span><b>' + dp + "</b></div>" + (repeat ? '<div class="npv2-wk-lp">LY ' + lyDp + "</div>" : "") : "") +
         (!repeat ? '<div class="npv2-wk-lp"><span class="npv2-wk-newt">new</span></div>' : "") +
-        '<div class="npv2-wk-tags">' + arr + optIcon + lockI + warnI + "</div>" +
+        '<div class="npv2-wk-tags">' + holI + depthDot + optIcon + lockI + warnI + chgBadges(o, c.week) + "</div>" +
       "</div></td>";
   }
   function sel(label, id, opts, cur, allLab) {
@@ -433,14 +485,15 @@
       '<span class="npv2-lg-div"></span>' +
       '<span class="npv2-lg npv2-lg-mechkey">ID = Item Discount · BXGX = Buy X Get X · MB = Must Buy</span>' +
       '<span class="npv2-lg npv2-lg-mech">offer <b>%</b> · <b>$</b> · <b>@$</b> · <b>FREE</b></span>' +
-      '<span class="npv2-lg"><i class="npv2-lg-dg">D</i>digital</span>' +
-      '<span class="npv2-lg"><i class="npv2-sw npv2-sw-lock"></i>locked</span>' +
+      '<span class="npv2-lg"><span class="npv2-lg-lockic">🔒</span>locked</span>' +
       '<span class="npv2-lg"><i class="npv2-wk-warn">⚠</i>on promo · no allowance</span>' +
-      '<span class="npv2-lg"><i class="npv2-sw npv2-sw-ev"></i>holiday wk</span>' +
+      '<span class="npv2-lg"><span class="npv2-lg-hol">★</span> holiday wk</span>' +
       '<span class="npv2-lg"><i class="npv2-sw npv2-fg-none"></i>no promo</span>' +
+      '<span class="npv2-lg"><span class="npv2-lg-tog npv2-lg-tog-add">＋</span> add promo · <span class="npv2-lg-tog">∅</span> remove — click on a cell</span>' +
       '<span class="npv2-lg"><i class="npv2-wk-opt is-opt">✦</i>optimized placement <i class="npv2-wk-opt is-rep">↺</i>repeats LY</span>' +
+      '<span class="npv2-lg"><i class="npv2-chg npv2-chg-c">C</i> base cost changed this week · <i class="npv2-chg npv2-chg-p">P</i> base price changed this week</span>' +
       '<span class="npv2-lg-div"></span>' +
-      '<span class="npv2-lg">depth vs LY <i class="npv2-wk-ar is-deeper">▲</i> deeper <i class="npv2-wk-ar is-shallower">▼</i> shallower <i class="npv2-wk-ar is-eq">=</i> same · <span class="npv2-wk-ly">LY %</span> = repeats LY</span>' +
+      '<span class="npv2-lg">depth <i class="npv2-dp-dot npv2-dp-shallow"></i> shallow <i class="npv2-dp-dot npv2-dp-reg"></i> regular <i class="npv2-dp-dot npv2-dp-deep"></i> deep</span>' +
       "</div>";
   }
   // exact V1 compare panel (Sales/Units/AGP/HHs, objective highlighted, leader bold)
@@ -475,11 +528,33 @@
 
   /* ---- scenarios (same model as V1: edit → dirty → Rerun creates a scenario) ---- */
   function totalsOf(ov) { let r = 0, u = 0, a = 0, h = 0; NP.cat().items.forEach((o) => { const x = NP.resultFor(o, ov); r += x.revenueM; u += x.units; a += x.agpM; h += x.hhK; }); return { r: r, u: u, a: a, h: h }; }
+  let scnEditing = null;   // id of the scenario whose name is being edited inline
+  const SCN_FIELD_LBL = { vlc: "VLC", deadNet: "dead-net", deepDeadNet: "deep dead-net", events: "events", digEvents: "digital events", bothEvents: "S+D events", deepEvents: "deep events", deepDigEvents: "deep dig events", deepBothEvents: "deep S+D events" };
   function scnShort(s) { return s.name.replace("Scenario ", "S"); }
+  // default tooltip = a quick summary of what the scenario changed (until the user names it)
+  function scnAutoDesc(s) {
+    const ov = s.ov || {}, uids = Object.keys(ov);
+    if (!uids.length) return "No edits recorded — click to name it";
+    const items = NP.cat().items, nameOf = (u) => { const o = items.find((x) => x.uid === u); return o ? o.item : u; };
+    const fields = new Set();
+    uids.forEach((u) => { const e = ov[u] || {}; Object.keys(e).forEach((f) => { if (typeof e[f] !== "boolean" && !/Touched$/.test(f)) fields.add(f); }); });
+    const fstr = [...fields].map((f) => SCN_FIELD_LBL[f] || f).join(", ");
+    const istr = uids.length <= 2 ? uids.map(nameOf).join(" & ") : nameOf(uids[0]) + " +" + (uids.length - 1) + " more";
+    return (fstr || "edits") + " · " + istr;
+  }
+  function scnDesc(s) { return (s.desc && s.desc.trim()) ? s.desc : scnAutoDesc(s); }
+  function startRename(id) { scnEditing = id; updateScenarioUI(); }
   function scenarioChips() {
     const st = NP.state;
     let html = '<button type="button" class="npv2-chip' + (st.activeScenario === "base" ? " is-active" : "") + '" data-scn="base" title="Optimized — last-year inputs">Optimized</button>';
-    st.scenarios.forEach((s) => { html += '<button type="button" class="npv2-chip' + (st.activeScenario === s.id ? " is-active" : "") + '" data-scn="' + s.id + '" title="' + esc(scnShort(s)) + ' — edited">' + esc(scnShort(s)) + '<span class="npv2-chip-x" data-del="' + s.id + '" title="Delete">×</span></button>'; });
+    st.scenarios.forEach((s) => {
+      if (scnEditing === s.id) {
+        html += '<span class="npv2-chip is-editing"><input class="npv2-scen-rename" data-renid="' + s.id + '" maxlength="60" value="' + esc(s.desc || "") + '" placeholder="Name this scenario — e.g. deeper VLC on Brawny"></span>';
+      } else {
+        const active = st.activeScenario === s.id;
+        html += '<button type="button" class="npv2-chip' + (active ? " is-active" : "") + '" data-scn="' + s.id + '" title="' + esc(scnDesc(s)) + (active ? " — click to rename" : "") + '">' + esc(scnShort(s)) + '<span class="npv2-chip-x" data-del="' + s.id + '" title="Delete">×</span></button>';
+      }
+    });
     return html;
   }
   function compareHTML() {
@@ -491,22 +566,40 @@
   }
   let cmpOpen = false, distCmpOpen = false;
   function bindScen(host) {
-    host.querySelectorAll("[data-del]").forEach((x) => (x.onclick = (e) => { e.stopPropagation(); NP.deleteScenario(x.dataset.del); }));
-    host.querySelectorAll(".npv2-chip").forEach((b) => (b.onclick = () => NP.setScenario(b.dataset.scn)));
+    host.querySelectorAll("[data-del]").forEach((x) => (x.onclick = (e) => { e.stopPropagation(); scnEditing = null; NP.deleteScenario(x.dataset.del); }));
+    // click a scenario chip: switch to it; click the ALREADY-active one → inline rename
+    host.querySelectorAll(".npv2-chip[data-scn]").forEach((b) => (b.onclick = () => {
+      const id = b.dataset.scn;
+      if (id !== "base" && id === NP.state.activeScenario) startRename(id);
+      else NP.setScenario(id);
+    }));
+    const inp = host.querySelector(".npv2-scen-rename");
+    if (inp) {
+      const save = () => { const s = NP.state.scenarios.find((x) => x.id === inp.dataset.renid); if (s) s.desc = inp.value.trim(); scnEditing = null; updateScenarioUI(); };
+      inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } else if (e.key === "Escape") { e.preventDefault(); scnEditing = null; updateScenarioUI(); } });
+      inp.addEventListener("blur", save);
+      inp.focus(); inp.select();
+    }
   }
   // an edit needs a reforecast only when it lands outside the discovered band
   function hasOutOfBand() {
-    const draft = NP.state.draft, fields = ["vlc", "deadNet", "deepDeadNet", "events", "digEvents", "bothEvents", "deepEvents", "deepDigEvents", "deepBothEvents"];
+    const draft = NP.state.draft;
+    const evFields = ["events", "digEvents", "bothEvents", "deepEvents", "deepDigEvents", "deepBothEvents"];
+    const bandFields = ["vlc", "deadNet", "deepDeadNet"];   // price-ish → a reforecast is only needed when OUTSIDE the discovered band
     for (const o of NP.cat().items) {
-      if (!draft[o.uid]) continue;
+      const ov = draft[o.uid]; if (!ov) continue;
+      // allowance edits (regular ov.ladder / deep ov.deepLadder) change the promo cost, and
+      // any event-count edit changes the plan → these ALWAYS need a reforecast (all input cells wired)
+      if ((ov.ladder && Object.keys(ov.ladder).length) || (ov.deepLadder && Object.keys(ov.deepLadder).length)) return true;
+      if (evFields.some((f) => NP.isEdited(o, f))) return true;
       const e = NP.effective(o, draft);
-      for (const f of fields) { if (NP.isEdited(o, f) && !NP.inBand(o, f, e[f])) return true; }
+      for (const f of bandFields) { if (NP.isEdited(o, f) && !NP.inBand(o, f, e[f])) return true; }
     }
     return false;
   }
   function updateScenarioUI() {
     const scen = document.getElementById("npV2Scen"); if (scen) { scen.innerHTML = scenarioChips(); bindScen(scen); }
-    const db = document.getElementById("npV2Dirty"); if (db) db.hidden = !(NP.isDirty() && hasOutOfBand());
+    const db = document.getElementById("npV2Dirty"); if (db) db.hidden = !((NP.isDirty() && hasOutOfBand()) || NP.promoDirty());
   }
 
   /* ---- inline editing of the pinned inputs (band-aware, like V1) ---- */
@@ -530,7 +623,7 @@
   }
   // allowance edits build the (read-only) promo cost — update the derived cost cells live
   function onAllowInput(e) {
-    const inp = e.target, uid = inp.dataset.uid, key = inp.dataset.alw, deep = NP.state.v2allowMode === "deep";
+    const inp = e.target, uid = inp.dataset.uid, key = inp.dataset.alw, deep = inp.dataset.deep === "1";
     NP.applyAllow(uid, key, inp.value, deep);
     const o = NP.cat().items.find((x) => x.uid === uid);
     updateCostCells(o);
@@ -538,7 +631,7 @@
     updateScenarioUI();
   }
   function onAllowBlur(e) {
-    const inp = e.target, key = inp.dataset.alw, deep = NP.state.v2allowMode === "deep";
+    const inp = e.target, key = inp.dataset.alw, deep = inp.dataset.deep === "1";
     const o = NP.cat().items.find((x) => x.uid === inp.dataset.uid), eDraft = NP.effective(o, NP.state.draft);
     const lad = deep ? deepLadderOf(o) : eDraft.ladder;
     inp.value = ((lad[key] || 0) * eDraft.vlc).toFixed(2);
@@ -568,6 +661,8 @@
 
   function renderFront() {
     const front = document.getElementById(FRONT); if (!front) return;
+    hideCellPop();   // never strand a hover card over a rebuilt grid (reforecast reopens its card itself)
+    document.body.classList.toggle("npv2-sbs", sbsOn());
     const map = NP.displayMap(), all = NP.cat().items;
     const cats = (NP.state.categoryIds || [NP.state.categoryId]).map((id) => [id, (NP.DATA[id] ? NP.DATA[id].name : id).split(" — ")[0]]);
     const vendors = [...new Set(all.map((o) => o.vendor))].sort();
@@ -590,8 +685,6 @@
           "</div>" +
           '<div class="npv2-fg-gr">' +
             '<button type="button" class="npv2-ix-cap' + (inputsOn() ? " is-on" : "") + '" id="npV2InputsT" title="Show or hide the pinned deal-input columns (list, promo cost, allowances, events) to focus on the calendar"><span class="npv2-ix-dot"></span>Inputs ' + (inputsOn() ? "on" : "off") + "</button>" +
-            '<button type="button" class="npv2-ix-cap' + (NP.state.v2ix ? " is-on" : "") + '" id="npV2Ix" title="Highlight where the optimizer separates cluster rivals (cannibalisation) and co-promotes complements (halo)"><span class="npv2-ix-dot"></span>Interactions ' + (NP.state.v2ix ? "on" : "off") + "</button>" +
-            '<span class="npv2-fg-ixkey"' + (NP.state.v2ix ? "" : " hidden") + '><i class="npv2-ixk npv2-ixk-h"></i>halo <i class="npv2-ixk npv2-ixk-c"></i>cannib.</span>' +
           "</div>" +
         "</div>" +
         // row 3 — filters (left) · sort (right)
@@ -621,11 +714,16 @@
     const rs = front.querySelector("#npV2FgRog"); rs.onchange = () => { ff.rog = rs.value; renderFront(); };
     const cs = front.querySelector("#npV2FgClass"); cs.onchange = () => { ff.cls = cs.value; renderFront(); };
     const sbs = front.querySelector("#npV2FgSub"); if (sbs) sbs.onchange = () => { ff.sub = sbs.value; renderFront(); };
-    // editable pinned inputs (VLC, events) — allowance inputs are handled separately below
-    front.querySelectorAll(".npv2-fg-input:not(.npv2-fg-alwin)").forEach((inp) => {
+    // editable pinned inputs (VLC, events) — allowance + buy-units inputs are handled separately below
+    front.querySelectorAll(".npv2-fg-input:not(.npv2-fg-alwin):not(.npv2-fg-buyin)").forEach((inp) => {
       inp.addEventListener("input", onEditInput);
       inp.addEventListener("focus", (e) => showBand(e.target, NP.cat().items.find((x) => x.uid === e.target.dataset.uid)));
       inp.addEventListener("blur", onEditBlur);
+    });
+    // send-to-buying units — local state with the MAE-adjusted suggestion as default
+    front.querySelectorAll(".npv2-fg-buyin").forEach((inp) => {
+      inp.addEventListener("input", onBuyInput);
+      inp.addEventListener("blur", onBuyBlur);
     });
     // allowance inputs build the (read-only) promo cost — write to the regular/deep ladder live
     front.querySelectorAll(".npv2-fg-alwin").forEach((inp) => {
@@ -637,7 +735,18 @@
     front.querySelectorAll("[data-period]").forEach((el) => (el.onclick = (e) => { e.stopPropagation(); zoomPeriod(+el.dataset.period); }));
     front.querySelectorAll("[data-zoomout]").forEach((el) => (el.onclick = (e) => { e.stopPropagation(); zoomOut(); }));
     // click a promoted week → single-week drawer
-    front.querySelectorAll("[data-mweek]").forEach((el) => (el.onclick = () => { const p = el.dataset.mweek.split("|"); if (window.NPViews && NPViews.openWeek) NPViews.openWeek("plan", p[0], +p[1]); }));
+    // clicking a promoted week PINS the hover card (the separate week drawer is retired —
+    // the card carries all the data + the Lock / Create-NOPA actions)
+    front.querySelectorAll("[data-mweek]").forEach((el) => (el.onclick = () => openCellPop(el.dataset.mweek, el, true)));
+    // in-cell promo⇄no-promo toggle — flips the week right on the calendar (no hover needed)
+    front.querySelectorAll("[data-ptoggle]").forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      const p = b.dataset.ptoggle.split("|");   // uid, week, mode
+      NP.state.promoOverride = NP.state.promoOverride || {};
+      NP.state.promoOverride[p[0] + "|" + p[1]] = p[2];
+      hideCellPop();
+      renderFront();
+    }));
     // scenario controls
     front.querySelector("#npV2RerunB").onclick = () => NP.rerun();
     front.querySelector("#npV2Discard").onclick = () => NP.revert();
@@ -652,6 +761,7 @@
     updateScenarioUI();
     const wrap = front.querySelector("#" + WRAP);
     bindDrag(wrap);
+    bindCellPop(wrap);   // hover-expand card on promoted week cells
     // condense the strategy cards to just the selected one once the table is scrolled
     const tools = front.querySelector(".npv2-fg-tools");
     wrap.addEventListener("scroll", () => { if (tools) tools.classList.toggle("is-scrolled", wrap.scrollTop > 14); }, { passive: true });
@@ -760,6 +870,320 @@
       if (e.deltaX) { wrap.scrollLeft += e.deltaX; if (e.deltaY) wrap.scrollTop += e.deltaY; e.preventDefault(); }
       // pure vertical (deltaX === 0) falls through to native overflow-y scrolling
     }, { passive: false });
+  }
+
+  /* ======================================================= HOVER-EXPAND CELL CARD
+     A promoted week cell grows into a card on hover (no tooltip): week KPI tiles
+     (Units/Sales/AGP vs LY), the secondary rate strip (AIV · List $/u · Funding $/u ·
+     Spend rate), the store/digital tactic table and a condensed cost ladder with the
+     LY value greyed beside every line. VLC and base price are editable in the card;
+     Reforecast re-runs the week KPIs and the new values become the base for every
+     remaining week (this week → W52). The grid itself only gains tiny C / P markers
+     (solid on the change week, hollow on later weeks running on the new base). */
+  const CELLPOP = { el: null, key: null, pinned: false, showT: null, hideT: null };
+  const CELLCHG = {};   // uid → { week (1-based origin), cost:{from,to}|null, price:{from,to}|null }
+  const BASEOV = {};    // uid → overridden base price (applies from the change week forward)
+  function baseOf(o) { return BASEOV[o.uid] != null ? BASEOV[o.uid] : o.basePrice; }
+  // C / P markers for the grid cell icon row — ONLY on the week the base change was made
+  // (the old hollow "inherited" badge on later weeks was dropped per merchant feedback).
+  function chgBadges(o, week1) {
+    const ch = CELLCHG[o.uid]; if (!ch || week1 !== ch.week) return "";
+    let h = "";
+    if (ch.cost) h += '<i class="npv2-chg npv2-chg-c" title="base cost changed this week · $' + ch.cost.from.toFixed(2) + " → $" + ch.cost.to.toFixed(2) + '">C</i>';
+    if (ch.price) h += '<i class="npv2-chg npv2-chg-p" title="base price changed this week · $' + ch.price.from.toFixed(2) + " → $" + ch.price.to.toFixed(2) + '">P</i>';
+    return h;
+  }
+  // reforecast multipliers for weeks running on a changed base: price cut → more units,
+  // slightly lower AIV; cost change hits AGP directly ($Δ × units)
+  function refFactors(ch) {
+    const pf = ch && ch.price ? (ch.price.to - ch.price.from) / ch.price.from : 0;
+    const um = clampN(1 - 1.6 * pf, 0.5, 1.7);
+    return { um: um, sf: um * (1 + pf * 0.8), cf: ch && ch.cost ? ch.cost.to - ch.cost.from : 0 };
+  }
+  function cellPopHTML(o, w1) {
+    const w0 = w1 - 1, map = NP.displayMap();
+    // same strategy-aware week resolver the grid uses (cfWeeks), so the card
+    // always matches the cell it grew out of
+    const cfV = window.NPViews, strat = NP.state.cf.strategy || "optimized";
+    const wkp = (strat === "optimized" || !cfV || !cfV.cfWeeks) ? NP.weekPlan(o, map, false) : cfV.cfWeeks(o, strat);
+    const c = wkp[w0];
+    if (!c) return "";
+    const promoted = !!c.promoted;   // non-promo weeks still open the card (base price + cost efficiency)
+    // draft-effective (not displayMap) so a VLC edit shows in the card immediately,
+    // exactly like the pinned deal-input columns
+    const s = NP.weeklySeries(o, map), e = NP.effective(o, NP.state.draft), l = e.ladder;
+    const locked = !!c.locked;
+    const ch = CELLCHG[o.uid], applied = !!(ch && w1 >= ch.week);
+    // ---- week KPIs (reforecast factors applied for weeks on the new base) ----
+    let u = s.units[w0], sal = s.sales[w0], agp = s.agp[w0];
+    if (applied) { const f = refFactors(ch); u *= f.um; sal *= f.sf; agp = agp * f.sf - (f.cf * u) / 1000; }
+    const lu = s.lyUnits[w0], lsal = s.lySales[w0], lagp = s.lyAgp[w0];
+    const kpi = (lab, cv, lv, money) => {
+      const f = money ? wkM : wkU, d = lv ? (cv - lv) / lv : 0;
+      return '<div class="npv2-cp-kpi"><label>' + lab + "</label><b>" + f(cv) + '</b><span class="' + (d >= 0 ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(d) + ' vs LY</span><small>LY ' + f(lv) + "</small></div>";
+    };
+    // ---- secondary rate strip ----
+    const aiv = u ? (sal * 1000) / u : 0, lyAiv = lu ? (lsal * 1000) / lu : 0;
+    const listU = e.vlc, fundU = e.vlc - e.deadNet;
+    const lyListU = listU * 0.985, lyFundU = fundU * 0.94;
+    const rate = sal ? (fundU * u) / (sal * 1000) : 0, lyRate = lsal ? (lyFundU * lu) / (lsal * 1000) : 0;
+    const sm = (lab, cvS, lvS, d, isPp) => '<div class="npv2-cp-sm"><label>' + lab + "</label><b>" + cvS + '</b><span class="' + (d >= 0 ? "np-pos" : "np-neg") + '">' + (isPp ? (d >= 0 ? "+" : "") + (d * 100).toFixed(1) + "pp" : NP.fmt.pct(d)) + "</span><small>LY " + lvS + "</small></div>";
+    const smNone = (lab) => '<div class="npv2-cp-sm"><label>' + lab + '</label><b class="npv2-wk-mut">–</b><small>no promo</small></div>';
+    const strip = sm("AIV", "$" + aiv.toFixed(2), "$" + lyAiv.toFixed(2), lyAiv ? (aiv - lyAiv) / lyAiv : 0, false) +
+      sm("List $/u", "$" + listU.toFixed(2), "$" + lyListU.toFixed(2), lyListU ? (listU - lyListU) / lyListU : 0, false) +
+      (promoted ? sm("Funding $/u", "$" + fundU.toFixed(2), "$" + lyFundU.toFixed(2), lyFundU ? (fundU - lyFundU) / lyFundU : 0, false) : smNone("Funding $/u")) +
+      (promoted ? sm("Spend rate", (rate * 100).toFixed(1) + "%", (lyRate * 100).toFixed(1) + "%", rate - lyRate, true) : smNone("Spend rate"));
+    // ---- tactic table (base price = ONE value for store & digital) ----
+    const bs = baseOf(o) / o.basePrice;   // base-override scale on promo prices
+    const hasDig = c.digital.length > 0, digDepth = Math.min(0.5, c.depth + 0.06);
+    const sp = NP.promoPriceOf(o, c.depth) * bs, dp = NP.promoPriceOf(o, digDepth) * bs;
+    const mbLim = c.store.className === "bxgx" ? "2 / 6" : "1 / 6";
+    // one value for store & digital (no caption — it forces the table wider than its column)
+    const baseCell = locked
+      ? "<b>" + NP.fmt.price(baseOf(o)) + "</b>"
+      : '<input class="npv2-cp-edit" type="text" inputmode="decimal" title="Base price — one value for store &amp; digital" data-cpbase data-orig="' + baseOf(o).toFixed(2) + '" value="' + baseOf(o).toFixed(2) + '">';
+    const mut = '<span class="npv2-wk-mut">–</span>';
+    const trow = (lab, sv, dv) => "<tr><td>" + lab + "</td><td>" + sv + "</td><td>" + (hasDig ? dv : '<span class="npv2-wk-mut">—</span>') + "</td></tr>";
+    // Non-promo weeks still render the CY tactic rows — with a dash — rather than hiding the
+    // table (PY promo presence varies week to week, so keep the layout stable and consistent).
+    const trowN = (lab) => "<tr><td>" + lab + "</td><td>" + mut + "</td><td>" + mut + "</td></tr>";
+    const tactic =
+      '<table class="npv2-cp-tt"><thead><tr><th></th><th>Store</th><th>Digital</th></tr></thead><tbody>' +
+      (promoted
+        ? trow("Tactic", "<b>" + esc(c.store.name) + "</b>", hasDig ? "<b>" + esc(NP.DIGITAL_NAMES[c.digital[0]] || "Digital") + "</b>" : "")
+        : trowN("Tactic")) +
+      '<tr><td>Base price</td><td colspan="2" class="npv2-cp-basec">' + baseCell + "</td></tr>" +
+      (promoted ? trow("Promo price", "<b>" + NP.fmt.price(sp) + "</b>", "<b>" + NP.fmt.price(dp) + "</b>") : trowN("Promo price")) +
+      (promoted ? trow("Depth", (c.depth * 100).toFixed(0) + "%", (digDepth * 100).toFixed(0) + "%") : trowN("Depth")) +
+      (promoted ? trow("MB / limit", mbLim, mbLim) : trowN("MB / limit")) +
+      (promoted ? trow("Ad / display", "Y / Y", "Y / N") : trowN("Ad / display")) +
+      "</tbody></table>";
+    // ---- condensed cost ladder with grey LY values ----
+    const eB = NP.effective(o, {}), lB = eB.ladder, lyVlc = eB.vlc * 0.97;
+    const lad = (vlc, lx) => {
+      const off = vlc * lx.offInvoice, bb = vlc * lx.billBack, pb = vlc * lx.priceBreak, fr = vlc * lx.freight;
+      const totBuy = off + bb + pb, totRet = NP.RETAIL_KEYS.reduce((t, k) => t + vlc * (lx[k] || 0), 0);
+      const net = vlc - totBuy - fr;
+      return { off: off, bb: bb, pb: pb, fr: fr, totBuy: totBuy, totRet: totRet, net: net, dead: net - totRet };
+    };
+    const cy = lad(e.vlc, l), ly = lad(lyVlc, lB);
+    const lrow = (lab, cv, lv, cls) => '<div class="npv2-cp-lrow' + (cls ? " " + cls : "") + '"><span>' + lab + '</span><em>LY $' + lv.toFixed(2) + "</em><b>$" + cv.toFixed(2) + "</b></div>";
+    const vlcCell = locked
+      ? "<b>$" + e.vlc.toFixed(2) + "</b>"
+      : '<input class="npv2-cp-edit" type="text" inputmode="decimal" data-cpvlc data-orig="' + e.vlc.toFixed(2) + '" value="' + e.vlc.toFixed(2) + '">';
+    // non-promo weeks have NO vendor funding → only VLC applies, every allowance line is a dash
+    const ldash = (lab, cls) => '<div class="npv2-cp-lrow' + (cls ? " " + cls : "") + '"><span>' + lab + '</span><em></em><b class="npv2-wk-mut">–</b></div>';
+    const ladder =
+      '<div class="npv2-cp-lrow head"><span>Vendor list cost</span><em>LY $' + lyVlc.toFixed(2) + "</em>" + vlcCell + "</div>" +
+      '<div class="npv2-cp-lgrp">Buying</div>' +
+      (promoted
+        ? lrow("Off-invoice", cy.off, ly.off) + lrow("Bill back", cy.bb, ly.bb) + lrow("Price break", cy.pb, ly.pb) +
+          lrow("Total buying", cy.totBuy, ly.totBuy, "sub") + lrow("Freight", cy.fr, ly.fr) + lrow("Net cost", cy.net, ly.net, "sub")
+        : ldash("Off-invoice") + ldash("Bill back") + ldash("Price break") +
+          ldash("Total buying", "sub") + ldash("Freight") + ldash("Net cost", "sub")) +
+      '<div class="npv2-cp-lgrp">Retail</div>' +
+      (promoted
+        ? lrow("Scan · STS · New item", cy.totRet, ly.totRet) + lrow("Dead-net cost", cy.dead, ly.dead, "tot")
+        : ldash("Scan · STS · New item") + ldash("Dead-net cost", "tot"));
+    // ---- header (echoes the cell) + reforecast bar ----
+    const tac = TAC_LABEL[c.store.className] || (c.store && c.store.name) || "No promo";
+    const lyPlan = NP.weekPlan(o, null, true), repeat = !!(lyPlan[w0] && lyPlan[w0].promoted);
+    const lyd = o.lyDepth || 0, dtier = depthTier(c.depth);
+    const headChip = promoted
+      ? '<span class="npv2-cp-tac tactic-' + c.store.className + '">' + esc(tac) + (c.val ? " · " + esc(c.val) : "") + "</span>"
+      : '<span class="npv2-cp-tac npv2-cp-tac-none">No promo</span>';
+    const arr = promoted ? '<span class="npv2-cp-depth npv2-dp-' + dtier + '">' + DEPTH_LABEL[dtier] + "</span>" : "";
+    const opt = !promoted ? "" : (repeat ? '<i class="npv2-wk-opt is-rep" title="repeats last year">↺</i>' : '<i class="npv2-wk-opt is-opt" title="optimized — new placement vs last year">✦</i>');
+    let paN = 4; try { paN = paData(o, w1).length; } catch (x) {}   // PA count only — never let it kill the card
+    const st = promoted ? (repeat ? '<span class="npv2-wk-ly">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-newt">NEW</span>') : '<span class="npv2-cp-baselbl">baseline</span>';
+    const remaining = 52 - w1;
+    const chip = applied ? '<span class="npv2-cp-refchip" title="running on the base set in W' + ch.week + '">⟳ reforecast W' + ch.week + " → W52</span>" : "";
+    const refc = locked
+      ? '<div class="npv2-cp-refc is-locked"><span>Locked actual — costs and prices can no longer change for this week.</span></div>'
+      : '<div class="npv2-cp-refc" data-cprefc><span class="npv2-cp-refmsg" data-cprefmsg>Edit <b>VLC</b> or <b>base price</b>, then Reforecast — new values become the base for <b>W' + w1 + " → W52</b> (" + remaining + " remaining week" + (remaining === 1 ? "" : "s") + ").</span>" +
+        '<button type="button" class="npv2-cp-refbtn" data-cprefbtn disabled>⟳ Reforecast</button></div>';
+    // ---- action footer (moved out of the old click-through week drawer, now retired) ----
+    const isAppr = !!(NP.state.cf.approved && NP.state.cf.approved[o.uid + ":" + w1]);
+    // past / actual weeks (locked) can't be re-planned → no Lock deal / Create NOPA actions
+    const acts = (promoted && !locked)
+      ? '<div class="npv2-cp-acts">' +
+          '<button type="button" class="npv2-cp-lockbtn' + (isAppr ? " is-on" : "") + '" data-cplock title="' + (isAppr ? "Locked into the plan — click to unlock" : "Lock week " + w1 + " into the plan") + '">' + (isAppr ? "✓ Locked into plan" : "🔒 Lock deal") + "</button>" +
+          '<button type="button" class="npv2-cp-wkview" data-cpwkview title="Generate the funding agreement, then open the price-area execution screen">＋ Create NOPA → week view</button>' +
+        "</div>"
+      : "";
+    return '<div class="npv2-cp-head">' +
+        headChip +
+        '<div class="npv2-cp-main"><b>' + esc(o.item) + " " + esc(o.pack) + "</b>" +
+          '<span class="npv2-cp-sub">' + esc(weekLabel(w1)) + " · " + paN + " price areas · 245 stores · " + st + (locked ? ' · <span class="npv2-cp-lockt">LOCKED</span>' : "") + "</span></div>" +
+        '<div class="npv2-cp-hr">' + arr + opt +
+          '<button type="button" class="npv2-cp-hbtn" data-cppin>' + (CELLPOP.pinned ? "📌 Pinned" : "📌 Pin") + "</button>" +
+          '<button type="button" class="npv2-cp-hbtn npv2-cp-x" data-cpclose title="Clear">×</button></div>' +
+      "</div>" +
+      '<div class="npv2-cp-kpis">' + kpi("Units", u, lu, false) + kpi("Sales", sal, lsal, true) + kpi("AGP", agp, lagp, true) + "</div>" +
+      (chip ? '<div class="npv2-cp-refrow">' + chip + "</div>" : "") +
+      '<div class="npv2-cp-strip">' + strip + "</div>" +
+      '<div class="npv2-cp-cols">' +
+        '<div class="npv2-cp-card"><div class="npv2-cp-cap"><span class="npv2-cp-sw npv2-cp-sw-t"></span>Tactic</div>' + tactic + "</div>" +
+        '<div class="npv2-cp-card"><div class="npv2-cp-cap"><span class="npv2-cp-sw npv2-cp-sw-l"></span>Cost ladder</div><div class="npv2-cp-ladder">' + ladder + "</div></div>" +
+      "</div>" + refc + acts;
+  }
+  // is the pointer geometrically over the open card? (works even while pointer-events:none)
+  function overPop(x, y) { const d = CELLPOP.el; if (!d || d.hidden) return false; const r = d.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }
+  function ensureCellPop() {
+    if (CELLPOP.el && document.body.contains(CELLPOP.el)) return CELLPOP.el;
+    const d = document.createElement("div");
+    CELLPOP.el = d;
+    d.id = "npV2CellPop"; d.className = "npv2-cellpop"; d.hidden = true;
+    document.body.appendChild(d);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideCellPop(); });
+    document.addEventListener("mousedown", (e) => {
+      // a pinned card is sticky — it stays on click-away (only ×/Esc/unpin closes it); clicking
+      // another cell re-pins to that cell via its own click handler
+      if (d.hidden || CELLPOP.pinned || overPop(e.clientX, e.clientY)) return;
+      const anchor = CELLPOP.key ? document.querySelector('[data-mweek="' + CELLPOP.key + '"]') : null;
+      if (anchor && anchor.contains(e.target)) return;
+      hideCellPop();
+    }, true);
+    // pointer pass-through: the card must NOT block the week cells behind it. It only
+    // captures the mouse when the pointer is actually over it (or it's pinned) — so you
+    // can keep sweeping over cells underneath and the card just follows.
+    document.addEventListener("mousemove", (e) => {
+      if (d.hidden) return;
+      const on = CELLPOP.pinned || overPop(e.clientX, e.clientY);
+      d.style.pointerEvents = on ? "auto" : "none";
+      if (on) { clearTimeout(CELLPOP.hideT); return; }
+      // pointer not over the card and not over any cell → dismiss
+      if (!CELLPOP.pinned && !(e.target && e.target.closest && e.target.closest("[data-mweek]"))) scheduleHidePop();
+    });
+    return d;
+  }
+  function hideCellPop() {
+    const d = CELLPOP.el; if (d) d.hidden = true;
+    CELLPOP.key = null; CELLPOP.pinned = false; clearTimeout(CELLPOP.showT); clearTimeout(CELLPOP.hideT);
+    document.querySelectorAll(".npv2-fg-wk.is-cpsel").forEach((el) => el.classList.remove("is-cpsel"));
+  }
+  function scheduleHidePop() { clearTimeout(CELLPOP.hideT); CELLPOP.hideT = setTimeout(() => { if (!CELLPOP.pinned) hideCellPop(); }, 150); }
+  function positionCellPop(anchor) {
+    const d = CELLPOP.el; if (!d || !anchor) return;
+    d.style.maxHeight = ""; d.style.overflow = "";
+    const r = anchor.getBoundingClientRect();
+    if (!r.width && !r.height) { hideCellPop(); return; }
+    const m = 8, gap = 6, vh = window.innerHeight, pw = d.offsetWidth;
+    let ph = d.offsetHeight;
+    // only if the card is genuinely TALLER than the viewport, cap it so it scrolls inside
+    // (rare) — otherwise it always shows in full
+    if (ph > vh - 2 * m) { d.style.maxHeight = (vh - 2 * m) + "px"; d.style.overflow = "auto"; ph = vh - 2 * m; }
+    // horizontal: centered on the cell, clamped on screen
+    let left = r.left + r.width / 2 - pw / 2;
+    left = Math.max(m, Math.min(left, window.innerWidth - pw - m));
+    // vertical: prefer BELOW the cell, else ABOVE — then CLAMP the whole card on-screen so it
+    // never gets cut off (pointer pass-through makes covering a cell harmless).
+    const belowRoom = vh - r.bottom - gap - m, aboveRoom = r.top - gap - m;
+    let top = (ph <= belowRoom || belowRoom >= aboveRoom) ? (r.bottom + gap) : (r.top - gap - ph);
+    top = Math.max(m, Math.min(top, vh - ph - m));
+    d.style.left = (window.scrollX + left) + "px";
+    d.style.top = (window.scrollY + top) + "px";
+  }
+  function repositionCellPop() {
+    const anchor = CELLPOP.key ? document.querySelector('[data-mweek="' + CELLPOP.key + '"]') : null;
+    if (anchor) positionCellPop(anchor); else hideCellPop();
+  }
+  function openCellPop(key, anchor, pinned) {
+    const p = key.split("|"), uid = p[0], w1 = +p[1];
+    const o = NP.cat().items.find((x) => x.uid === uid); if (!o) return;
+    CELLPOP.key = key; CELLPOP.pinned = !!pinned;   // set BEFORE building so the card can gate on pinned
+    let html = "";
+    try { html = cellPopHTML(o, w1); }
+    catch (x) { console.warn("npv2 cell card failed for", key, x); return; }
+    if (!html) return;
+    const d = ensureCellPop(); if (!d) return;
+    d.innerHTML = html; d.hidden = false;
+    positionCellPop(anchor);
+    bindCellPopContent(d, o, w1);
+    document.querySelectorAll(".npv2-fg-wk.is-cpsel").forEach((el) => el.classList.remove("is-cpsel"));
+    if (anchor) anchor.classList.add("is-cpsel");
+  }
+  function bindCellPopContent(d, o, w1) {
+    const pin = d.querySelector("[data-cppin]");
+    const pinLbl = () => { if (pin) { pin.textContent = CELLPOP.pinned ? "📌 Pinned" : "📌 Pin"; pin.classList.toggle("is-on", CELLPOP.pinned); } };
+    // pin toggles + re-opens so the action footer (gated on pinned) renders/hides
+    if (pin) pin.onclick = () => { const a = CELLPOP.key ? document.querySelector('[data-mweek="' + CELLPOP.key + '"]') : null; openCellPop(CELLPOP.key, a, !CELLPOP.pinned); };
+    const x = d.querySelector("[data-cpclose]"); if (x) x.onclick = hideCellPop;
+    // Lock deal — toggle this week into/out of the approved plan (was the drawer's Lock button)
+    const lock = d.querySelector("[data-cplock]");
+    if (lock) lock.onclick = () => {
+      NP.state.cf.approved = NP.state.cf.approved || {};
+      const akey = o.uid + ":" + w1;
+      NP.state.cf.approved[akey] = !NP.state.cf.approved[akey];
+      renderFront();
+      const anchor = document.querySelector('[data-mweek="' + o.uid + "|" + w1 + '"]');
+      if (anchor) openCellPop(o.uid + "|" + w1, anchor, true); else hideCellPop();
+    };
+    // Create NOPA & open the price-area week-by-week execution screen (step 5)
+    const wv = d.querySelector("[data-cpwkview]");
+    if (wv) wv.onclick = () => { hideCellPop(); openWeekView(o.uid, w1); };
+    const vlcIn = d.querySelector("[data-cpvlc]"), baseIn = d.querySelector("[data-cpbase]");
+    const btn = d.querySelector("[data-cprefbtn]"), bar = d.querySelector("[data-cprefc]"), msg = d.querySelector("[data-cprefmsg]");
+    if (!btn) return;   // locked actual — read-only card
+    const num = (el) => { const v = parseFloat(String(el.value).replace(/[^0-9.]/g, "")); return isFinite(v) ? round(v, 2) : null; };
+    const edits = () => {
+      const out = [];
+      if (vlcIn) { const v = num(vlcIn), ov = +vlcIn.dataset.orig; if (v != null && Math.abs(v - ov) > 0.004) out.push({ k: "cost", from: ov, to: v, lab: "VLC $" + ov.toFixed(2) + " → <b>$" + v.toFixed(2) + "</b>" }); }
+      if (baseIn) { const v = num(baseIn), ov = +baseIn.dataset.orig; if (v != null && Math.abs(v - ov) > 0.004) out.push({ k: "price", from: ov, to: v, lab: "Base price $" + ov.toFixed(2) + " → <b>$" + v.toFixed(2) + "</b> (store &amp; digital)" }); }
+      return out;
+    };
+    const sync = () => {
+      CELLPOP.pinned = true;   // editing locks the dock to this week
+      pinLbl();
+      const ed = edits();
+      if (vlcIn) vlcIn.classList.toggle("is-dirty", ed.some((x) => x.k === "cost"));
+      if (baseIn) baseIn.classList.toggle("is-dirty", ed.some((x) => x.k === "price"));
+      bar.classList.toggle("is-dirty", !!ed.length);
+      btn.disabled = !ed.length;
+      msg.innerHTML = ed.length
+        ? "<b>" + ed.length + " edit" + (ed.length === 1 ? "" : "s") + "</b> — " + ed.map((x) => x.lab).join(" · ") + ". Reforecast updates Units / Sales / AGP; new values become the base for <b>W" + w1 + " → W52</b>."
+        : "Edit <b>VLC</b> or <b>base price</b>, then Reforecast — new values become the base for <b>W" + w1 + " → W52</b> (" + (52 - w1) + " remaining week" + (52 - w1 === 1 ? "" : "s") + ").";
+    };
+    [vlcIn, baseIn].forEach((el) => { if (el) el.addEventListener("input", sync); });
+    btn.onclick = () => {
+      const ed = edits(); if (!ed.length) return;
+      const cost = ed.find((x) => x.k === "cost") || null, price = ed.find((x) => x.k === "price") || null;
+      const prev = CELLCHG[o.uid];
+      CELLCHG[o.uid] = {
+        week: w1,
+        cost: cost ? { from: cost.from, to: cost.to } : (prev && prev.cost) || null,
+        price: price ? { from: price.from, to: price.to } : (prev && prev.price) || null
+      };
+      if (price) BASEOV[o.uid] = price.to;
+      if (cost) NP.applyEdit(o.uid, "vlc", cost.to);   // flows through the normal edit pipeline (pinned VLC input, promo cost, dirty bar)
+      renderFront();                                    // stamps the C / P markers on the grid
+      const anchor = document.querySelector('[data-mweek="' + o.uid + "|" + w1 + '"]');
+      if (anchor) openCellPop(o.uid + "|" + w1, anchor, true); else hideCellPop();
+    };
+  }
+  function bindCellPop(wrap) {
+    wrap.addEventListener("mouseover", (e) => {
+      if (CELLPOP.pinned) return;   // a pinned card is sticky — hover never opens/switches another
+      const td = e.target.closest("[data-mweek]");
+      if (!td || !wrap.contains(td)) return;
+      if (overPop(e.clientX, e.clientY)) return;   // pointer is over the open card → don't switch to the cell behind it
+      const key = td.dataset.mweek;
+      clearTimeout(CELLPOP.hideT);
+      if (CELLPOP.el && !CELLPOP.el.hidden && CELLPOP.key === key) return;   // already showing this cell
+      if (CELLPOP._pendingKey === key) return;   // already scheduled for this cell — don't reset the timer
+      clearTimeout(CELLPOP.showT);               // (moving over the ± toggle inside the cell used to keep resetting it)
+      CELLPOP._pendingKey = key;
+      CELLPOP.showT = setTimeout(() => { CELLPOP._pendingKey = null; openCellPop(key, td, false); }, 140);   // hover intent
+    });
+    wrap.addEventListener("mouseout", (e) => {
+      const td = e.target.closest("[data-mweek]");
+      if (!td) return;
+      const to = e.relatedTarget;
+      if (to && (td.contains(to) || (to.closest && to.closest("[data-mweek]")) || (CELLPOP.el && CELLPOP.el.contains(to)))) return;
+      clearTimeout(CELLPOP.showT); CELLPOP._pendingKey = null;
+      if (!CELLPOP.pinned) scheduleHidePop();
+    });
+    wrap.addEventListener("scroll", () => { if (CELLPOP.pinned) repositionCellPop(); else hideCellPop(); }, { passive: true });
   }
 
   /* ===================================================================== the flip */
@@ -1523,7 +1947,7 @@
       '<footer class="npv2-wk-footer">' +
         '<div class="npv2-wk-fsummary"><span class="npv2-wk-feyebrow">' + (inCart ? "IN BASKET" : "PENDING") + '</span>' +
           "<span><b>" + esc(chosenFor(o, week, pds[0]).label) + "</b> + " + (pds.length - 1) + " more PAs for <b>" + esc(o.ncrc) + "</b>, " + esc(weekLabel(week)) + '</span><span class="npv2-wk-fbin">' + (items.indexOf(o) + 1) + " of " + items.length + " in this view</span></div>" +
-        '<div class="npv2-wk-fbtns"><button type="button" class="npv2-wk-fbtn" id="npV2WkSkip">Skip →</button><button type="button" class="npv2-wk-fbtn is-primary" id="npV2WkAdd">' + (inCart ? "Update &amp; next →" : "Add &amp; next →") + '</button><button type="button" class="npv2-wk-fbtn is-finalize" id="npV2WkFinalize"' + (Object.keys(WKCART).length ? "" : " disabled") + ">Review &amp; finalize (" + Object.keys(WKCART).length + ")</button></div>" +
+        '<div class="npv2-wk-fbtns"><button type="button" class="npv2-wk-fbtn npv2-wk-fbtn-back" id="npV2WkBack" title="Return to the 52-week promotional calendar">‹ Promotional calendar</button><button type="button" class="npv2-wk-fbtn" id="npV2WkSkip">Skip →</button><button type="button" class="npv2-wk-fbtn is-primary" id="npV2WkAdd">' + (inCart ? "Update &amp; next →" : "Add &amp; next →") + '</button><button type="button" class="npv2-wk-fbtn is-finalize" id="npV2WkFinalize"' + (Object.keys(WKCART).length ? "" : " disabled") + ">Review &amp; finalize (" + Object.keys(WKCART).length + ")</button></div>" +
       "</footer>";
     bindWkTools(front, items);
     bindWeekMain(front, items, o, week, pds);
@@ -1603,6 +2027,7 @@
   }
 
   function bindWkTools(front, items) {
+    const back = front.querySelector("#npV2WkBack"); if (back) back.onclick = () => NP.goStep(4);   // return to the 52-week promotional calendar
     front.querySelectorAll("[data-strat]").forEach((b) => (b.onclick = () => { NP.state.cf.strategy = b.dataset.strat; renderWeekView(); }));
     const moreBtn = front.querySelector("#npV2StratMore"), stratRow = front.querySelector("#npV2Strats");
     if (moreBtn && stratRow) moreBtn.onclick = () => { stratExpanded = !stratExpanded; stratRow.classList.toggle("is-collapsed", !stratExpanded); const others = stratRow.querySelectorAll(".npv2-strat").length - 1; moreBtn.textContent = stratExpanded ? "Hide other scenarios" : "Other scenarios (" + others + ")"; moreBtn.setAttribute("aria-expanded", String(stratExpanded)); };
@@ -1640,6 +2065,14 @@
     if (!shellExists()) return;
     document.getElementById(SHELL).remove();
     flip = { open: false, m: 0, animating: false };
+  }
+
+  // crossing the side-by-side breakpoint swaps the Regular/Deep columns between
+  // the paired groups and the single toggled set — re-render the front grid live
+  if (SBS_MQ) {
+    const onSbsChange = () => { if (canSwipe() && !flip.open) renderFront(); };
+    if (SBS_MQ.addEventListener) SBS_MQ.addEventListener("change", onSbsChange);
+    else if (SBS_MQ.addListener) SBS_MQ.addListener(onSbsChange);
   }
 
   window.NPV2 = { mount, mountWeek, unmount, renderToggle, openWeekView };

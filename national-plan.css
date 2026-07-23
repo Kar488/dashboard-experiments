@@ -1425,6 +1425,12 @@ body.dark .npv2-strat-m b { color: #e6ecf5; }
 body.dark .npv2-scen-seg { background: linear-gradient(180deg, #1a2334, #141b29); border-color: #2c3a52; }
 .npv2-scen-seg .npv2-chip { border: 0; background: transparent; border-radius: 999px; padding: 3px 24px 3px 12px; font-size: 0.72rem; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.05; position: relative; }
 .npv2-scen-seg .npv2-chip small { font-size: 0.5rem; color: var(--faint); font-weight: 500; }
+/* inline scenario rename (click the active chip) — chip stays "S1", this names it for the tooltip */
+.npv2-scen-seg .npv2-chip.is-editing { padding: 0; background: transparent; }
+.npv2-scen-rename { width: 210px; max-width: 46vw; border: 1px solid var(--blue); border-radius: 999px; padding: 3px 12px;
+  font-family: inherit; font-size: 0.72rem; font-weight: 600; color: var(--ink); background: #fff; outline: none;
+  box-shadow: 0 0 0 2px rgba(23,105,232,0.14); }
+body.dark .npv2-scen-rename { background: #131f33; color: #e6ecf5; }
 .npv2-scen-seg .npv2-chip.is-active { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(15,23,42,0.14); }
 body.dark .npv2-scen-seg .npv2-chip.is-active { background: #0e1626; color: #e6ecf5; }
 .npv2-scen-seg .npv2-chip-x { position: absolute; top: 50%; right: 7px; transform: translateY(-50%); font-size: 0.8rem; line-height: 1; color: var(--muted); opacity: 0.55; }
@@ -1451,6 +1457,12 @@ body.dark .npv2-fg-gr .npv2-fg-filter select { background: #131c2c; border-color
 .npv2-sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
 .npv2-sw.tactic-item { background: #dce7f6; } .npv2-sw.tactic-bxgx { background: #d8ead9; } .npv2-sw.tactic-mb { background: #f2e4cb; }
 .npv2-sw-lock { background: #fff; box-shadow: inset 0 0 0 2px #6b7a93; position: relative; }
+.npv2-lg-lockic { font-size: 0.74rem; line-height: 1; }
+.npv2-lg-tog { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px; padding: 0 2px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 0.66rem; font-weight: 800; color: var(--muted); background: #fff; box-sizing: border-box; }
+.npv2-lg-tog-add { color: var(--blue); border-color: #bcd3f5; border-style: dashed; }
+/* holiday ★ marker on the cell (and its legend) */
+.npv2-wk-hol { color: #d99a1c; font-size: 0.72rem; line-height: 1; }
+.npv2-lg-hol { color: #d99a1c; font-size: 0.82rem; line-height: 1; }
 .npv2-sw-ev { background: #eef2f8; box-shadow: inset 0 2px 0 rgba(23,105,232,0.45); }
 .npv2-sw.npv2-fg-none { background: linear-gradient(180deg, #f5f8fc, #e7edf5) !important; }
 .npv2-lg-dg { font-size: 0.58rem; font-weight: 700; color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; }
@@ -1476,7 +1488,7 @@ body.dark .npv2-ov-panel { background: #131f33; }
 
 /* pinned block: grouped header (caption + labels), centred */
 .npv2-fg-id { width: 580px !important; min-width: 580px !important; max-width: 580px !important; }
-.npv2-fg-wrap { scroll-padding-left: 580px; max-height: calc(100vh - var(--np-headtop, 112px) - 214px); min-height: 320px; overflow: auto; }
+.npv2-fg-wrap { scroll-padding-left: 580px; max-height: calc(100vh - var(--np-headtop, 112px) - 214px); min-height: 220px; overflow: auto; }
 .npv2-fg-name { width: 108px !important; min-width: 108px !important; }
 .npv2-fg-idin { align-items: stretch; }
 .npv2-fg-grp { display: flex; flex-direction: column; padding: 0 6px; }
@@ -1505,7 +1517,7 @@ body.dark .npv2-fg-wk.tactic-item { background: #26405f !important; } body.dark 
 .npv2-fg-wkv { color: rgba(15,23,42,0.5) !important; font-weight: 600 !important; }
 body.dark .npv2-fg-wkv { color: rgba(255,255,255,0.6) !important; }
 /* locked-into-plan marker */
-.npv2-fg-wk.is-lock { box-shadow: inset 0 0 0 2px #6b7a93; }
+.npv2-fg-wk.is-lock { box-shadow: none; }   /* the 🔒 icon marks a locked deal — no frame needed */
 .npv2-fg-lk { position: absolute; top: 1px; right: 1px; width: 5px; height: 5px; border-radius: 1px; background: #4a586f; }
 
 /* ===================== V2 front grid — layout v4 (paired groups, gentle, clearer) ===================== */
@@ -1569,10 +1581,51 @@ body.dark .npv2-fg-inc.is-edited { background: #3a3526 !important; }
 body.dark .npv2-wk-v { color: rgba(255,255,255,0.72); }
 .npv2-wk-ar { font-size: 0.5rem; font-style: normal; line-height: 1; }
 .npv2-wk-ar.is-deeper { color: #c2700a; } .npv2-wk-ar.is-shallower { color: #1a8f63; }
+
+/* ---- depth tier COLOUR (absolute deep vs shallow, replaces the vs-LY arrows) ---- */
+/* round dot = depth (distinct from the square C/P change-badges, so they don't get confused) */
+.npv2-dp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; border: 1px solid rgba(15,23,42,0.12); box-sizing: border-box; }
+.npv2-dp-dot.npv2-dp-shallow { background: #f2d97e; border-color: #e2c250; }
+.npv2-dp-dot.npv2-dp-reg { background: #c8d3e6; border-color: #a9b8d2; }
+.npv2-dp-dot.npv2-dp-deep { background: #d6c2f2; border-color: #bd9fe8; }
+/* left colour rail on the plan cell body */
+.npv2-wk-pc.npv2-dp-shallow { border-left: 3px solid #e2c250; }
+.npv2-wk-pc.npv2-dp-reg { border-left: 3px solid #a9b8d2; }
+.npv2-wk-pc.npv2-dp-deep { border-left: 3px solid #bd9fe8; }
+
+/* ---- in-cell promo⇄no-promo toggle (on the 52-week calendar, not the hover) ---- */
+/* NOTE: class is `npv2-cell-toggle` — must NOT collide with the week-view `.npv2-wk-toggle`
+   (the +N alternates button); reusing that name previously made it position:absolute/opacity:0. */
+.npv2-wk-pc { position: relative; }
+.npv2-fg-none { position: relative; }
+.npv2-cell-toggle { position: absolute; z-index: 4; top: 3px; right: 3px; width: 18px; height: 18px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-weight: 800;
+  font-size: 0.74rem; line-height: 1; border: 1px solid var(--line-strong); border-radius: 5px;
+  background: rgba(255,255,255,0.92); color: var(--muted); cursor: pointer; opacity: 0;
+  transition: opacity .12s, color .12s, border-color .12s, background .12s; }
+.npv2-fg-wk:hover .npv2-cell-toggle, .npv2-cell-toggle:focus-visible { opacity: 1; }
+.npv2-cell-toggle:hover { color: var(--negative); border-color: var(--negative); background: #fff; }
+body.dark .npv2-cell-toggle { background: rgba(19,31,51,0.92); color: #9fb0c8; border-color: #2c3a52; }
+/* non-promo: a centered ＋, faintly visible so an empty cell reads as "add a promo here" */
+.npv2-cell-toggle-add { top: 50%; left: 50%; right: auto; transform: translate(-50%,-50%); opacity: 0.34;
+  border-style: dashed; color: var(--blue); border-color: #bcd3f5; }
+.npv2-fg-none:hover .npv2-cell-toggle-add { opacity: 1; border-style: solid; background: #eef5ff; }
+.npv2-cell-toggle-add:hover { color: var(--blue); border-color: var(--blue); background: #e2ecfd; }
+/* a locked / actual week can't be re-planned — no toggle */
+.npv2-fg-wk.is-locked .npv2-cell-toggle { display: none; }
+/* hover-pop header depth chip */
+.npv2-cp-depth { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.02em; border-radius: 5px; padding: 2px 7px; border: 1px solid transparent; white-space: nowrap; }
+.npv2-cp-depth.npv2-dp-shallow { background: #fbf1cf; color: #8a6a0c; border-color: #ecd88a; }
+.npv2-cp-depth.npv2-dp-reg { background: #e9eef6; color: #495a7c; border-color: #c6d1e4; }
+.npv2-cp-depth.npv2-dp-deep { background: #efe6fb; color: #6a39c0; border-color: #d5c2f4; }
+body.dark .npv2-cp-depth.npv2-dp-shallow { background: #3a3013; color: #e8cf7a; border-color: #5a4a1e; }
+body.dark .npv2-cp-depth.npv2-dp-reg { background: #25324a; color: #b9c6de; border-color: #38486a; }
+body.dark .npv2-cp-depth.npv2-dp-deep { background: #2e2145; color: #cbb0f0; border-color: #4a356e; }
 .npv2-wk-tags { display: inline-flex; gap: 2px; margin-top: auto; padding-bottom: 3px; align-items: center; }
 .npv2-wk-d { font-size: 0.48rem; font-weight: 800; font-style: normal; color: #fff; background: #7587a0; border-radius: 2px; padding: 0 2px; line-height: 1.35; }
-.npv2-wk-lk { width: 8px; height: 8px; display: inline-block; }
-.npv2-wk-lk::before { content: "🔒"; font-size: 0.52rem; line-height: 1; }
+/* lock badge on a locked cell — white chip so 🔒 stays legible on any tactic/yellow bg */
+.npv2-wk-lk { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; background: rgba(255,255,255,0.96); border: 1px solid rgba(15,23,42,0.16); border-radius: 4px; box-sizing: border-box; }
+.npv2-wk-lk::before { content: "🔒"; font-size: 0.56rem; line-height: 1; }
 /* interactions: gentle corner triangle instead of a heavy ring */
 .npv2-fg-wk.is-halo, .npv2-fg-wk.is-cann, .npv2-fg-wk.is-halo.npv2-fg-ev, .npv2-fg-wk.is-cann.npv2-fg-ev { box-shadow: none; }
 .npv2-fg-wk.is-halo.npv2-fg-ev, .npv2-fg-wk.is-cann.npv2-fg-ev { box-shadow: inset 0 2px 0 rgba(23,105,232,0.4); }
@@ -1800,7 +1853,7 @@ body.dark .npv2-fg-vlc, body.dark .npv2-fg-cost, body.dark .npv2-fg-ev { backgro
 .npv2-wk-d { font-size: 0.6rem !important; font-weight: 800 !important; color: #fff !important; background: #3b6fb5 !important; padding: 0 3px !important; min-width: 12px; text-align: center; line-height: 1.4 !important; border-radius: 3px; }
 .npv2-wk-warn { color: #c2700a; font-size: 0.62rem; font-weight: 700; font-style: normal; line-height: 1; }
 .npv2-fg-wk.is-noalw { box-shadow: inset 0 0 0 1px rgba(194,112,10,0.5); }
-.npv2-fg-wk.is-noalw.is-lock { box-shadow: inset 0 0 0 2px #6b7a93; }
+.npv2-fg-wk.is-noalw.is-lock { box-shadow: none; }
 
 /* sort-by-bin pills: true pills, subtle */
 .npv2-sort { display: inline-flex; align-items: center; gap: 7px; }
@@ -2389,6 +2442,10 @@ body.dark .npv2-sw.npv2-fam-complex { background: #44351d; }
    V2 toolbar (.npv2-fg-tools) verbatim; everything below is scoped to .npv2-wk-*. Colours
    come from the existing tokens only. */
 .npv2-wk-tools { padding-bottom: 8px; }
+/* back to the 52-week promotional calendar — a footer nav action, pushed to the far left */
+.npv2-wk-fbtn-back { margin-right: auto; color: var(--blue); }
+.npv2-wk-fbtn-back:hover { border-color: var(--blue); background: rgba(23,105,232,0.08); }
+body.dark .npv2-wk-fbtn-back { color: #7fb0ff; }
 .npv2-wk-weekbar { display: flex; align-items: center; gap: 10px; padding: 8px 2px 2px; }
 .npv2-wk-weeklab { font-size: 0.62rem; letter-spacing: 0.08em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
 .npv2-wk-weeksel { height: 30px; min-width: 220px; padding: 0 24px 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; font-size: 0.78rem; font-weight: 600; color: var(--ink); font-family: inherit; cursor: pointer; }
@@ -2786,3 +2843,221 @@ body.dark .npv2-wk-tools { background: #0e1626; }
 .npv2-rev-totals span { display: inline-flex; align-items: baseline; gap: 7px; }
 .npv2-rev-totals em { font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--faint); font-style: normal; }
 .npv2-rev-totals b { font-size: 1.1rem; font-weight: 800; color: var(--ink); }
+
+/* ===== Regular + Deep side by side (wide screens) ============================
+   NPV2 sets body.npv2-sbs when the viewport crosses its media threshold
+   (min-width: 1780px): the Allowances and Events groups render twice — the
+   Regular set, then a purple-tinted Deep twin — and the R⇄D toggle becomes a
+   plain caption. Below the threshold the single toggled set returns. The
+   pinned block is width: max-content, so it widens/shrinks on its own. */
+.npv2-fg-alwdeep, .npv2-fg-evdeep { background: #f7f2fb !important; border-left: 1px solid #e6dcf2 !important; }
+.npv2-fg thead .npv2-fg-alwdeep, .npv2-fg thead .npv2-fg-evdeep { background: #f0e8f8 !important; }
+.npv2-fg-alwdeep .npv2-fg-gcap, .npv2-fg-alwdeep .npv2-fg-colh-in, .npv2-fg-evdeep .npv2-fg-gcap, .npv2-fg-evdeep .npv2-fg-colh-in { color: #6b4ba0 !important; }
+body.dark .npv2-fg-alwdeep, body.dark .npv2-fg-evdeep { background: rgba(124,77,204,0.10) !important; border-left-color: #2c3a52 !important; }
+body.dark .npv2-fg thead .npv2-fg-alwdeep, body.dark .npv2-fg thead .npv2-fg-evdeep { background: rgba(124,77,204,0.14) !important; }
+body.dark .npv2-fg-alwdeep .npv2-fg-gcap, body.dark .npv2-fg-alwdeep .npv2-fg-colh-in, body.dark .npv2-fg-evdeep .npv2-fg-gcap, body.dark .npv2-fg-evdeep .npv2-fg-colh-in { color: #b39ddb !important; }
+
+/* ===== Send-to-buying units column ==========================================
+   Merchant-entered buy quantity, pinned just before List. Teal — deliberately
+   distinct from the amber deal-input groups. The hint line keeps the predicted
+   units and the MAE-adjusted suggestion (prefilled) in view. */
+.npv2-fg-buy { background: #e9f6f0 !important; border-left: 1px solid #cfe9dd !important; }
+.npv2-fg thead .npv2-fg-buy { background: #dcf0e6 !important; }
+.npv2-fg-buy .npv2-fg-gcap, .npv2-fg-buy .npv2-fg-colh, .npv2-fg-buy .npv2-fg-colh-in { color: #0f7a5c !important; }
+.npv2-fg-buy .npv2-fg-gcells > * { width: 92px !important; min-width: 92px !important; }
+.npv2-fg-buyhint { color: #2a8a68 !important; font-size: 0.5rem !important; }
+.npv2-fg-buyc:hover { background: rgba(25,160,106,0.10) !important; }
+.npv2-fg-buyc.is-edited { background: #cdead9 !important; }
+.npv2-fg-buyc.is-edited .npv2-fg-input { color: #0d6b4f !important; font-weight: 700; }
+.npv2-fg-buyc:focus-within { background: #e2f3ec !important; box-shadow: inset 0 0 0 2px #19a06a !important; }
+body.dark .npv2-fg-buy { background: rgba(25,160,106,0.10) !important; border-left-color: #2c3a52 !important; }
+body.dark .npv2-fg thead .npv2-fg-buy { background: rgba(25,160,106,0.16) !important; }
+body.dark .npv2-fg-buy .npv2-fg-gcap, body.dark .npv2-fg-buy .npv2-fg-colh, body.dark .npv2-fg-buy .npv2-fg-colh-in { color: #6fd0ab !important; }
+body.dark .npv2-fg-buyhint { color: #74c7a5 !important; }
+body.dark .npv2-fg-buyc.is-edited { background: rgba(25,160,106,0.28) !important; }
+body.dark .npv2-fg-buyc.is-edited .npv2-fg-input { color: #9fe6c8 !important; }
+body.dark .npv2-fg-buyc:focus-within { background: rgba(25,160,106,0.18) !important; }
+
+/* ===== Hover-expand week-cell card + base-change markers =====================
+   A promoted 52-week cell grows into a card on hover (replaces the tooltip):
+   week KPI tiles, secondary rate strip, store/digital tactic, condensed cost
+   ladder with grey LY values, editable VLC + base price, Reforecast bar.
+   The grid itself only gains tiny C / P markers — solid on the week the base
+   cost / price was changed, hollow on later weeks running on the new base. */
+.npv2-chg { font-style: normal; font-size: 0.5rem; font-weight: 800; line-height: 1.4; border-radius: 3px; padding: 0 2.5px; letter-spacing: 0.02em; }
+.npv2-chg-c { color: #fff; background: #e8930c; }
+.npv2-chg-p { color: #fff; background: var(--blue); }
+.npv2-chg.is-inherit { background: transparent; }
+.npv2-chg-c.is-inherit { color: #c2700a; box-shadow: inset 0 0 0 1px #e8b25c; }
+.npv2-chg-p.is-inherit { color: var(--blue); box-shadow: inset 0 0 0 1px #a9c6f5; }
+.npv2-legend .npv2-chg { margin: 0 1px; }
+
+.npv2-cellpop { position: absolute; z-index: 320; width: 500px; max-width: calc(100vw - 24px);
+  background: #fff; border: 1px solid var(--line-strong); border-radius: 12px;
+  box-shadow: 0 22px 54px rgba(15,23,42,0.26), 0 0 0 2px var(--blue);
+  font-size: 13px; color: var(--ink); }
+body.dark .npv2-cellpop { background: #131d30; border-color: #2c3a52; color: #e6ecf5; box-shadow: 0 22px 54px rgba(0,0,0,0.5), 0 0 0 2px var(--blue); }
+
+/* header — echoes the cell (tactic chip · item · PA + stores · NEW/LY) */
+.npv2-cp-head { display: flex; align-items: flex-start; gap: 10px; padding: 10px 13px 9px; border-bottom: 1px solid var(--line); }
+.npv2-cp-tac { flex: none; font-size: 0.66rem; font-weight: 800; border-radius: 6px; padding: 3px 8px; white-space: nowrap; margin-top: 1px; }
+.npv2-cp-tac.tactic-item { color: #0f57d6; background: #eaf3ff; box-shadow: inset 0 0 0 1px #cfe1ff; }
+.npv2-cp-tac.tactic-bxgx { color: #047857; background: #eaf9f1; box-shadow: inset 0 0 0 1px #c8efd9; }
+.npv2-cp-tac.tactic-mb { color: #b0620a; background: #fdf3e3; box-shadow: inset 0 0 0 1px #f0dcb4; }
+.npv2-cp-main { min-width: 0; }
+.npv2-cp-main > b { display: block; font-size: 0.76rem; font-weight: 700; line-height: 1.2; }
+.npv2-cp-sub { display: block; font-size: 0.62rem; color: var(--muted); margin-top: 2px; }
+.npv2-cp-sub .npv2-wk-newt { font-size: 0.58rem; }
+.npv2-cp-lockt { color: #b0620a; font-weight: 700; }
+.npv2-cp-hr { margin-left: auto; display: flex; align-items: center; gap: 7px; flex: none; }
+.npv2-cp-hr .npv2-wk-ar { font-size: 0.7rem !important; }
+.npv2-cp-hbtn { border: 1px solid var(--line-strong); background: transparent; border-radius: 6px; font-family: inherit;
+  font-size: 0.62rem; font-weight: 600; color: var(--muted); padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+.npv2-cp-hbtn:hover { color: var(--ink); border-color: var(--blue); }
+body.dark .npv2-cp-hbtn:hover { color: #e6ecf5; }
+.npv2-cp-hbtn.is-on { color: var(--blue); border-color: var(--blue); background: var(--blue-soft); }
+.npv2-cp-x { padding: 3px 7px; font-size: 0.72rem; line-height: 1; }
+
+/* KPI tiles */
+.npv2-cp-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 13px 4px; }
+.npv2-cp-kpi { border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; }
+.npv2-cp-kpi label { display: block; font-size: 0.52rem; letter-spacing: 0.08em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.npv2-cp-kpi b { display: block; font-size: 0.98rem; font-weight: 800; margin-top: 1px; }
+.npv2-cp-kpi span { display: block; font-size: 0.58rem; font-weight: 700; margin-top: 1px; }
+.npv2-cp-kpi small { display: block; font-size: 0.56rem; color: var(--faint); margin-top: 1px; }
+.npv2-cp-refrow { padding: 6px 13px 0; }
+.npv2-cp-refchip { font-size: 0.58rem; font-weight: 700; color: var(--blue); background: var(--blue-soft); border-radius: 20px; padding: 3px 10px; }
+
+/* secondary metrics strip */
+.npv2-cp-strip { display: flex; margin: 8px 13px 2px; border: 1px solid #cfe1ff; border-radius: 9px; background: #fbfdff; padding: 6px 3px; }
+body.dark .npv2-cp-strip { border-color: #2c3a52; background: rgba(23,105,232,0.08); }
+.npv2-cp-sm { flex: 1; padding: 0 9px; border-right: 1px solid var(--line); min-width: 0; }
+.npv2-cp-sm:last-child { border-right: 0; }
+.npv2-cp-sm label { display: block; font-size: 0.5rem; letter-spacing: 0.07em; font-weight: 700; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+.npv2-cp-sm b { font-size: 0.74rem; font-weight: 800; }
+.npv2-cp-sm span { font-size: 0.54rem; font-weight: 700; margin-left: 3px; }
+.npv2-cp-sm small { display: block; font-size: 0.52rem; color: var(--faint); margin-top: 1px; white-space: nowrap; }
+
+/* two-column body: tactic table + cost ladder */
+.npv2-cp-cols { display: grid; grid-template-columns: 1fr 206px; gap: 10px; padding: 10px 13px 10px; }
+.npv2-cp-card { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; min-width: 0; }
+.npv2-cp-cap { display: flex; align-items: center; gap: 6px; background: var(--soft, #f5f7fb); border-bottom: 1px solid var(--line);
+  padding: 5px 10px; font-size: 0.56rem; letter-spacing: 0.06em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+body.dark .npv2-cp-cap { background: #1a2334; }
+.npv2-cp-sw { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.npv2-cp-sw-t { background: #7c5cd6; }
+.npv2-cp-sw-l { background: #19a06a; }
+/* explicit th/td font sizes — styles.css has bare `td { font-size: 0.84rem }`
+   element rules that override the inherited table size. Tactic reads a tad
+   bigger than the ladder (0.66 vs 0.6rem). */
+.npv2-cp-tt { width: 100%; border-collapse: collapse; font-size: 0.66rem; }
+.npv2-cp-tt th { font-size: 0.52rem; letter-spacing: 0.06em; font-weight: 700; color: var(--faint); text-transform: uppercase; text-align: right; padding: 5px 10px 3px; border-bottom: 1px solid var(--line); background: transparent; white-space: nowrap; vertical-align: middle; }
+.npv2-cp-tt th:first-child { text-align: left; }
+.npv2-cp-tt td { font-size: 0.66rem; padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: right; font-weight: 600; white-space: nowrap; vertical-align: middle; }
+.npv2-cp-tt td:first-child { text-align: left; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.npv2-cp-tt tr:last-child td { border-bottom: 0; }
+.npv2-cp-tt td b { font-weight: 800; }
+.npv2-cp-basec { white-space: nowrap; }
+.npv2-cp-bnote { font-size: 0.48rem; color: var(--faint); font-weight: 600; margin-right: 7px; letter-spacing: 0.02em; }
+
+/* condensed ladder — grey LY value beside every line; VLC editable */
+.npv2-cp-ladder { font-size: 0.6rem; padding-bottom: 3px; }
+.npv2-cp-lrow { display: flex; align-items: center; gap: 6px; padding: 3px 10px; }
+.npv2-cp-lrow span { color: var(--muted); flex: 1; white-space: nowrap; }
+.npv2-cp-lrow em { font-style: normal; color: var(--faint); font-size: 0.52rem; font-weight: 600; white-space: nowrap; }
+.npv2-cp-lrow b { font-weight: 700; min-width: 36px; text-align: right; }
+.npv2-cp-lrow.head span, .npv2-cp-lrow.head b { font-weight: 700; color: var(--ink); }
+body.dark .npv2-cp-lrow.head span, body.dark .npv2-cp-lrow.head b { color: #e6ecf5; }
+.npv2-cp-lgrp { padding: 4px 10px 1px; font-size: 0.48rem; letter-spacing: 0.07em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
+.npv2-cp-lrow.sub { background: var(--soft, #fbfcfe); }
+.npv2-cp-lrow.sub span { color: var(--ink); font-weight: 600; }
+.npv2-cp-lrow.tot { background: var(--soft, #f5f7fb); border-top: 1px solid var(--line); padding-top: 5px; padding-bottom: 5px; }
+.npv2-cp-lrow.tot span, .npv2-cp-lrow.tot b { font-weight: 800; color: var(--ink); }
+body.dark .npv2-cp-lrow.sub, body.dark .npv2-cp-lrow.tot { background: #1a2334; }
+body.dark .npv2-cp-lrow.sub span, body.dark .npv2-cp-lrow.tot span, body.dark .npv2-cp-lrow.tot b { color: #e6ecf5; }
+
+/* editable VLC / base price */
+.npv2-cp-edit { width: 54px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 2px 5px;
+  font-family: inherit; font-size: 0.6rem; font-weight: 700; color: var(--ink); text-align: right; background: #fff; flex: none; }
+body.dark .npv2-cp-edit { background: #0f1828; border-color: #2c3a52; color: #e6ecf5; }
+.npv2-cp-edit.is-dirty { border-color: #e8930c; background: #fff9ee; box-shadow: 0 0 0 1px #f2c063; }
+body.dark .npv2-cp-edit.is-dirty { background: rgba(232,147,12,0.12); }
+
+/* reforecast bar */
+.npv2-cp-refc { display: flex; align-items: center; gap: 10px; margin: 0 13px 12px; padding: 7px 11px;
+  border: 1px dashed var(--line-strong); border-radius: 8px; background: var(--soft, #f5f7fb); }
+body.dark .npv2-cp-refc { background: #1a2334; border-color: #2c3a52; }
+.npv2-cp-refc.is-dirty { border: 1px solid #f2c063; background: #fff9ee; }
+body.dark .npv2-cp-refc.is-dirty { background: rgba(232,147,12,0.1); border-color: #8a6420; }
+.npv2-cp-refc.is-locked span { font-size: 0.6rem; color: var(--muted); }
+.npv2-cp-refmsg { font-size: 0.6rem; color: var(--muted); line-height: 1.45; }
+.npv2-cp-refmsg b { color: var(--ink); }
+body.dark .npv2-cp-refmsg b { color: #e6ecf5; }
+.npv2-cp-refbtn { margin-left: auto; border: 1px solid var(--line-strong); background: transparent; color: var(--muted);
+  font-family: inherit; font-weight: 700; font-size: 0.62rem; padding: 6px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; flex: none; }
+.npv2-cp-refbtn:disabled { opacity: 0.55; cursor: default; }
+.npv2-cp-refc.is-dirty .npv2-cp-refbtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+/* compact hint shown on the HOVER card (the full Lock/NOPA actions appear only when pinned) */
+.npv2-cp-hoverfoot { margin: 0 13px 13px; padding: 8px 12px; border: 1px dashed var(--line-strong); border-radius: 8px;
+  background: var(--soft); color: var(--muted); font-size: 0.62rem; font-weight: 600; text-align: center; }
+body.dark .npv2-cp-hoverfoot { background: #1a2334; border-color: #2c3a52; }
+/* action footer inside the hover card — Lock deal + Create-NOPA, compact side-by-side */
+.npv2-cp-acts { display: flex; gap: 8px; margin: 0 13px 13px; }
+.npv2-cp-acts .npv2-cp-lockbtn, .npv2-cp-acts .npv2-cp-wkview { flex: 1; margin: 0; display: inline-flex; align-items: center; justify-content: center; text-align: center; padding: 9px 10px; border-radius: 8px; font-family: inherit; font-weight: 700; font-size: 0.66rem; line-height: 1.2; cursor: pointer; white-space: nowrap; }
+.npv2-cp-acts .npv2-cp-lockbtn { border: 1px solid var(--blue); background: var(--blue); color: #fff; }
+.npv2-cp-acts .npv2-cp-lockbtn.is-on { background: #eafaf1; border-color: #b7e6cc; color: #0f7a48; }
+.npv2-cp-acts .npv2-cp-wkview { border: 1px solid #bcd3f5; background: #f2f7ff; color: var(--blue); }
+.npv2-cp-acts .npv2-cp-wkview:hover { background: #e7f0fd; border-color: var(--blue); }
+body.dark .npv2-cp-acts .npv2-cp-wkview { background: #16233b; border-color: #2c4062; }
+/* legacy (unused now) */
+.npv2-cp-actrow-legacy { margin: 0 13px 13px; }
+.npv2-cp-actrow { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--soft); }
+body.dark .npv2-cp-actrow { background: #1a2334; border-color: #2c3a52; }
+.npv2-cp-actq { font-size: 0.66rem; color: var(--ink); font-weight: 600; }
+body.dark .npv2-cp-actq { color: #e6ecf5; }
+.npv2-cp-lockbtn { margin-left: auto; border: 1px solid var(--blue); background: var(--blue); color: #fff; font-family: inherit; font-weight: 700; font-size: 0.68rem; padding: 8px 16px; border-radius: 8px; cursor: pointer; white-space: nowrap; flex: none; }
+.npv2-cp-lockbtn:hover { filter: brightness(1.05); }
+.npv2-cp-lockbtn.is-on { background: #eafaf1; border-color: #b7e6cc; color: #0f7a48; }
+body.dark .npv2-cp-lockbtn.is-on { background: rgba(25,160,106,0.15); border-color: #2f7a54; color: #7fe0ab; }
+.npv2-cp-actor { text-align: center; font-size: 0.55rem; font-weight: 800; letter-spacing: 0.08em; color: var(--faint); margin: 7px 0; }
+.npv2-cp-wkview { display: block; width: 100%; text-align: center; border: 1px solid #bcd3f5; background: #f2f7ff; border-radius: 9px; padding: 11px 12px; cursor: pointer; font-family: inherit; }
+body.dark .npv2-cp-wkview { background: #16233b; border-color: #2c4062; }
+.npv2-cp-wkview:hover { background: #e7f0fd; border-color: var(--blue); }
+.npv2-cp-wkview-main { display: block; font-size: 0.68rem; font-weight: 800; color: var(--blue); }
+.npv2-cp-wkview-sub { display: block; font-size: 0.56rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+/* non-promo card: muted "No promo" chip, baseline label, and the promo⇄no-promo toggle buttons */
+.npv2-cp-tac.npv2-cp-tac-none { color: var(--muted); background: var(--soft); border: 1px solid var(--line); }
+body.dark .npv2-cp-tac.npv2-cp-tac-none { background: #1a2334; border-color: #2c3a52; color: #9fb0c8; }
+.npv2-cp-baselbl { color: var(--faint); font-weight: 700; }
+.npv2-cp-nopromo { border: 1px solid var(--line-strong); background: #fff; color: var(--muted); font-family: inherit; font-weight: 700; font-size: 0.62rem; padding: 7px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; flex: none; }
+.npv2-cp-nopromo:hover { border-color: var(--negative); color: var(--negative); }
+body.dark .npv2-cp-nopromo { background: transparent; color: #9fb0c8; }
+.npv2-cp-lockbtn.npv2-cp-addpromo { background: #eafaf1; border-color: #b7e6cc; color: #0f7a48; }
+.npv2-cp-lockbtn.npv2-cp-addpromo:hover { filter: brightness(1.03); }
+body.dark .npv2-cp-lockbtn.npv2-cp-addpromo { background: rgba(25,160,106,0.15); border-color: #2f7a54; color: #7fe0ab; }
+
+/* ============================================================================
+   DOCKED cell-detail panel — sits BELOW the 52-week grid (replaces the floating
+   hover card so it never covers cells or the in-cell promo toggle). Hover fills
+   it; click / editing locks it. Sections flow left→right so it stays short.
+   ========================================================================= */
+/* Transient FLOATING overlay pinned to the bottom — appears on hover (fast, no click),
+   does NOT reserve grid space (grid keeps full height), consistent position so it never
+   pops around individual cells or covers the in-cell toggle. Hidden until a cell fills it. */
+.npv2-dock { position: fixed; left: 14px; right: 14px; bottom: 14px; z-index: 60; max-height: 384px; overflow: auto;
+  border: 1px solid var(--line-strong); border-radius: 12px; background: #fff; box-shadow: 0 -10px 44px rgba(15,23,42,0.22);
+  display: none; }
+.npv2-dock.is-filled { display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 4px 20px; padding: 12px 16px 14px; }
+body.dark .npv2-dock { background: #131f33; border-color: #25324a; }
+.npv2-dock-empty { display: none; }
+.npv2-dock > .npv2-cp-head { flex: 1 1 100%; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
+body.dark .npv2-dock > .npv2-cp-head { border-color: #25324a; }
+.npv2-dock > .npv2-cp-kpis { flex: 0 0 auto; width: 300px; padding: 6px 0 0; }
+.npv2-dock > .npv2-cp-refrow { flex: 1 1 100%; }
+.npv2-dock > .npv2-cp-strip { flex: 0 0 auto; width: 328px; margin: 8px 0 0; }
+.npv2-dock > .npv2-cp-cols { flex: 1 1 470px; padding: 6px 0 0; }
+.npv2-dock > .npv2-cp-refc { flex: 1 1 100%; margin: 8px 0 0; }
+.npv2-dock > .npv2-cp-acts { flex: 1 1 100%; margin: 6px 0 0; }
+/* the cell whose detail is showing in the dock */
+.npv2-fg-wk.is-cpsel, td.npv2-fg-none.is-cpsel { outline: 2px solid var(--blue); outline-offset: -2px; z-index: 2; }

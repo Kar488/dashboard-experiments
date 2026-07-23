@@ -394,9 +394,12 @@
     let weeks, offset = {};
     if (ly) { weeks = pickWeeks(o.form, e.events, "shift"); }
     else { const s = scheduleFor(ensureData(o.catId), map)[o.uid] || { weeks: new Set(), offset: {} }; weeks = s.weeks; offset = s.offset; }
+    const ov = (!ly && state.promoOverride) ? state.promoOverride : null;
     const arr = [];
     for (let w = 0; w < 52; w++) {
-      const promoted = weeks.has(w), locked = w < CURRENT_WEEK;
+      let promoted = weeks.has(w);
+      if (ov) { const f = ov[o.uid + "|" + (w + 1)]; if (f === "on") promoted = true; else if (f === "off") promoted = false; }
+      const locked = w < CURRENT_WEEK;
       let store = STORE_TACTICS.NONE, digital = [], offer = null, depth = 0;
       if (promoted) {
         offer = OFFERS[(w + h) % OFFERS.length];
@@ -556,6 +559,8 @@
     step: 1, generated: false, division: "national", categoryIds: ["paper"], categoryId: "paper", objective: "sales", periods: [],
     draft: {}, scenarios: [], scnSeq: 0, activeScenario: "base",
     showAllow: false, deadNetVersion: "v1", flip: {}, v2: true, v2plan: false, v2period: null, v2ix: false, v2evMode: "reg", v2allowMode: "reg",
+    promoOverride: {},   // per-cell promo⇄no-promo toggle — key "uid|week1" → "on" | "off"
+    promoBaseline: {},   // last-committed promo overrides (Rerun commits, Discard reverts) — drives the dirty banner
     grid: { vendor: "all", rog: "all" },
     res: { vendor: "all", rog: "all", binBy: null, bin: "all" },
     ix: { binBy: "sales", bin: "1", ncrc: "", open: false },
@@ -586,6 +591,7 @@
   function activeOv() { if (state.activeScenario === "base") return {}; const s = state.scenarios.find((x) => x.id === state.activeScenario); return s ? s.ov : {}; }
   function displayMap() { return activeOv(); }
   function isDirty() { return JSON.stringify(state.draft) !== JSON.stringify(activeOv()); }
+  function promoDirty() { return JSON.stringify(state.promoOverride || {}) !== JSON.stringify(state.promoBaseline || {}); }
   function objMeta() { return OBJECTIVES.find((o) => o.id === state.objective) || OBJECTIVES[0]; }
   function objVal(res, obj) { return res[(OBJECTIVES.find((x) => x.id === (obj || state.objective)) || OBJECTIVES[0]).metric]; }
 
@@ -640,7 +646,7 @@
 
   window.NP = {
     state, DATA, CATEGORIES, DIVISIONS, ROGS, OBJECTIVES, STEPS, GUARDRAIL_GROUPS, CLUSTER_LABEL, CURVE, SEASON, OFFERS, STORE_TACTICS, DIGITAL_NAMES, DEPTH_LADDER, CURRENT_WEEK, LADDER_KEYS, BUY_KEYS, RETAIL_KEYS,
-    cat, divMeta, divisionFactor, draftOf, displayMap, isDirty, isEdited, objMeta, objVal, ranges, askContext,
+    cat, divMeta, divisionFactor, draftOf, displayMap, isDirty, promoDirty, isEdited, objMeta, objVal, ranges, askContext,
     effective, resultFor, lyResult, noPromoResult, respond, deadNetOf, promoPriceOf, applyLadder,
     weekPlan, weeklyTrend, weeklySeries, binsFor, displayTactic, snapDepth, offerValueShort, MECH_LABEL, RETAIL_EVENTS, rankedClusters,
     guardrailCount, findGuardrail, flaggedFor,
@@ -674,8 +680,8 @@
     host.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => { const n = +b.dataset.step; if (n === 1 || state.generated) goStep(n); });
   }
   function goStep(n) { if (state.v2 && !state.v2plan && n === 3) n = 4; state.step = n; closeOverlays(); renderAll(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.grid = { vendor: "all", rog: "all" }; state.v2period = null; state.step = 2; renderAll(); }
-  function rerun() { state.scnSeq++; const id = "scn" + state.scnSeq; state.scenarios.push({ id: id, name: "Scenario " + state.scnSeq, ov: clone(state.draft) }); state.activeScenario = id; renderAll(); }
+  function generate() { state.generated = true; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.promoOverride = {}; state.promoBaseline = {}; state.grid = { vendor: "all", rog: "all" }; state.v2period = null; state.step = 2; renderAll(); }
+  function rerun() { state.scnSeq++; const id = "scn" + state.scnSeq; state.scenarios.push({ id: id, name: "Scenario " + state.scnSeq, ov: clone(state.draft) }); state.activeScenario = id; state.promoBaseline = clone(state.promoOverride || {}); renderAll(); }
   /* edit a single input into the draft (same field semantics as the V1 deal grid),
      so V2's editable summary strip drives the identical scenario / reforecast flow. */
   function distributeDeadNet(o, target) {
@@ -713,7 +719,7 @@
     const v = parseFloat(raw); if (isNaN(v)) return true;
     return v >= r.lo - 1e-9 && v <= r.hi + 1e-9;
   }
-  function revert() { state.draft = clone(activeOv()); renderAll(); }
+  function revert() { state.draft = clone(activeOv()); state.promoOverride = clone(state.promoBaseline || {}); renderAll(); }
   function setScenario(which) { state.activeScenario = which; state.draft = clone(activeOv()); renderAll(); }
   function deleteScenario(id) { state.scenarios = state.scenarios.filter((s) => s.id !== id); if (state.activeScenario === id) { state.activeScenario = state.scenarios.length ? state.scenarios[state.scenarios.length - 1].id : "base"; state.draft = clone(activeOv()); } renderAll(); }
 
@@ -734,7 +740,7 @@
   }
 
   const scopeUi = { catOpen: false, catQ: "", perOpen: false, bound: false };
-  function resetPlanState() { state.generated = false; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.step = 1; }
+  function resetPlanState() { state.generated = false; state.draft = {}; state.scenarios = []; state.scnSeq = 0; state.activeScenario = "base"; state.promoOverride = {}; state.promoBaseline = {}; state.step = 1; }
   function setCategories(ids) { state.categoryIds = ids; state.categoryId = ids[0]; resetPlanState(); renderAll(); }
 
   function catRow(c, checked) {
