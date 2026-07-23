@@ -2786,3 +2786,136 @@ body.dark .npv2-wk-tools { background: #0e1626; }
 .npv2-rev-totals span { display: inline-flex; align-items: baseline; gap: 7px; }
 .npv2-rev-totals em { font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--faint); font-style: normal; }
 .npv2-rev-totals b { font-size: 1.1rem; font-weight: 800; color: var(--ink); }
+
+/* ===== Regular + Deep side by side (wide screens) ============================
+   NPV2 sets body.npv2-sbs when the viewport crosses its media threshold
+   (min-width: 1780px): the Allowances and Events groups render twice — the
+   Regular set, then a purple-tinted Deep twin — and the R⇄D toggle becomes a
+   plain caption. Below the threshold the single toggled set returns. The
+   pinned block is width: max-content, so it widens/shrinks on its own. */
+.npv2-fg-alwdeep, .npv2-fg-evdeep { background: #f7f2fb !important; border-left: 1px solid #e6dcf2 !important; }
+.npv2-fg thead .npv2-fg-alwdeep, .npv2-fg thead .npv2-fg-evdeep { background: #f0e8f8 !important; }
+.npv2-fg-alwdeep .npv2-fg-gcap, .npv2-fg-alwdeep .npv2-fg-colh-in, .npv2-fg-evdeep .npv2-fg-gcap, .npv2-fg-evdeep .npv2-fg-colh-in { color: #6b4ba0 !important; }
+body.dark .npv2-fg-alwdeep, body.dark .npv2-fg-evdeep { background: rgba(124,77,204,0.10) !important; border-left-color: #2c3a52 !important; }
+body.dark .npv2-fg thead .npv2-fg-alwdeep, body.dark .npv2-fg thead .npv2-fg-evdeep { background: rgba(124,77,204,0.14) !important; }
+body.dark .npv2-fg-alwdeep .npv2-fg-gcap, body.dark .npv2-fg-alwdeep .npv2-fg-colh-in, body.dark .npv2-fg-evdeep .npv2-fg-gcap, body.dark .npv2-fg-evdeep .npv2-fg-colh-in { color: #b39ddb !important; }
+
+/* ===== Hover-expand week-cell card + base-change markers =====================
+   A promoted 52-week cell grows into a card on hover (replaces the tooltip):
+   week KPI tiles, secondary rate strip, store/digital tactic, condensed cost
+   ladder with grey LY values, editable VLC + base price, Reforecast bar.
+   The grid itself only gains tiny C / P markers — solid on the week the base
+   cost / price was changed, hollow on later weeks running on the new base. */
+.npv2-chg { font-style: normal; font-size: 0.5rem; font-weight: 800; line-height: 1.4; border-radius: 3px; padding: 0 2.5px; letter-spacing: 0.02em; }
+.npv2-chg-c { color: #fff; background: #e8930c; }
+.npv2-chg-p { color: #fff; background: var(--blue); }
+.npv2-chg.is-inherit { background: transparent; }
+.npv2-chg-c.is-inherit { color: #c2700a; box-shadow: inset 0 0 0 1px #e8b25c; }
+.npv2-chg-p.is-inherit { color: var(--blue); box-shadow: inset 0 0 0 1px #a9c6f5; }
+.npv2-legend .npv2-chg { margin: 0 1px; }
+
+.npv2-cellpop { position: absolute; z-index: 320; width: 500px; max-width: calc(100vw - 24px);
+  background: #fff; border: 1px solid var(--line-strong); border-radius: 12px;
+  box-shadow: 0 22px 54px rgba(15,23,42,0.26), 0 0 0 2px var(--blue);
+  font-size: 13px; color: var(--ink); }
+body.dark .npv2-cellpop { background: #131d30; border-color: #2c3a52; color: #e6ecf5; box-shadow: 0 22px 54px rgba(0,0,0,0.5), 0 0 0 2px var(--blue); }
+
+/* header — echoes the cell (tactic chip · item · PA + stores · NEW/LY) */
+.npv2-cp-head { display: flex; align-items: flex-start; gap: 10px; padding: 10px 13px 9px; border-bottom: 1px solid var(--line); }
+.npv2-cp-tac { flex: none; font-size: 0.66rem; font-weight: 800; border-radius: 6px; padding: 3px 8px; white-space: nowrap; margin-top: 1px; }
+.npv2-cp-tac.tactic-item { color: #0f57d6; background: #eaf3ff; box-shadow: inset 0 0 0 1px #cfe1ff; }
+.npv2-cp-tac.tactic-bxgx { color: #047857; background: #eaf9f1; box-shadow: inset 0 0 0 1px #c8efd9; }
+.npv2-cp-tac.tactic-mb { color: #b0620a; background: #fdf3e3; box-shadow: inset 0 0 0 1px #f0dcb4; }
+.npv2-cp-main { min-width: 0; }
+.npv2-cp-main > b { display: block; font-size: 0.76rem; font-weight: 700; line-height: 1.2; }
+.npv2-cp-sub { display: block; font-size: 0.62rem; color: var(--muted); margin-top: 2px; }
+.npv2-cp-sub .npv2-wk-newt { font-size: 0.58rem; }
+.npv2-cp-lockt { color: #b0620a; font-weight: 700; }
+.npv2-cp-hr { margin-left: auto; display: flex; align-items: center; gap: 7px; flex: none; }
+.npv2-cp-hr .npv2-wk-ar { font-size: 0.7rem !important; }
+.npv2-cp-hbtn { border: 1px solid var(--line-strong); background: transparent; border-radius: 6px; font-family: inherit;
+  font-size: 0.62rem; font-weight: 600; color: var(--muted); padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+.npv2-cp-hbtn:hover { color: var(--ink); border-color: var(--blue); }
+body.dark .npv2-cp-hbtn:hover { color: #e6ecf5; }
+.npv2-cp-hbtn.is-on { color: var(--blue); border-color: var(--blue); background: var(--blue-soft); }
+.npv2-cp-x { padding: 3px 7px; font-size: 0.72rem; line-height: 1; }
+
+/* KPI tiles */
+.npv2-cp-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 13px 4px; }
+.npv2-cp-kpi { border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; }
+.npv2-cp-kpi label { display: block; font-size: 0.52rem; letter-spacing: 0.08em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.npv2-cp-kpi b { display: block; font-size: 0.98rem; font-weight: 800; margin-top: 1px; }
+.npv2-cp-kpi span { display: block; font-size: 0.58rem; font-weight: 700; margin-top: 1px; }
+.npv2-cp-kpi small { display: block; font-size: 0.56rem; color: var(--faint); margin-top: 1px; }
+.npv2-cp-refrow { padding: 6px 13px 0; }
+.npv2-cp-refchip { font-size: 0.58rem; font-weight: 700; color: var(--blue); background: var(--blue-soft); border-radius: 20px; padding: 3px 10px; }
+
+/* secondary metrics strip */
+.npv2-cp-strip { display: flex; margin: 8px 13px 2px; border: 1px solid #cfe1ff; border-radius: 9px; background: #fbfdff; padding: 6px 3px; }
+body.dark .npv2-cp-strip { border-color: #2c3a52; background: rgba(23,105,232,0.08); }
+.npv2-cp-sm { flex: 1; padding: 0 9px; border-right: 1px solid var(--line); min-width: 0; }
+.npv2-cp-sm:last-child { border-right: 0; }
+.npv2-cp-sm label { display: block; font-size: 0.5rem; letter-spacing: 0.07em; font-weight: 700; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+.npv2-cp-sm b { font-size: 0.74rem; font-weight: 800; }
+.npv2-cp-sm span { font-size: 0.54rem; font-weight: 700; margin-left: 3px; }
+.npv2-cp-sm small { display: block; font-size: 0.52rem; color: var(--faint); margin-top: 1px; white-space: nowrap; }
+
+/* two-column body: tactic table + cost ladder */
+.npv2-cp-cols { display: grid; grid-template-columns: 1fr 206px; gap: 10px; padding: 10px 13px 10px; }
+.npv2-cp-card { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; min-width: 0; }
+.npv2-cp-cap { display: flex; align-items: center; gap: 6px; background: var(--soft, #f5f7fb); border-bottom: 1px solid var(--line);
+  padding: 5px 10px; font-size: 0.56rem; letter-spacing: 0.06em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+body.dark .npv2-cp-cap { background: #1a2334; }
+.npv2-cp-sw { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.npv2-cp-sw-t { background: #7c5cd6; }
+.npv2-cp-sw-l { background: #19a06a; }
+/* explicit th/td font sizes — styles.css has bare `td { font-size: 0.84rem }`
+   element rules that override the inherited table size. Tactic reads a tad
+   bigger than the ladder (0.66 vs 0.6rem). */
+.npv2-cp-tt { width: 100%; border-collapse: collapse; font-size: 0.66rem; }
+.npv2-cp-tt th { font-size: 0.52rem; letter-spacing: 0.06em; font-weight: 700; color: var(--faint); text-transform: uppercase; text-align: right; padding: 5px 10px 3px; border-bottom: 1px solid var(--line); background: transparent; white-space: nowrap; vertical-align: middle; }
+.npv2-cp-tt th:first-child { text-align: left; }
+.npv2-cp-tt td { font-size: 0.66rem; padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: right; font-weight: 600; white-space: nowrap; vertical-align: middle; }
+.npv2-cp-tt td:first-child { text-align: left; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.npv2-cp-tt tr:last-child td { border-bottom: 0; }
+.npv2-cp-tt td b { font-weight: 800; }
+.npv2-cp-basec { white-space: nowrap; }
+.npv2-cp-bnote { font-size: 0.48rem; color: var(--faint); font-weight: 600; margin-right: 7px; letter-spacing: 0.02em; }
+
+/* condensed ladder — grey LY value beside every line; VLC editable */
+.npv2-cp-ladder { font-size: 0.6rem; padding-bottom: 3px; }
+.npv2-cp-lrow { display: flex; align-items: center; gap: 6px; padding: 3px 10px; }
+.npv2-cp-lrow span { color: var(--muted); flex: 1; white-space: nowrap; }
+.npv2-cp-lrow em { font-style: normal; color: var(--faint); font-size: 0.52rem; font-weight: 600; white-space: nowrap; }
+.npv2-cp-lrow b { font-weight: 700; min-width: 36px; text-align: right; }
+.npv2-cp-lrow.head span, .npv2-cp-lrow.head b { font-weight: 700; color: var(--ink); }
+body.dark .npv2-cp-lrow.head span, body.dark .npv2-cp-lrow.head b { color: #e6ecf5; }
+.npv2-cp-lgrp { padding: 4px 10px 1px; font-size: 0.48rem; letter-spacing: 0.07em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
+.npv2-cp-lrow.sub { background: var(--soft, #fbfcfe); }
+.npv2-cp-lrow.sub span { color: var(--ink); font-weight: 600; }
+.npv2-cp-lrow.tot { background: var(--soft, #f5f7fb); border-top: 1px solid var(--line); padding-top: 5px; padding-bottom: 5px; }
+.npv2-cp-lrow.tot span, .npv2-cp-lrow.tot b { font-weight: 800; color: var(--ink); }
+body.dark .npv2-cp-lrow.sub, body.dark .npv2-cp-lrow.tot { background: #1a2334; }
+body.dark .npv2-cp-lrow.sub span, body.dark .npv2-cp-lrow.tot span, body.dark .npv2-cp-lrow.tot b { color: #e6ecf5; }
+
+/* editable VLC / base price */
+.npv2-cp-edit { width: 54px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 2px 5px;
+  font-family: inherit; font-size: 0.6rem; font-weight: 700; color: var(--ink); text-align: right; background: #fff; flex: none; }
+body.dark .npv2-cp-edit { background: #0f1828; border-color: #2c3a52; color: #e6ecf5; }
+.npv2-cp-edit.is-dirty { border-color: #e8930c; background: #fff9ee; box-shadow: 0 0 0 1px #f2c063; }
+body.dark .npv2-cp-edit.is-dirty { background: rgba(232,147,12,0.12); }
+
+/* reforecast bar */
+.npv2-cp-refc { display: flex; align-items: center; gap: 10px; margin: 0 13px 12px; padding: 7px 11px;
+  border: 1px dashed var(--line-strong); border-radius: 8px; background: var(--soft, #f5f7fb); }
+body.dark .npv2-cp-refc { background: #1a2334; border-color: #2c3a52; }
+.npv2-cp-refc.is-dirty { border: 1px solid #f2c063; background: #fff9ee; }
+body.dark .npv2-cp-refc.is-dirty { background: rgba(232,147,12,0.1); border-color: #8a6420; }
+.npv2-cp-refc.is-locked span { font-size: 0.6rem; color: var(--muted); }
+.npv2-cp-refmsg { font-size: 0.6rem; color: var(--muted); line-height: 1.45; }
+.npv2-cp-refmsg b { color: var(--ink); }
+body.dark .npv2-cp-refmsg b { color: #e6ecf5; }
+.npv2-cp-refbtn { margin-left: auto; border: 1px solid var(--line-strong); background: transparent; color: var(--muted);
+  font-family: inherit; font-weight: 700; font-size: 0.62rem; padding: 6px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; flex: none; }
+.npv2-cp-refbtn:disabled { opacity: 0.55; cursor: default; }
+.npv2-cp-refc.is-dirty .npv2-cp-refbtn { background: var(--blue); border-color: var(--blue); color: #fff; }
