@@ -70,6 +70,33 @@
   ];
   // pinned inputs: VLC · Promo cost (Reg / Deep) · Events (Store / Dig / S+D, toggled Reg↔Deep)
   const VLCCOL = { k: "vlc", label: "$/u", edit: true, dec: true, val: (o, e) => e.vlc.toFixed(2) };
+  // Send-to-buying units — merchant-entered quantity that goes to buying.
+  // Prefilled with the MAE-adjusted suggestion (predicted units + the learnt MAE
+  // across price areas); the hint line keeps both numbers visible.
+  const BUYUNITS = {};   // uid → entered units (K)
+  function buyMaePct(o) { return 0.05 + (Math.abs(NP.util.hashStr(o.uid + "|mae")) % 100) / 1000; }   // learnt 5–14.9%
+  function buySuggest(o, res) { const pred = res.units, mae = pred * buyMaePct(o); return { pred: pred, mae: mae, adj: pred + mae }; }
+  function buyCellHTML(o, res) {
+    const s = buySuggest(o, res), adjR = Math.round(s.adj);
+    const cur = BUYUNITS[o.uid], val = cur != null ? cur : adjR;
+    const edited = cur != null && Math.round(cur) !== adjR;
+    const tip = "Units to send for buying (K) — predicted " + NP.fmt.u(s.pred) + " · learnt MAE across price areas ±" + (buyMaePct(o) * 100).toFixed(1) + "% (" + NP.fmt.u(s.mae) + ") → MAE-adjusted " + NP.fmt.u(s.adj);
+    return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit npv2-fg-evc npv2-fg-buyc' + (edited ? " is-edited" : "") + '" data-cell="' + o.uid + ':buyUnits" title="' + esc(tip) + '">' +
+      '<input class="npv2-fg-input npv2-fg-buyin" type="text" inputmode="numeric" data-uid="' + o.uid + '" data-adj="' + adjR + '" value="' + Math.round(val) + '">' +
+      '<span class="npv2-fg-evsplit npv2-fg-buyhint">pred ' + NP.fmt.u(s.pred) + " · adj " + NP.fmt.u(s.adj) + "</span></div>";
+  }
+  function onBuyInput(e) {
+    const inp = e.target, uid = inp.dataset.uid, adj = +inp.dataset.adj;
+    const v = parseInt(String(inp.value).replace(/[^0-9]/g, ""), 10);
+    if (isNaN(v)) delete BUYUNITS[uid]; else BUYUNITS[uid] = v;
+    const cell = inp.closest(".npv2-fg-inc");
+    if (cell) cell.classList.toggle("is-edited", BUYUNITS[uid] != null && BUYUNITS[uid] !== adj);
+  }
+  function onBuyBlur(e) {
+    const inp = e.target, uid = inp.dataset.uid;
+    if (BUYUNITS[uid] == null) { inp.value = inp.dataset.adj; const cell = inp.closest(".npv2-fg-inc"); if (cell) cell.classList.remove("is-edited"); }
+    else inp.value = String(Math.round(BUYUNITS[uid]));
+  }
   // Promo cost (Reg / Deep) is now the DERIVED result of the allowance breakup — read-only
   const COSTCOLS = [
     { k: "deadNet", label: "Reg" },
@@ -203,7 +230,8 @@
       '<div class="npv2-fg-name"><b>' + esc(o.item) + " " + esc(o.pack) + '</b><span class="np-rc-id">' + esc(String(o.ncrc).replace(/^NCRC\s*/i, "")) + '</span><span class="np-rc-id npv2-fg-base">Base ' + NP.fmt.price(o.basePrice) + "</span></div>" +
       grpBody("out", OUTCOLS.map((c) => outCellHTML(c, res, ly)).join("")) +
       (inputsOn()
-        ? grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
+        ? grpBody("buy", buyCellHTML(o, res)) +
+          grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
           grpBody("cost", costCellHTML(o, false) + costCellHTML(o, true)) +
           grpBody("alw", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft, false)).join("")) +
           (sbsOn() ? grpBody("alw npv2-fg-alwdeep", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft, true)).join("")) : "") +
@@ -217,7 +245,8 @@
       '<div class="npv2-fg-name npv2-fg-nameh">NCRC · item</div>' +
       grpHead("out", "Outputs vs LY", OUTCOLS) +
       (inputsOn()
-        ? grpHead("vlc", "List", [VLCCOL]) +
+        ? grpHead("buy", "Send to buying", [{ k: "buyUnits", label: "Units (K)", edit: true }]) +
+          grpHead("vlc", "List", [VLCCOL]) +
           grpHead("cost", "Promo cost $/u", COSTCOLS) +
           grpHead("alw", allowCap(false), ALLOWCOLS) +
           (sbsOn() ? grpHead("alw npv2-fg-alwdeep", allowCap(true), ALLOWCOLS) : "") +
@@ -685,11 +714,16 @@
     const rs = front.querySelector("#npV2FgRog"); rs.onchange = () => { ff.rog = rs.value; renderFront(); };
     const cs = front.querySelector("#npV2FgClass"); cs.onchange = () => { ff.cls = cs.value; renderFront(); };
     const sbs = front.querySelector("#npV2FgSub"); if (sbs) sbs.onchange = () => { ff.sub = sbs.value; renderFront(); };
-    // editable pinned inputs (VLC, events) — allowance inputs are handled separately below
-    front.querySelectorAll(".npv2-fg-input:not(.npv2-fg-alwin)").forEach((inp) => {
+    // editable pinned inputs (VLC, events) — allowance + buy-units inputs are handled separately below
+    front.querySelectorAll(".npv2-fg-input:not(.npv2-fg-alwin):not(.npv2-fg-buyin)").forEach((inp) => {
       inp.addEventListener("input", onEditInput);
       inp.addEventListener("focus", (e) => showBand(e.target, NP.cat().items.find((x) => x.uid === e.target.dataset.uid)));
       inp.addEventListener("blur", onEditBlur);
+    });
+    // send-to-buying units — local state with the MAE-adjusted suggestion as default
+    front.querySelectorAll(".npv2-fg-buyin").forEach((inp) => {
+      inp.addEventListener("input", onBuyInput);
+      inp.addEventListener("blur", onBuyBlur);
     });
     // allowance inputs build the (read-only) promo cost — write to the regular/deep ladder live
     front.querySelectorAll(".npv2-fg-alwin").forEach((inp) => {

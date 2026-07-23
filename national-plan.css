@@ -2857,6 +2857,27 @@ body.dark .npv2-fg-alwdeep, body.dark .npv2-fg-evdeep { background: rgba(124,77,
 body.dark .npv2-fg thead .npv2-fg-alwdeep, body.dark .npv2-fg thead .npv2-fg-evdeep { background: rgba(124,77,204,0.14) !important; }
 body.dark .npv2-fg-alwdeep .npv2-fg-gcap, body.dark .npv2-fg-alwdeep .npv2-fg-colh-in, body.dark .npv2-fg-evdeep .npv2-fg-gcap, body.dark .npv2-fg-evdeep .npv2-fg-colh-in { color: #b39ddb !important; }
 
+/* ===== Send-to-buying units column ==========================================
+   Merchant-entered buy quantity, pinned just before List. Teal — deliberately
+   distinct from the amber deal-input groups. The hint line keeps the predicted
+   units and the MAE-adjusted suggestion (prefilled) in view. */
+.npv2-fg-buy { background: #e9f6f0 !important; border-left: 1px solid #cfe9dd !important; }
+.npv2-fg thead .npv2-fg-buy { background: #dcf0e6 !important; }
+.npv2-fg-buy .npv2-fg-gcap, .npv2-fg-buy .npv2-fg-colh, .npv2-fg-buy .npv2-fg-colh-in { color: #0f7a5c !important; }
+.npv2-fg-buy .npv2-fg-gcells > * { width: 92px !important; min-width: 92px !important; }
+.npv2-fg-buyhint { color: #2a8a68 !important; font-size: 0.5rem !important; }
+.npv2-fg-buyc:hover { background: rgba(25,160,106,0.10) !important; }
+.npv2-fg-buyc.is-edited { background: #cdead9 !important; }
+.npv2-fg-buyc.is-edited .npv2-fg-input { color: #0d6b4f !important; font-weight: 700; }
+.npv2-fg-buyc:focus-within { background: #e2f3ec !important; box-shadow: inset 0 0 0 2px #19a06a !important; }
+body.dark .npv2-fg-buy { background: rgba(25,160,106,0.10) !important; border-left-color: #2c3a52 !important; }
+body.dark .npv2-fg thead .npv2-fg-buy { background: rgba(25,160,106,0.16) !important; }
+body.dark .npv2-fg-buy .npv2-fg-gcap, body.dark .npv2-fg-buy .npv2-fg-colh, body.dark .npv2-fg-buy .npv2-fg-colh-in { color: #6fd0ab !important; }
+body.dark .npv2-fg-buyhint { color: #74c7a5 !important; }
+body.dark .npv2-fg-buyc.is-edited { background: rgba(25,160,106,0.28) !important; }
+body.dark .npv2-fg-buyc.is-edited .npv2-fg-input { color: #9fe6c8 !important; }
+body.dark .npv2-fg-buyc:focus-within { background: rgba(25,160,106,0.18) !important; }
+
 /* ===== Hover-expand week-cell card + base-change markers =====================
    A promoted 52-week cell grows into a card on hover (replaces the tooltip):
    week KPI tiles, secondary rate strip, store/digital tactic, condensed cost
