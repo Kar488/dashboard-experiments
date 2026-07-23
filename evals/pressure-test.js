@@ -57,6 +57,10 @@ const VARIATIONS = [
   { cls: "novel", q: "I am running three groups of categories through a planning process, use the two lead digits of the four digit category number to group the categories together. 0201 - COOKIES 0204 - ON THE GO LUNCHBOX 0210 - CRACKERS 3001 - BATH TISSUE 3002 - PAPER TOWELS 3004 - FACIAL TISSUE 4201 - PACKAGED ICE CREAM 4205 - NOVELTIES I need to understand how exclusive households are, inside each group of categories. I want to establish a risk factor for removing overlapping promotions inside a group. For each group of categories go down to the NCRC level and identify total households buying the NCRC and how many of those households are exclusive to that NCRC only in that group of categories. Use promo week 49 2025 to promo week 8 2026 as the time frame to evaluate. I will also need to understand this at the group of categories level. I will also need to know this at a Division level." },
   { cls: "novel", q: "what is the basket affinity between chips and salsa at jewel — when households buy one how often do they buy the other in the same trip" },
   { cls: "novel", q: "show me household penetration for greek yogurt in jewel and how it trends vs last year" },
+  // -- multi-clause drill that IS a registered family (field miss 2026-07-22:
+  //    compound detector shredded the BOG drill into the generic diagnostic
+  //    card, dropped the person scope, and printed >100% split percentages)
+  { cls: "drill", q: "Where are we losing Bill-Out Gross on Rachel Jones. What SMICs? What vendors within those SMIC? What NCRCs within those vendors? Provide me with the regular retail, list cost, offinvoice per unit, and Bill-Out Gross for those identified NCRCs this year and last year. Isolate those with the most significant decline in off-invoice per unit versus LY, versus 2YA." },
   // -- causal treated-vs-comparison asks (field miss 2026-07-21: SNAP offer
   //    incrementality answered with a single-concept penetration card and a
   //    phantom HOUSEHOLD CLEANERS category from an 8-char prefix match)

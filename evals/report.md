@@ -1,4 +1,4 @@
-# Pressure-test report — 158 questions
+# Pressure-test report — 159 questions
 
 | Class | Pass | Total |
 |---|---|---|
@@ -11,6 +11,7 @@
 | compound | 3 | 3 |
 | premise | 2 | 2 |
 | novel | 3 | 3 |
+| drill | 1 | 1 |
 | causal | 1 | 1 |
 | clarify | 1 | 1 |
 
