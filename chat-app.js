@@ -1927,7 +1927,13 @@
       const m0 = pnlModel(rng, e.premise);
       const b0 = agpBridge(m0);
       blocks.push(pnlTable(m0, e));
-      blocks.push(H(`${cat} ${m0.agpTY < m0.agpLY ? "lost" : "gained"} ${fmt.k(Math.abs(m0.agpTY - m0.agpLY))} of AGP versus last year, split ${fmt.pct(Math.abs(b0.vol / b0.total), 0)} volume / ${fmt.pct(Math.abs(b0.rate / b0.total), 0)} rate${e.premise && e.premise.salesChg > 0 ? " — sales grew " + fmt.spct(e.premise.salesChg) + ", so the profit decline is a rate story" : ""}.`));
+      // never render >100% component splits — offsetting components read in
+      // dollars ("-$76K volume partly offset by +$59K rate"), not nonsense %
+      const vShare = b0.vol / b0.total, rShare = b0.rate / b0.total;
+      const sp = (vShare >= 0 && vShare <= 1 && rShare >= 0 && rShare <= 1)
+        ? `split ${fmt.pct(vShare, 0)} volume / ${fmt.pct(rShare, 0)} rate`
+        : `driven by ${fmt.sk(b0.vol)} of volume ${b0.vol * b0.rate < 0 ? "partly offset" : "compounded"} by ${fmt.sk(b0.rate)} of rate`;
+      blocks.push(H(`${cat[0].toUpperCase() + cat.slice(1)} ${m0.agpTY < m0.agpLY ? "lost" : "gained"} ${fmt.k(Math.abs(m0.agpTY - m0.agpLY))} of AGP versus last year, ${sp}${e.premise && e.premise.salesChg > 0 ? " — sales grew " + fmt.spct(e.premise.salesChg) + ", so the profit decline is a rate story" : ""}.`));
       blocks.push(b0.tbl);
     }
     if (s2.byDivision) {
@@ -2445,6 +2451,15 @@
     // a growth/decline/change ask must render a COMPARISON, not levels —
     // shared flag any renderer can honor (and the judge enforces)
     if (/\b(grow(th|ing|n)?|grew|gain(ing|s)?|increas(e|ing)|declin(e|ing)|drop(ping|s)?|chang(e|es|ed|ing))\b|vs (last|prior) year|yoy|year over year/i.test(t)) e = { ...e, growthAsk: true };
+    // a person/desk named in the input overrides the matched question's
+    // stored one ("on Rachel Jones" must never answer for "Desk X") —
+    // capitalized name pairs that aren't a known vendor/division
+    const person = input.match(/\b(?:on|for|under)\s+([A-Z][a-z]+(?: [A-Z][a-z]+)+)\b/);
+    if (person && (e.desk || e.asm)
+      && !DIVISION_SYN.some(([re]) => re.test(person[1]))
+      && !Object.values(POOLS.vendors).some((list) => list.some((v) => v.toUpperCase().startsWith(person[1].toUpperCase())))) {
+      e = e.desk ? { ...e, desk: person[1] } : { ...e, asm: person[1] };
+    }
     // a stored vendor that doesn't sell the (possibly overridden) category is
     // stale context from the matched question — drop it unless the user
     // actually named it (never rank Magnum NCRCs inside SOUR CREAM)
@@ -2467,8 +2482,6 @@
     const exact = QINDEX.find((q) => q.norm === nIn);
     // constructed entries store no entities — extract them from the text
     if (exact) return { tier: 1, score: 1, q: exact, arch: exact.a, e: Object.keys(exact.e || {}).length ? exact.e : periodOverride(input, {}), latency: 2 };
-    const complex = detectComplex(input);
-    if (complex) return complex;
     const toks = tokens(input);
     // grain-aware nearest neighbor: same-grain candidates get a small
     // boost, contradicting-grain candidates a larger penalty — a wrong
@@ -2487,7 +2500,17 @@
       }
       if (s > bestScore) { bestScore = s; best = q; }
     }
-    if (bestScore >= 0.92) return { tier: 1, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 3 };
+    // A STRONG family match beats compound decomposition: a multi-clause
+    // question that IS a registered family (e.g. the BOG SMIC→vendor→NCRC
+    // drill is inherently multi-part) must route to its purpose-built
+    // template, not be shredded into the generic compound card.
+    if (bestScore >= 0.55) {
+      return bestScore >= 0.92
+        ? { tier: 1, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 3 }
+        : { tier: 2, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 140 + Math.floor(bestScore * 60) };
+    }
+    const complex = detectComplex(input);
+    if (complex) return complex;
     if (bestScore >= 0.40) return { tier: 2, score: bestScore, q: best, arch: best.a, e: periodOverride(input, best.e), latency: 140 + Math.floor(bestScore * 60) };
     // Tier 3 — scope guards FIRST. These regex guards are the KEY-LESS
     // FALLBACK only; with a live tier-3 model the question_class field is the
@@ -2833,6 +2856,13 @@
     if (/(rank|top \d+|winning).*(item|upc|ncrc|cig|vendor|smic)|(item|upc|ncrc|cig|vendor|smic)s?.*rank/.test(q)) asks.push({ ask: "ranked entities", test: (t, tables) => tables.some((tb) => tb.rows.length >= 2) });
     if (/trend/.test(q)) asks.push({ ask: "trend comparison", test: (t) => /trend/i.test(t) });
     if (/total row/.test(q)) asks.push({ ask: "total row", test: (t, tables) => tables.some((tb) => tb.rows.some((r) => /^TOTAL/i.test(String(r[0])))) });
+    // a person/desk named in the question must be echoed — never silently
+    // answered for someone else's portfolio
+    const personAsk = qText.match(/\b(?:on|for|under)\s+([A-Z][a-z]+(?: [A-Z][a-z]+)+)\b/);
+    if (personAsk && !DIVISION_SYN.some(([re]) => re.test(personAsk[1]))) {
+      asks.push({ ask: "named person/desk: " + personAsk[1], test: (t, tables, ents) =>
+        t.includes(personAsk[1]) || (ents && [ents.desk, ents.asm].some((x) => String(x || "").includes(personAsk[1]))) });
+    }
     // growth/decline/change asks must show a COMPARISON (LY column, vs-prior,
     // signed deltas) — a levels-only table never answers "what is growing"
     if (/\b(growth|grew|growing|gains?|declin\w*|increas\w*|dropp?(ed|ing)?|chang(e|es|ed|ing))\b/i.test(q)) {
@@ -3449,7 +3479,9 @@
     const stageDefs = [
       match.tier === 1 ? { label: `Intent matched — registry exact hit`, ms: 240 }
         : match.tier === 2 ? { label: `Intent matched — nearest neighbor (${match.score.toFixed(2)})`, ms: 380 }
-          : match.guarded ? { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one (SIMULATED — ${LLM.live ? "live status not confirmed at send time" : "no API key configured"}; with a live key the model constructs and registers a real template)`, ms: 950 }
+          : match.guarded ? (["complex_diagnostic", "compound_review"].includes(match.arch)
+            ? { label: `Compound ask decomposed into its sub-analyses (deterministic policy guard — runs code-side, before any model)`, ms: 950 }
+            : { label: `No direct hit — concept-coverage guard: no existing contract covers this; constructing one (SIMULATED — ${LLM.live ? "live status not confirmed at send time" : "no API key configured"}; with a live key the model constructs and registers a real template)`, ms: 950 })
           : match.upgraded ? { label: `Registered template upgraded to the current spec schema via ${match.model} — ${match.persisted ? `upserted in the registry (${match.registryCount} templates; survives restart)` : "⚠ registry write FAILED — will re-construct next session (check the server console)"}`, ms: 160 }
           : match.constructed ? { label: `Outside every registered template — NEW contract constructed via ${match.model}; ${match.persisted ? `registered for reuse (registry now ${match.registryCount} templates; survives restart)` : "⚠ registry write FAILED — will re-construct next session (check the server console)"}`, ms: 160 }
           : match.live ? { label: `No direct hit — contract inferred via ${match.model} (live call, 3 nearest archetypes injected)`, ms: 120 }
