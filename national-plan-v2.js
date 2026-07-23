@@ -881,6 +881,8 @@
      remaining week (this week → W52). The grid itself only gains tiny C / P markers
      (solid on the change week, hollow on later weeks running on the new base). */
   const CELLPOP = { el: null, key: null, pinned: false, showT: null, hideT: null };
+  const CELLPOP_DELAY = 1000;      // ms the pointer must rest on a cell before the card opens
+  const CELLPOP_HIDE_DELAY = 40;   // ms after the pointer leaves — dismissal is near-instant (just enough grace to cross into the card)
   const CELLCHG = {};   // uid → { week (1-based origin), cost:{from,to}|null, price:{from,to}|null }
   const BASEOV = {};    // uid → overridden base price (applies from the change week forward)
   function baseOf(o) { return BASEOV[o.uid] != null ? BASEOV[o.uid] : o.basePrice; }
@@ -1062,7 +1064,7 @@
     CELLPOP.key = null; CELLPOP.pinned = false; clearTimeout(CELLPOP.showT); clearTimeout(CELLPOP.hideT);
     document.querySelectorAll(".npv2-fg-wk.is-cpsel").forEach((el) => el.classList.remove("is-cpsel"));
   }
-  function scheduleHidePop() { clearTimeout(CELLPOP.hideT); CELLPOP.hideT = setTimeout(() => { if (!CELLPOP.pinned) hideCellPop(); }, 150); }
+  function scheduleHidePop() { clearTimeout(CELLPOP.hideT); CELLPOP.hideT = setTimeout(() => { if (!CELLPOP.pinned) hideCellPop(); }, CELLPOP_HIDE_DELAY); }
   function positionCellPop(anchor) {
     const d = CELLPOP.el; if (!d || !anchor) return;
     d.style.maxHeight = ""; d.style.overflow = "";
@@ -1173,7 +1175,7 @@
       if (CELLPOP._pendingKey === key) return;   // already scheduled for this cell — don't reset the timer
       clearTimeout(CELLPOP.showT);               // (moving over the ± toggle inside the cell used to keep resetting it)
       CELLPOP._pendingKey = key;
-      CELLPOP.showT = setTimeout(() => { CELLPOP._pendingKey = null; openCellPop(key, td, false); }, 140);   // hover intent
+      CELLPOP.showT = setTimeout(() => { CELLPOP._pendingKey = null; openCellPop(key, td, false); }, CELLPOP_DELAY);   // hover intent — pointer must rest on the cell
     });
     wrap.addEventListener("mouseout", (e) => {
       const td = e.target.closest("[data-mweek]");
