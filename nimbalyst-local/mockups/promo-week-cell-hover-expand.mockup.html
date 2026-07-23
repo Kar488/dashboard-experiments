@@ -10,6 +10,13 @@
     --blue:#1769e8; --soft:#f5f7fb; --ink:#0f172a; --faint:#98a4b6;
     --positive:#177245; --negative:#c0392b; --promo-bg:#fdfaee; --promo-ink:#9a7926;
     --custom-bg:#eef4ff; --green:#0f9d58;
+    /* depth palette (point 5) */
+    --dp-shallow-bg:#fdf3c4; --dp-shallow-ink:#8a6a0c; --dp-shallow-line:#ecd88a;
+    --dp-reg-bg:#e5eaf3;    --dp-reg-ink:#495a7c;    --dp-reg-line:#c6d1e4;
+    --dp-deep-bg:#ece1fb;   --dp-deep-ink:#6a39c0;   --dp-deep-line:#d5c2f4;
+    /* change markers */
+    --mk-cost:#e8930c; --mk-price:#1769e8;
+    --hol:#c98a12; --hol-bg:#fdf6e7;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -22,11 +29,11 @@
     justify-content:space-between;align-items:flex-start;gap:24px;}
   .eyebrow{font-size:.62rem;letter-spacing:.14em;font-weight:700;color:var(--blue);}
   .head h2{margin:4px 0 6px;font-size:1.18rem;font-weight:700;}
-  .head p{margin:0;font-size:.72rem;color:var(--muted);max-width:640px;line-height:1.5;}
+  .head p{margin:0;font-size:.72rem;color:var(--muted);max-width:680px;line-height:1.5;}
   .state-pill{font-size:.62rem;font-weight:700;letter-spacing:.05em;border-radius:20px;padding:5px 12px;
     background:var(--custom-bg);color:var(--blue);border:1px solid #cfe1ff;white-space:nowrap;}
 
-  .section-cap{display:flex;align-items:baseline;gap:10px;padding:14px 22px 4px;}
+  .section-cap{display:flex;align-items:baseline;gap:10px;padding:14px 22px 4px;flex-wrap:wrap;}
   .section-cap .n{background:var(--blue);color:#fff;font-size:.62rem;font-weight:700;border-radius:50%;
     width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;flex:none;}
   .section-cap strong{font-size:.8rem;}
@@ -36,17 +43,19 @@
   .gridwrap{padding:10px 22px 22px;overflow:visible;}
   table.wkgrid{border-collapse:collapse;width:100%;table-layout:fixed;}
   .wkgrid > thead > tr > th{background:var(--soft);font-size:.55rem;letter-spacing:.05em;font-weight:700;color:var(--muted);
-    text-transform:uppercase;padding:7px 6px;border:1px solid var(--line);text-align:center;}
+    text-transform:uppercase;padding:7px 6px;border:1px solid var(--line);text-align:center;position:relative;}
   .wkgrid > thead > tr > th.itemcol{width:190px;text-align:left;padding-left:10px;}
   .wkgrid > thead > tr > th .sub{display:block;font-size:.52rem;font-weight:600;color:var(--faint);letter-spacing:0;text-transform:none;margin-top:1px;}
-  .wkgrid > thead > tr > th.holiday{background:#fdf6e7;color:#9a7926;}
-  .wkgrid > tbody > tr > td{border:1px solid var(--line);padding:0;height:96px;vertical-align:top;background:#fff;}
+  .wkgrid > thead > tr > th.holiday{background:var(--hol-bg);color:var(--hol);}
+  .wkgrid > thead > tr > th.holiday .holtag{display:inline-flex;align-items:center;gap:3px;margin-top:2px;
+    font-size:.5rem;font-weight:800;letter-spacing:.04em;color:#fff;background:var(--hol);border-radius:3px;padding:1px 4px;}
+  .wkgrid > tbody > tr > td{border:1px solid var(--line);padding:0;height:104px;vertical-align:top;background:#fff;}
   .wkgrid > tbody > tr > td.itemcell{padding:8px 10px;vertical-align:middle;}
   .item-name{font-size:.68rem;font-weight:700;line-height:1.25;}
   .item-meta{font-size:.58rem;color:var(--muted);margin-top:2px;}
   .item-meta em{font-style:normal;color:var(--faint);}
 
-  /* ---------- compact promo cell (as today) ---------- */
+  /* ---------- compact promo cell ---------- */
   .pcell{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:1px;
     height:100%;padding:5px 6px 4px;text-align:left;cursor:pointer;}
   .pcell .tok{font-size:.56rem;font-weight:700;color:var(--muted);line-height:1.1;}
@@ -56,25 +65,50 @@
   .pcell .ch{font-size:.46rem;font-weight:800;color:#fff;background:#8aa0bd;border-radius:2px;padding:0 2px;line-height:1.5;}
   .pcell .chd{background:#3b6fb5;}
   .newt{color:#15805a;font-size:.54rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
-  .pcell .tags{display:flex;gap:6px;margin-top:auto;padding-top:3px;align-items:center;}
+  .pcell .tags{display:flex;gap:5px;margin-top:auto;padding-top:3px;align-items:center;flex-wrap:wrap;}
   .pcell .tags i{font-style:normal;font-size:.66rem;line-height:1;}
-  .ar-sh{color:#1a8f63;} .ar-dp{color:#c2700a;}
   .opt{color:#15805a;} .rep{color:var(--faint);}
 
-  td.tactic-item{background:#eaf3ff;box-shadow:inset 0 0 0 1px #cfe1ff;}
-  td.tactic-item .tok{color:#0f57d6;}
-  td.tactic-bxgx{background:#eaf9f1;box-shadow:inset 0 0 0 1px #c8efd9;}
-  td.tactic-bxgx .tok{color:#047857;}
-  td.tactic-mb{background:#fdf3e3;box-shadow:inset 0 0 0 1px #f0dcb4;}
-  td.tactic-mb .tok{color:#b0620a;}
-  td.holiday-col{background:#fefaf1;}
+  /* depth colour chip (replaces the ▼/▲/= arrows — point 5) */
+  .depth{font-size:.48rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;border-radius:3px;
+    padding:0 4px;line-height:1.5;border:1px solid transparent;}
+  .depth-shallow{background:var(--dp-shallow-bg);color:var(--dp-shallow-ink);border-color:var(--dp-shallow-line);}
+  .depth-reg{background:var(--dp-reg-bg);color:var(--dp-reg-ink);border-color:var(--dp-reg-line);}
+  .depth-deep{background:var(--dp-deep-bg);color:var(--dp-deep-ink);border-color:var(--dp-deep-line);}
+  /* left colour rail on the cell = depth at a glance without reading */
+  td.dp-shallow{box-shadow:inset 3px 0 0 var(--dp-shallow-line);}
+  td.dp-reg{box-shadow:inset 3px 0 0 var(--dp-reg-line);}
+  td.dp-deep{box-shadow:inset 3px 0 0 var(--dp-deep-line);}
 
-  td.hascell:hover{box-shadow:inset 0 0 0 2px var(--blue);}
+  td.tactic-item{background:#eaf3ff;}
+  td.tactic-item .tok{color:#0f57d6;}
+  td.tactic-bxgx{background:#eaf9f1;}
+  td.tactic-bxgx .tok{color:#047857;}
+  td.tactic-mb{background:#fdf3e3;}
+  td.tactic-mb .tok{color:#b0620a;}
+  td.holiday-col{background:var(--hol-bg);}
+  td.holiday-col.tactic-item,td.holiday-col.tactic-bxgx,td.holiday-col.tactic-mb{background:#fbf3e6;}
+
+  /* holiday flag inside a cell (point 6) */
+  .hol-flag{display:inline-flex;align-items:center;gap:3px;font-size:.48rem;font-weight:800;letter-spacing:.03em;
+    color:#fff;background:var(--hol);border-radius:3px;padding:0 4px;line-height:1.5;}
+
+  td.hascell:hover{outline:2px solid var(--blue);outline-offset:-2px;}
+
+  /* ---------- NON-PROMO cell (point 1 & 2 + toggle) ---------- */
+  td.cell-none{background:repeating-linear-gradient(135deg,#fafbfd,#fafbfd 7px,#f2f5f9 7px,#f2f5f9 8px);}
+  .pcell-none .none-lbl{font-size:.56rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;}
+  .pcell-none .base{display:flex;align-items:baseline;gap:4px;}
+  .pcell-none .base span{font-size:.5rem;color:var(--faint);font-weight:700;}
+  .pcell-none .base b{font-size:.68rem;font-weight:700;color:var(--ink);}
+  .pcell-none .kmini{font-size:.54rem;color:var(--muted);}
+  .toggle-promo{margin-top:auto;font-size:.5rem;font-weight:700;color:var(--blue);background:var(--custom-bg);
+    border:1px solid #cfe1ff;border-radius:4px;padding:1px 5px;cursor:pointer;font-family:inherit;align-self:flex-start;}
 
   /* ================================================================
-     EXPANDED CARD — the cell grows into this on hover (no tooltip)
+     EXPANDED CARD
      ================================================================ */
-  .pop{position:absolute;top:-6px;left:-6px;width:500px;z-index:60;
+  .pop{position:absolute;top:-6px;left:-6px;width:512px;z-index:60;
     background:#fff;border:1px solid var(--line-strong);border-radius:12px;
     box-shadow:0 22px 54px rgba(15,23,42,.26), 0 0 0 2px var(--blue);
     opacity:0;visibility:hidden;transform:scale(.55);transform-origin:top left;
@@ -87,11 +121,12 @@
   .ph-tac{display:inline-flex;align-items:center;gap:5px;font-size:.66rem;font-weight:800;color:#0f57d6;
     background:#eaf3ff;border:1px solid #cfe1ff;border-radius:6px;padding:3px 8px;white-space:nowrap;}
   .ph-tac.bxgx{color:#047857;background:#eaf9f1;border-color:#c8efd9;}
+  .ph-tac.none{color:var(--muted);background:var(--soft);border-color:var(--line);}
   .ph-main{min-width:0;}
   .ph-item{display:block;font-size:.74rem;font-weight:700;line-height:1.2;}
   .ph-sub{display:block;font-size:.6rem;color:var(--muted);margin-top:2px;}
+  .ph-sub .hol-flag{margin:0 2px;}
   .ph-right{margin-left:auto;display:flex;align-items:center;gap:7px;flex:none;}
-  .ph-right i{font-style:normal;font-size:.7rem;}
   .pin{border:1px solid var(--line-strong);background:#fff;border-radius:6px;font-size:.6rem;color:var(--muted);
     padding:3px 7px;cursor:pointer;font-family:inherit;font-weight:600;}
   .pin.on{border-color:var(--blue);color:var(--blue);background:var(--custom-bg);}
@@ -102,52 +137,72 @@
   .kpi label{display:block;font-size:.52rem;letter-spacing:.08em;font-weight:700;color:var(--muted);text-transform:uppercase;}
   .kpi b{display:block;font-size:1rem;font-weight:800;margin-top:1px;}
   .kpi .vs{display:block;font-size:.58rem;font-weight:700;color:var(--positive);margin-top:1px;}
+  .kpi .vs.dn{color:var(--negative);}
   .kpi .ly{display:block;font-size:.56rem;color:var(--faint);margin-top:1px;}
 
   /* secondary metrics strip */
   .strip{display:flex;gap:0;margin:8px 14px 2px;border:1px solid #cfe1ff;border-radius:9px;
     background:#fbfdff;padding:7px 4px;}
+  .strip.none{border-color:var(--line);background:var(--soft);}
   .sm{flex:1;padding:0 9px;border-right:1px solid var(--line);min-width:0;}
   .sm:last-child{border-right:0;}
   .sm label{display:block;font-size:.5rem;letter-spacing:.07em;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap;}
   .sm b{font-size:.76rem;font-weight:800;}
+  .sm b.empty{color:var(--faint);font-weight:700;}
   .sm .d{font-size:.54rem;font-weight:700;margin-left:3px;}
   .sm .d.up{color:var(--positive);} .sm .d.dn{color:var(--negative);}
   .sm .ly{display:block;font-size:.52rem;color:var(--faint);margin-top:1px;white-space:nowrap;}
 
   /* two-column body: tactic table + cost ladder */
-  .pop-cols{display:grid;grid-template-columns:1fr 206px;gap:10px;padding:10px 14px 10px;}
+  .pop-cols{display:grid;grid-template-columns:1fr 210px;gap:10px;padding:10px 14px 10px;}
   .pcard{border:1px solid var(--line);border-radius:9px;overflow:hidden;min-width:0;}
   .pcard-cap{display:flex;align-items:center;gap:6px;background:var(--soft);border-bottom:1px solid var(--line);
     padding:6px 10px;font-size:.56rem;letter-spacing:.06em;font-weight:700;color:var(--muted);text-transform:uppercase;}
   .pcard-cap .sw{width:7px;height:7px;border-radius:2px;flex:none;}
   .sw-purple{background:#7c5cd6;} .sw-green{background:#19a06a;}
+  .pcard-cap .cap-note{margin-left:auto;font-size:.5rem;font-weight:600;color:var(--faint);letter-spacing:.02em;text-transform:none;}
 
+  /* tactic table — now with an LY column (point 4) */
   table.tt{width:100%;border-collapse:collapse;font-size:.62rem;}
   .tt th{font-size:.5rem;letter-spacing:.06em;font-weight:700;color:var(--faint);text-transform:uppercase;
-    text-align:right;padding:5px 10px 3px;border-bottom:1px solid var(--line);}
+    text-align:right;padding:5px 9px 3px;border-bottom:1px solid var(--line);}
   .tt th:first-child{text-align:left;}
-  .tt td{padding:4px 10px;border-bottom:1px solid #eef2f8;text-align:right;font-weight:600;}
+  .tt th.lycol{color:var(--faint);}
+  .tt td{padding:4px 9px;border-bottom:1px solid #eef2f8;text-align:right;font-weight:600;}
   .tt td:first-child{text-align:left;color:var(--muted);font-weight:500;}
+  .tt td.lyc{color:var(--faint);font-weight:600;}
   .tt tr:last-child td{border-bottom:0;}
   .tt td b{font-weight:800;}
+  .tt .none-row td{color:var(--faint);font-style:italic;text-align:left;padding:9px 10px;}
 
+  /* cost ladder */
   .ladder{font-size:.6rem;}
   .lrow{display:flex;align-items:center;gap:6px;padding:3px 10px;}
-  .lrow span{color:var(--muted);flex:1;}
+  .lrow span.nm{color:var(--muted);flex:1;}
   .lyv{font-style:normal;color:var(--faint);font-size:.52rem;font-weight:600;white-space:nowrap;}
   .lrow b{font-weight:700;min-width:36px;text-align:right;}
-  .lrow.head span,.lrow.head b{font-weight:700;color:var(--ink);}
+  .lrow.head span.nm,.lrow.head b{font-weight:700;color:var(--ink);}
   .lgrp{padding:4px 10px 1px;font-size:.48rem;letter-spacing:.07em;font-weight:700;color:var(--faint);text-transform:uppercase;}
-  .lrow.sub{background:#fbfcfe;} .lrow.sub span{color:var(--ink);font-weight:600;}
+  .lrow.sub{background:#fbfcfe;} .lrow.sub span.nm{color:var(--ink);font-weight:600;}
   .lrow.tot{background:var(--soft);border-top:1px solid var(--line);padding-top:5px;padding-bottom:5px;}
-  .lrow.tot span,.lrow.tot b{font-weight:800;color:var(--ink);}
+  .lrow.tot span.nm,.lrow.tot b{font-weight:800;color:var(--ink);}
 
-  /* editable fields + reforecast bar */
-  .mini-edit{width:54px;border:1px solid var(--line-strong);border-radius:5px;padding:2px 5px;
+  /* editable fields — override shows the original in grey (point 3) */
+  .editwrap{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;}
+  .orig{font-size:.54rem;color:var(--faint);text-decoration:line-through;font-weight:600;white-space:nowrap;}
+  .mini-edit{width:56px;border:1px solid var(--line-strong);border-radius:5px;padding:2px 5px;
     font-family:inherit;font-size:.6rem;font-weight:700;color:var(--ink);text-align:right;background:#fff;flex:none;}
   .mini-edit.dirty{border-color:#e8930c;background:#fff9ee;box-shadow:0 0 0 1px #f2c063;}
-  .basep-note{font-size:.5rem;color:var(--faint);font-weight:600;margin-right:7px;letter-spacing:.02em;}
+
+  /* action buttons brought into the card (was the separate screen) */
+  .cardacts{display:flex;gap:8px;margin:0 14px 8px;}
+  .cardacts button{flex:1;border-radius:8px;padding:8px 10px;font-family:inherit;font-weight:700;font-size:.66rem;
+    cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+  .act-primary{background:var(--blue);border:1px solid var(--blue);color:#fff;}
+  .act-ghost{background:#fff;border:1px solid var(--line-strong);color:var(--muted);}
+  .act-add{background:#eafaf1;border:1px solid #b7e6cc;color:#0f7a48;}
+
+  /* reforecast bar */
   .refc{display:flex;align-items:center;gap:10px;margin:0 14px 12px;padding:8px 11px;
     border:1px dashed var(--line-strong);border-radius:8px;background:var(--soft);}
   .refc.dirty{border:1px solid #f2c063;background:#fff9ee;}
@@ -157,15 +212,16 @@
     font-family:inherit;font-weight:700;font-size:.62rem;padding:6px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;flex:none;}
   .refc.dirty .refc-btn{background:var(--blue);border-color:var(--blue);color:#fff;}
 
-  /* base-change markers on the background grid */
-  .chg{font-style:normal;font-size:.5rem;font-weight:800;line-height:1.4;border-radius:3px;padding:0 3px;letter-spacing:.02em;}
-  .chg-cost{color:#fff;background:#e8930c;}
-  .chg-price{color:#fff;background:#1769e8;}
-  .chg.inherit{background:transparent;}
-  .chg-cost.inherit{color:#c2700a;box-shadow:inset 0 0 0 1px #e8b25c;}
-  .chg-price.inherit{color:#1769e8;box-shadow:inset 0 0 0 1px #a9c6f5;}
-  .chg-legend{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:10px;font-size:.64rem;color:var(--muted);}
+  /* base-change markers on the background grid (point 5 redesign) */
+  .mk{display:inline-flex;align-items:center;gap:2px;font-style:normal;font-size:.48rem;font-weight:800;
+    line-height:1.4;border-radius:3px;padding:0 3px;letter-spacing:.02em;color:#fff;}
+  .mk-cost{background:var(--mk-cost);}
+  .mk-price{background:var(--mk-price);}
+  .chg-legend{display:flex;flex-wrap:wrap;gap:16px 22px;align-items:center;margin-top:12px;font-size:.64rem;color:var(--muted);}
   .chg-legend .lg{display:inline-flex;align-items:center;gap:6px;}
+  .chg-legend .swatch{width:13px;height:13px;border-radius:3px;border:1px solid transparent;flex:none;}
+  .lg-title{font-size:.55rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+    width:100%;margin-top:4px;}
 
   /* ---------- annotations (state B) ---------- */
   .anno{position:absolute;z-index:70;display:flex;align-items:center;gap:6px;}
@@ -178,7 +234,7 @@
   .anno-key b{color:var(--ink);}
 
   .stateb-grid{display:grid;grid-template-columns:1fr 300px;gap:18px;padding:10px 22px 26px;align-items:start;}
-  .stateb-canvas{position:relative;min-height:720px;}
+  .stateb-canvas{position:relative;min-height:760px;}
 
   /* behaviour notes */
   .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px 22px 22px;}
@@ -191,26 +247,69 @@
   .hint{display:flex;gap:8px;align-items:center;background:#fff8ec;border:1px dashed #e6c882;
     border-radius:9px;padding:8px 13px;font-size:.68rem;color:#8a6d2f;margin:12px 22px 0;}
   .hint b{color:#6f5622;}
+
+  /* ---------- KPI-in-cell options (calendar point 2) ---------- */
+  .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:14px 22px 8px;align-items:start;}
+  .optcard{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;}
+  .optcard .oc-head{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--soft);}
+  .optcard .oc-head b{font-size:.74rem;}
+  .optcard .oc-head p{margin:4px 0 0;font-size:.62rem;color:var(--muted);line-height:1.45;}
+  .oc-stage{padding:16px 14px;display:flex;justify-content:center;background:
+    repeating-linear-gradient(0deg,#fbfcfe,#fbfcfe 25px,#f4f7fb 25px,#f4f7fb 26px);}
+  .oc-foot{padding:10px 14px 12px;font-size:.62rem;color:var(--muted);line-height:1.5;}
+  .oc-foot b{color:var(--ink);}
+  /* a single "cell" preview sized like the real grid cell */
+  .kcell{width:150px;min-height:104px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;
+    box-shadow:inset 3px 0 0 var(--dp-reg-line);padding:6px 8px;display:flex;flex-direction:column;gap:2px;}
+  .kcell .kc-top{display:flex;align-items:center;justify-content:space-between;}
+  .kcell .kc-tac{font-size:.5rem;font-weight:800;color:#0f57d6;background:#eaf3ff;border:1px solid #cfe1ff;
+    border-radius:3px;padding:0 4px;line-height:1.5;}
+  .kcell .kc-dep{font-size:.44rem;font-weight:800;text-transform:uppercase;color:var(--dp-reg-ink);
+    background:var(--dp-reg-bg);border:1px solid var(--dp-reg-line);border-radius:3px;padding:0 3px;}
+  /* option A: stat stack */
+  .kA .big{font-size:.9rem;font-weight:800;line-height:1;margin-top:2px;}
+  .kA .biglbl{font-size:.46rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .kA .up{color:var(--positive);font-size:.5rem;font-weight:700;}
+  .kA .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1px 8px;margin-top:3px;}
+  .kA .grid2 div{font-size:.5rem;color:var(--muted);}
+  .kA .grid2 b{color:var(--ink);font-weight:700;}
+  .kA .lyline{font-size:.46rem;color:var(--faint);margin-top:auto;}
+  /* option B: mini-bars vs LY */
+  .kB .row{display:flex;align-items:center;gap:5px;font-size:.5rem;}
+  .kB .row .lb{width:26px;color:var(--muted);font-weight:700;}
+  .kB .bar{flex:1;height:7px;border-radius:3px;background:#eef2f8;position:relative;overflow:hidden;}
+  .kB .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#8fb8f2;}
+  .kB .bar i.g{background:#7fd0a6;}
+  .kB .bar .ly{position:absolute;top:-1px;bottom:-1px;width:2px;background:#b6bfce;}
+  .kB .row b{width:34px;text-align:right;font-weight:800;color:var(--ink);}
+  /* option C: sparkline + headline */
+  .kC .big{font-size:.86rem;font-weight:800;}
+  .kC .up{font-size:.5rem;color:var(--positive);font-weight:700;}
+  .kC svg{display:block;margin-top:3px;}
+  .kC .mini{display:flex;gap:8px;margin-top:3px;font-size:.48rem;color:var(--muted);}
+  .kC .mini b{color:var(--ink);}
 </style>
 </head>
 <body>
 
-  <!-- ================= FRAME 1 · live demo (default → hover) ================= -->
+  <!-- ================= FRAME 1 · live demo ================= -->
   <div class="frame">
     <header class="head">
       <div>
         <span class="eyebrow">52-WEEK PLAN · PROMO CELL</span>
-        <h2>Cell expands on hover — no tooltip</h2>
-        <p>Default stays minimal exactly as today. Hovering a promoted cell grows the card in place and reveals
-           the merchant's full read: <b>KPI tiles</b>, <b>secondary rate metrics</b>, <b>store / digital tactic</b> and the
-           <b>cost ladder</b>.</p>
+        <h2>Cell expands on hover — promoted <em>and</em> non-promoted weeks</h2>
+        <p>Default stays minimal exactly as today. Hovering a <b>promoted</b> cell reveals the full read — KPI tiles,
+           rate metrics, store / digital tactic (each with its <b>LY</b> value) and the cost ladder. Hovering a
+           <b>non-promoted</b> cell reveals the same KPIs plus an editable <b>base price + cost ladder</b> — only the
+           promo-allowance section is empty. Every card carries its own <b>action buttons</b>, so the separate week screen
+           is no longer needed.</p>
       </div>
-      <span class="state-pill">INTERACTIVE — HOVER A CELL BELOW</span>
+      <span class="state-pill">INTERACTIVE — HOVER ANY CELL</span>
     </header>
 
-    <div class="hint"><b>Try it:</b>&nbsp;hover the blue <b>ID</b> cell on Coca-Cola W31 or the green <b>BXGX</b> cell on Pepsi W33. The card scales out of the cell after a short hover-intent delay.</div>
+    <div class="hint"><b>Try it:</b>&nbsp;hover the blue <b>ID</b> cell (Coca-Cola W31), the empty <b>W30</b> cell (non-promo — base &amp; cost), or the amber holiday <b>W33</b> cell.</div>
 
-    <div class="section-cap"><span class="n">1</span><strong>Default state — unchanged</strong><small>compact tactic cells, same density as the current 52-week grid</small></div>
+    <div class="section-cap"><span class="n">1</span><strong>Default state</strong><small>compact cells — depth shown as a colour rail + chip (yellow shallow · blue-grey regular · purple deep); holiday weeks flagged</small></div>
 
     <div class="gridwrap">
       <table class="wkgrid">
@@ -220,7 +319,7 @@
             <th>W30<span class="sub">Jul 20</span></th>
             <th>W31<span class="sub">Jul 27</span></th>
             <th>W32<span class="sub">Aug 3</span></th>
-            <th class="holiday">W33<span class="sub">Aug 10 · HOL</span></th>
+            <th class="holiday">W33<span class="sub">Aug 10</span><span class="holtag">★ LABOR DAY</span></th>
             <th>W34<span class="sub">Aug 17</span></th>
             <th>W35<span class="sub">Aug 24</span></th>
             <th>W36<span class="sub">Aug 31</span></th>
@@ -229,15 +328,80 @@
         <tbody>
           <tr>
             <td class="itemcell"><div class="item-name">COCA COLA ZERO SUGAR</div><div class="item-meta">NCRC 30043 · <em>12-12FZ</em></div></td>
-            <td></td>
-            <td class="hascell tactic-item">
+
+            <!-- NON-PROMO cell, now hoverable (points 1 & 2) -->
+            <td class="hascell cell-none">
+              <div class="pcell pcell-none">
+                <div class="none-lbl">No promo</div>
+                <div class="base"><span>BASE</span><b>$1.79</b></div>
+                <div class="kmini">Sales $9K · 6K u</div>
+                <button class="toggle-promo">＋ Promo</button>
+
+                <!-- non-promo card -->
+                <div class="pop">
+                  <div class="pop-head">
+                    <span class="ph-tac none">No promo</span>
+                    <div class="ph-main">
+                      <span class="ph-item">COCA COLA ZERO SUGAR 12-12FZ</span>
+                      <span class="ph-sub">W30 · Jul 20 – Jul 26 · Price area 4 · 245 stores · baseline</span>
+                    </div>
+                    <div class="ph-right"><button class="pin">📌 Pin</button></div>
+                  </div>
+                  <div class="kpis">
+                    <div class="kpi"><label>Units</label><b>6K</b><span class="vs dn">-2.1% vs LY</span><span class="ly">LY 6K</span></div>
+                    <div class="kpi"><label>Sales</label><b>$9K</b><span class="vs">+1.3% vs LY</span><span class="ly">LY $9K</span></div>
+                    <div class="kpi"><label>AGP</label><b>$5K</b><span class="vs">+0.8% vs LY</span><span class="ly">LY $5K</span></div>
+                  </div>
+                  <div class="strip none">
+                    <div class="sm"><label>AIV</label><b>$1.79</b><span class="ly">LY $1.77</span></div>
+                    <div class="sm"><label>List $/U</label><b class="empty">—</b><span class="ly">no promo</span></div>
+                    <div class="sm"><label>Funding $/U</label><b class="empty">—</b><span class="ly">no promo</span></div>
+                    <div class="sm"><label>Spend rate</label><b class="empty">—</b><span class="ly">no promo</span></div>
+                  </div>
+                  <div class="pop-cols">
+                    <div class="pcard">
+                      <div class="pcard-cap"><span class="sw sw-purple"></span>Promo allowances<span class="cap-note">empty — not on promo</span></div>
+                      <table class="tt">
+                        <tbody>
+                          <tr class="none-row"><td colspan="4">No tactic, depth or funding this week. Toggle to <b>Promo</b> to plan one — or just set the base price &amp; cost efficiency at right.</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="pcard">
+                      <div class="pcard-cap"><span class="sw sw-green"></span>Cost ladder</div>
+                      <div class="ladder">
+                        <div class="lrow head"><span class="nm">Base price</span><em class="lyv">LY $1.77</em><input class="mini-edit" value="$1.79"></div>
+                        <div class="lrow head"><span class="nm">Vendor list cost</span><em class="lyv">LY $0.97</em><input class="mini-edit" value="$1.00"></div>
+                        <div class="lgrp">Buying</div>
+                        <div class="lrow"><span class="nm">Off-invoice</span><em class="lyv">LY $0.25</em><b>$0.26</b></div>
+                        <div class="lrow"><span class="nm">Bill back</span><em class="lyv">LY $0.03</em><b>$0.03</b></div>
+                        <div class="lrow sub"><span class="nm">Total buying</span><em class="lyv">LY $0.28</em><b>$0.29</b></div>
+                        <div class="lrow"><span class="nm">Freight</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
+                        <div class="lrow tot"><span class="nm">Dead-net cost</span><em class="lyv">LY $0.71</em><b>$0.73</b></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="cardacts">
+                    <button class="act-add">＋ Add promo</button>
+                    <button class="act-ghost">Reset to optimizer</button>
+                  </div>
+                  <div class="refc">
+                    <span class="refc-msg">Set the <b>base price</b> or <b>cost efficiency</b> here — new values become the base for <b>W30 → W52</b>.</span>
+                    <button class="refc-btn">⟳ Reforecast</button>
+                  </div>
+                </div>
+              </div>
+            </td>
+
+            <!-- PROMO cell (shallow, item discount) -->
+            <td class="hascell tactic-item dp-shallow">
               <div class="pcell">
                 <div class="tok"><b>ID</b></div>
                 <div class="tok">@$1</div>
                 <div class="pr"><span class="ch">S</span><b>$1.25</b></div>
                 <div class="pr"><span class="ch chd">D</span><b>$1.15</b></div>
                 <div><span class="newt">NEW</span></div>
-                <div class="tags"><i class="ar-sh">▼</i><i class="opt">✦</i></div>
+                <div class="tags"><span class="depth depth-shallow">Shallow</span><i class="opt" title="optimized placement">✦</i></div>
 
                 <!-- expanded card -->
                 <div class="pop">
@@ -247,7 +411,7 @@
                       <span class="ph-item">COCA COLA ZERO SUGAR 12-12FZ</span>
                       <span class="ph-sub">W31 · Jul 27 – Aug 2 · Price area 4 · 245 stores · <span class="newt">NEW</span></span>
                     </div>
-                    <div class="ph-right"><i class="ar-sh" title="shallower vs LY">▼</i><i class="opt" title="optimized placement">✦</i><button class="pin">📌 Pin</button></div>
+                    <div class="ph-right"><span class="depth depth-shallow">Shallow</span><button class="pin">📌 Pin</button></div>
                   </div>
                   <div class="kpis">
                     <div class="kpi"><label>Units</label><b>20K</b><span class="vs">+17.5% vs LY</span><span class="ly">LY 17K</span></div>
@@ -262,85 +426,93 @@
                   </div>
                   <div class="pop-cols">
                     <div class="pcard">
-                      <div class="pcard-cap"><span class="sw sw-purple"></span>Tactic</div>
+                      <div class="pcard-cap"><span class="sw sw-purple"></span>Tactic<span class="cap-note">LY shown per line</span></div>
                       <table class="tt">
-                        <thead><tr><th></th><th>Store</th><th>Digital</th></tr></thead>
+                        <thead><tr><th></th><th>Store</th><th>Digital</th><th class="lycol">LY</th></tr></thead>
                         <tbody>
-                          <tr><td>Tactic</td><td><b>Item Discount</b></td><td><b>Meal Deal</b></td></tr>
-                          <tr><td>Base price</td><td colspan="2"><input class="mini-edit" value="$1.56"></td></tr>
-                          <tr><td>Promo price</td><td><b>$1.25</b></td><td><b>$1.15</b></td></tr>
-                          <tr><td>Depth</td><td>20%</td><td>26%</td></tr>
-                          <tr><td>MB / limit</td><td>1/6</td><td>1/6</td></tr>
-                          <tr><td>Ad / display</td><td>Y / Y</td><td>Y / N</td></tr>
+                          <tr><td>Tactic</td><td><b>Item Disc.</b></td><td><b>Meal Deal</b></td><td class="lyc">Item Disc.</td></tr>
+                          <tr><td>Base price</td><td colspan="2"><input class="mini-edit" value="$1.56"></td><td class="lyc">$1.58</td></tr>
+                          <tr><td>Promo price</td><td><b>$1.25</b></td><td><b>$1.15</b></td><td class="lyc">$1.29</td></tr>
+                          <tr><td>Depth</td><td>20%</td><td>26%</td><td class="lyc">18%</td></tr>
+                          <tr><td>MB / limit</td><td>1/6</td><td>1/6</td><td class="lyc">1/6</td></tr>
+                          <tr><td>Ad / display</td><td>Y / Y</td><td>Y / N</td><td class="lyc">Y / Y</td></tr>
                         </tbody>
                       </table>
                     </div>
                     <div class="pcard">
                       <div class="pcard-cap"><span class="sw sw-green"></span>Cost ladder</div>
                       <div class="ladder">
-                        <div class="lrow head"><span>Vendor list cost</span><em class="lyv">LY $0.97</em><input class="mini-edit" value="$1.00"></div>
+                        <div class="lrow head"><span class="nm">Vendor list cost</span><em class="lyv">LY $0.97</em><input class="mini-edit" value="$1.00"></div>
                         <div class="lgrp">Buying</div>
-                        <div class="lrow"><span>Off-invoice</span><em class="lyv">LY $0.25</em><b>$0.27</b></div>
-                        <div class="lrow"><span>Bill back</span><em class="lyv">LY $0.03</em><b>$0.03</b></div>
-                        <div class="lrow"><span>Price break</span><em class="lyv">LY $0.01</em><b>$0.01</b></div>
-                        <div class="lrow sub"><span>Total buying</span><em class="lyv">LY $0.29</em><b>$0.30</b></div>
-                        <div class="lrow"><span>Freight</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
-                        <div class="lrow sub"><span>Net cost</span><em class="lyv">LY $0.66</em><b>$0.67</b></div>
+                        <div class="lrow"><span class="nm">Off-invoice</span><em class="lyv">LY $0.25</em><b>$0.27</b></div>
+                        <div class="lrow"><span class="nm">Bill back</span><em class="lyv">LY $0.03</em><b>$0.03</b></div>
+                        <div class="lrow"><span class="nm">Price break</span><em class="lyv">LY $0.01</em><b>$0.01</b></div>
+                        <div class="lrow sub"><span class="nm">Total buying</span><em class="lyv">LY $0.29</em><b>$0.30</b></div>
+                        <div class="lrow"><span class="nm">Freight</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
+                        <div class="lrow sub"><span class="nm">Net cost</span><em class="lyv">LY $0.66</em><b>$0.67</b></div>
                         <div class="lgrp">Retail</div>
-                        <div class="lrow"><span>Scan · STS · New item</span><em class="lyv">LY $0.04</em><b>$0.06</b></div>
-                        <div class="lrow tot"><span>Dead-net cost</span><em class="lyv">LY $0.62</em><b>$0.61</b></div>
+                        <div class="lrow"><span class="nm">Scan · STS · New item</span><em class="lyv">LY $0.04</em><b>$0.06</b></div>
+                        <div class="lrow tot"><span class="nm">Dead-net cost</span><em class="lyv">LY $0.62</em><b>$0.61</b></div>
                       </div>
                     </div>
                   </div>
+                  <div class="cardacts">
+                    <button class="act-primary">✓ Approve week</button>
+                    <button class="act-ghost">Set no promo</button>
+                  </div>
                   <div class="refc">
-                    <span class="refc-msg">Edit <b>VLC</b> or <b>base price</b>, then Reforecast — new values become the base for <b>W31 → W52</b>.</span>
+                    <span class="refc-msg">Edit <b>VLC</b> or <b>base price</b>, then Reforecast — new values become the base for <b>W31 → W52</b> (22 weeks).</span>
                     <button class="refc-btn">⟳ Reforecast</button>
                   </div>
                 </div>
               </div>
             </td>
+
             <td></td>
-            <td class="holiday-col"></td>
-            <td class="hascell tactic-bxgx">
+
+            <!-- HOLIDAY promo cell (deep) -->
+            <td class="hascell tactic-bxgx holiday-col dp-deep">
               <div class="pcell">
                 <div class="tok"><b>BXGX</b></div>
                 <div class="tok">B2G1</div>
                 <div class="pr"><span class="ch">S</span><b>$1.39</b></div>
-                <div class="tok" style="margin-top:2px;color:var(--faint)">LY 28%</div>
-                <div class="tags"><i class="ar-dp">▲</i><i class="rep">↺</i></div>
+                <div class="tags"><span class="hol-flag">★ HOL</span><span class="depth depth-deep">Deep</span><i class="rep">↺</i></div>
               </div>
             </td>
-            <td></td><td></td>
+
+            <td></td><td></td><td></td>
           </tr>
+
           <tr>
             <td class="itemcell"><div class="item-name">PEPSI ZERO SUGAR</div><div class="item-meta">NCRC 30101 · <em>12-12FZ</em></div></td>
-            <td class="hascell tactic-item">
+            <td class="hascell tactic-item dp-reg">
               <div class="pcell">
                 <div class="tok"><b>ID</b></div>
                 <div class="tok">25%</div>
                 <div class="pr"><span class="ch">S</span><b>$1.49</b></div>
-                <div class="tok" style="margin-top:2px;color:var(--faint)">LY 25%</div>
-                <div class="tags"><i class="ar-sh">=</i><i class="rep">↺</i></div>
+                <div class="tags"><span class="depth depth-reg">Regular</span><i class="rep">↺</i></div>
               </div>
             </td>
             <td></td><td></td>
-            <td class="hascell tactic-bxgx holiday-col">
+
+            <!-- HOLIDAY promo cell with card (deep) -->
+            <td class="hascell tactic-bxgx holiday-col dp-deep">
               <div class="pcell">
                 <div class="tok"><b>BXGX</b></div>
                 <div class="tok">BOGO 50%</div>
                 <div class="pr"><span class="ch">S</span><b>$1.56</b></div>
                 <div class="pr"><span class="ch chd">D</span><b>$1.49</b></div>
                 <div><span class="newt">NEW</span></div>
-                <div class="tags"><i class="ar-dp">▲</i><i class="opt">✦</i></div>
+                <div class="tags"><span class="hol-flag">★ HOL</span><span class="depth depth-deep">Deep</span><i class="opt">✦</i></div>
 
-                <div class="pop">
+                <div class="pop open-left">
                   <div class="pop-head">
                     <span class="ph-tac bxgx">BXGX · BOGO 50%</span>
                     <div class="ph-main">
                       <span class="ph-item">PEPSI ZERO SUGAR 12-12FZ</span>
-                      <span class="ph-sub">W33 · Aug 10 – Aug 16 · Holiday wk · Price area 4 · 245 stores · <span class="newt">NEW</span></span>
+                      <span class="ph-sub">W33 · Aug 10 – Aug 16 · <span class="hol-flag">★ LABOR DAY</span> · Price area 4 · 245 stores · <span class="newt">NEW</span></span>
                     </div>
-                    <div class="ph-right"><i class="ar-dp" title="deeper vs LY">▲</i><i class="opt">✦</i><button class="pin">📌 Pin</button></div>
+                    <div class="ph-right"><span class="depth depth-deep">Deep</span><button class="pin">📌 Pin</button></div>
                   </div>
                   <div class="kpis">
                     <div class="kpi"><label>Units</label><b>24K</b><span class="vs">+22.1% vs LY</span><span class="ly">LY 20K</span></div>
@@ -355,35 +527,39 @@
                   </div>
                   <div class="pop-cols">
                     <div class="pcard">
-                      <div class="pcard-cap"><span class="sw sw-purple"></span>Tactic</div>
+                      <div class="pcard-cap"><span class="sw sw-purple"></span>Tactic<span class="cap-note">LY — (new item)</span></div>
                       <table class="tt">
-                        <thead><tr><th></th><th>Store</th><th>Digital</th></tr></thead>
+                        <thead><tr><th></th><th>Store</th><th>Digital</th><th class="lycol">LY</th></tr></thead>
                         <tbody>
-                          <tr><td>Tactic</td><td><b>Buy X Get X</b></td><td><b>Must Buy</b></td></tr>
-                          <tr><td>Base price</td><td colspan="2"><input class="mini-edit" value="$2.08"></td></tr>
-                          <tr><td>Promo price</td><td><b>$1.56</b></td><td><b>$1.49</b></td></tr>
-                          <tr><td>Depth</td><td>25%</td><td>28%</td></tr>
-                          <tr><td>MB / limit</td><td>2/6</td><td>2/6</td></tr>
-                          <tr><td>Ad / display</td><td>Y / Y</td><td>Y / Y</td></tr>
+                          <tr><td>Tactic</td><td><b>Buy X Get X</b></td><td><b>Must Buy</b></td><td class="lyc">—</td></tr>
+                          <tr><td>Base price</td><td colspan="2"><input class="mini-edit" value="$2.08"></td><td class="lyc">—</td></tr>
+                          <tr><td>Promo price</td><td><b>$1.56</b></td><td><b>$1.49</b></td><td class="lyc">—</td></tr>
+                          <tr><td>Depth</td><td>25%</td><td>28%</td><td class="lyc">—</td></tr>
+                          <tr><td>MB / limit</td><td>2/6</td><td>2/6</td><td class="lyc">—</td></tr>
+                          <tr><td>Ad / display</td><td>Y / Y</td><td>Y / Y</td><td class="lyc">—</td></tr>
                         </tbody>
                       </table>
                     </div>
                     <div class="pcard">
                       <div class="pcard-cap"><span class="sw sw-green"></span>Cost ladder</div>
                       <div class="ladder">
-                        <div class="lrow head"><span>Vendor list cost</span><em class="lyv">LY $1.08</em><input class="mini-edit" value="$1.12"></div>
+                        <div class="lrow head"><span class="nm">Vendor list cost</span><em class="lyv">LY $1.08</em><input class="mini-edit" value="$1.12"></div>
                         <div class="lgrp">Buying</div>
-                        <div class="lrow"><span>Off-invoice</span><em class="lyv">LY $0.29</em><b>$0.31</b></div>
-                        <div class="lrow"><span>Bill back</span><em class="lyv">LY $0.04</em><b>$0.04</b></div>
-                        <div class="lrow"><span>Price break</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
-                        <div class="lrow sub"><span>Total buying</span><em class="lyv">LY $0.35</em><b>$0.37</b></div>
-                        <div class="lrow"><span>Freight</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
-                        <div class="lrow sub"><span>Net cost</span><em class="lyv">LY $0.71</em><b>$0.77</b></div>
+                        <div class="lrow"><span class="nm">Off-invoice</span><em class="lyv">LY $0.29</em><b>$0.31</b></div>
+                        <div class="lrow"><span class="nm">Bill back</span><em class="lyv">LY $0.04</em><b>$0.04</b></div>
+                        <div class="lrow"><span class="nm">Price break</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
+                        <div class="lrow sub"><span class="nm">Total buying</span><em class="lyv">LY $0.35</em><b>$0.37</b></div>
+                        <div class="lrow"><span class="nm">Freight</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
+                        <div class="lrow sub"><span class="nm">Net cost</span><em class="lyv">LY $0.71</em><b>$0.77</b></div>
                         <div class="lgrp">Retail</div>
-                        <div class="lrow"><span>Scan · STS · New item</span><em class="lyv">LY $0.06</em><b>$0.07</b></div>
-                        <div class="lrow tot"><span>Dead-net cost</span><em class="lyv">LY $0.65</em><b>$0.70</b></div>
+                        <div class="lrow"><span class="nm">Scan · STS · New item</span><em class="lyv">LY $0.06</em><b>$0.07</b></div>
+                        <div class="lrow tot"><span class="nm">Dead-net cost</span><em class="lyv">LY $0.65</em><b>$0.70</b></div>
                       </div>
                     </div>
+                  </div>
+                  <div class="cardacts">
+                    <button class="act-primary">✓ Approve week</button>
+                    <button class="act-ghost">Set no promo</button>
                   </div>
                   <div class="refc">
                     <span class="refc-msg">Edit <b>VLC</b> or <b>base price</b>, then Reforecast — new values become the base for <b>W33 → W52</b>.</span>
@@ -394,16 +570,16 @@
             </td>
             <td></td><td></td><td></td>
           </tr>
+
           <tr>
             <td class="itemcell"><div class="item-name">SPRITE</div><div class="item-meta">NCRC 30077 · <em>12-12FZ</em></div></td>
             <td></td><td></td>
-            <td class="hascell tactic-mb">
+            <td class="hascell tactic-mb dp-shallow">
               <div class="pcell">
                 <div class="tok"><b>MB</b></div>
                 <div class="tok">4/$5</div>
                 <div class="pr"><span class="ch">S</span><b>$1.25</b></div>
-                <div class="tok" style="margin-top:2px;color:var(--faint)">LY 22%</div>
-                <div class="tags"><i class="ar-sh">▼</i><i class="rep">↺</i></div>
+                <div class="tags"><span class="depth depth-shallow">Shallow</span><i class="rep">↺</i></div>
               </div>
             </td>
             <td class="holiday-col"></td><td></td><td></td><td></td>
@@ -413,9 +589,9 @@
     </div>
   </div>
 
-  <!-- ================= FRAME 2 · anatomy of the expanded card ================= -->
+  <!-- ================= FRAME 2 · anatomy ================= -->
   <div class="frame">
-    <div class="section-cap" style="padding-top:18px;"><span class="n">2</span><strong>Hover state — anatomy</strong><small>the same Coca-Cola W31 cell, pinned open for reference</small></div>
+    <div class="section-cap" style="padding-top:18px;"><span class="n">2</span><strong>Hover state — anatomy</strong><small>Coca-Cola W31, pinned open. Overrides show the original value struck through in grey.</small></div>
 
     <div class="stateb-grid">
       <div class="stateb-canvas">
@@ -431,14 +607,14 @@
             <tr>
               <td class="itemcell"><div class="item-name">COCA COLA ZERO SUGAR</div><div class="item-meta">NCRC 30043 · <em>12-12FZ</em></div></td>
               <td></td>
-              <td class="hascell tactic-item">
+              <td class="hascell tactic-item dp-shallow">
                 <div class="pcell pinned">
                   <div class="tok"><b>ID</b></div>
                   <div class="tok">@$1</div>
                   <div class="pr"><span class="ch">S</span><b>$1.25</b></div>
                   <div class="pr"><span class="ch chd">D</span><b>$1.15</b></div>
                   <div><span class="newt">NEW</span></div>
-                  <div class="tags"><i class="ar-sh">▼</i><i class="opt">✦</i></div>
+                  <div class="tags"><span class="depth depth-shallow">Shallow</span><i class="opt">✦</i></div>
 
                   <div class="pop">
                     <div class="pop-head">
@@ -447,7 +623,7 @@
                         <span class="ph-item">COCA COLA ZERO SUGAR 12-12FZ</span>
                         <span class="ph-sub">W31 · Jul 27 – Aug 2 · Price area 4 · 245 stores · <span class="newt">NEW</span></span>
                       </div>
-                      <div class="ph-right"><i class="ar-sh">▼</i><i class="opt">✦</i><button class="pin on">📌 Pinned</button></div>
+                      <div class="ph-right"><span class="depth depth-shallow">Shallow</span><button class="pin on">📌 Pinned</button></div>
                     </div>
                     <div class="kpis">
                       <div class="kpi"><label>Units</label><b>20K</b><span class="vs">+17.5% vs LY</span><span class="ly">LY 17K</span></div>
@@ -462,38 +638,42 @@
                     </div>
                     <div class="pop-cols">
                       <div class="pcard">
-                        <div class="pcard-cap"><span class="sw sw-purple"></span>Tactic</div>
+                        <div class="pcard-cap"><span class="sw sw-purple"></span>Tactic<span class="cap-note">LY shown per line</span></div>
                         <table class="tt">
-                          <thead><tr><th></th><th>Store</th><th>Digital</th></tr></thead>
+                          <thead><tr><th></th><th>Store</th><th>Digital</th><th class="lycol">LY</th></tr></thead>
                           <tbody>
-                            <tr><td>Tactic</td><td><b>Item Discount</b></td><td><b>Meal Deal</b></td></tr>
-                            <tr><td>Base price</td><td colspan="2"><input class="mini-edit dirty" value="$1.49"></td></tr>
-                            <tr><td>Promo price</td><td><b>$1.25</b></td><td><b>$1.15</b></td></tr>
-                            <tr><td>Depth</td><td>20%</td><td>26%</td></tr>
-                            <tr><td>MB / limit</td><td>1/6</td><td>1/6</td></tr>
-                            <tr><td>Ad / display</td><td>Y / Y</td><td>Y / N</td></tr>
+                            <tr><td>Tactic</td><td><b>Item Disc.</b></td><td><b>Meal Deal</b></td><td class="lyc">Item Disc.</td></tr>
+                            <tr><td>Base price</td><td colspan="2"><span class="editwrap"><span class="orig">$1.56</span><input class="mini-edit dirty" value="$1.49"></span></td><td class="lyc">$1.58</td></tr>
+                            <tr><td>Promo price</td><td><b>$1.25</b></td><td><b>$1.15</b></td><td class="lyc">$1.29</td></tr>
+                            <tr><td>Depth</td><td>20%</td><td>26%</td><td class="lyc">18%</td></tr>
+                            <tr><td>MB / limit</td><td>1/6</td><td>1/6</td><td class="lyc">1/6</td></tr>
+                            <tr><td>Ad / display</td><td>Y / Y</td><td>Y / N</td><td class="lyc">Y / Y</td></tr>
                           </tbody>
                         </table>
                       </div>
                       <div class="pcard">
                         <div class="pcard-cap"><span class="sw sw-green"></span>Cost ladder</div>
                         <div class="ladder">
-                          <div class="lrow head"><span>Vendor list cost</span><em class="lyv">LY $0.97</em><input class="mini-edit dirty" value="$1.04"></div>
+                          <div class="lrow head"><span class="nm">Vendor list cost</span><span class="editwrap"><span class="orig">$1.00</span><input class="mini-edit dirty" value="$1.04"></span></div>
                           <div class="lgrp">Buying</div>
-                          <div class="lrow"><span>Off-invoice</span><em class="lyv">LY $0.25</em><b>$0.27</b></div>
-                          <div class="lrow"><span>Bill back</span><em class="lyv">LY $0.03</em><b>$0.03</b></div>
-                          <div class="lrow"><span>Price break</span><em class="lyv">LY $0.01</em><b>$0.01</b></div>
-                          <div class="lrow sub"><span>Total buying</span><em class="lyv">LY $0.29</em><b>$0.30</b></div>
-                          <div class="lrow"><span>Freight</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
-                          <div class="lrow sub"><span>Net cost</span><em class="lyv">LY $0.66</em><b>$0.71</b></div>
+                          <div class="lrow"><span class="nm">Off-invoice</span><em class="lyv">LY $0.25</em><b>$0.27</b></div>
+                          <div class="lrow"><span class="nm">Bill back</span><em class="lyv">LY $0.03</em><b>$0.03</b></div>
+                          <div class="lrow"><span class="nm">Price break</span><em class="lyv">LY $0.01</em><b>$0.01</b></div>
+                          <div class="lrow sub"><span class="nm">Total buying</span><em class="lyv">LY $0.29</em><b>$0.30</b></div>
+                          <div class="lrow"><span class="nm">Freight</span><em class="lyv">LY $0.02</em><b>$0.02</b></div>
+                          <div class="lrow sub"><span class="nm">Net cost</span><em class="lyv">LY $0.66</em><b>$0.71</b></div>
                           <div class="lgrp">Retail</div>
-                          <div class="lrow"><span>Scan · STS · New item</span><em class="lyv">LY $0.04</em><b>$0.06</b></div>
-                          <div class="lrow tot"><span>Dead-net cost</span><em class="lyv">LY $0.62</em><b>$0.65</b></div>
+                          <div class="lrow"><span class="nm">Scan · STS · New item</span><em class="lyv">LY $0.04</em><b>$0.06</b></div>
+                          <div class="lrow tot"><span class="nm">Dead-net cost</span><em class="lyv">LY $0.62</em><b>$0.65</b></div>
                         </div>
                       </div>
                     </div>
+                    <div class="cardacts">
+                      <button class="act-primary">✓ Approve week</button>
+                      <button class="act-ghost">Set no promo</button>
+                    </div>
                     <div class="refc dirty">
-                      <span class="refc-msg"><b>2 edits</b> — VLC $1.00 → <b>$1.04</b> · Base price $1.56 → <b>$1.49</b> (store &amp; digital). Reforecast updates Units / Sales / AGP and the new values become the base for <b>W31 → W52</b> (22 weeks).</span>
+                      <span class="refc-msg"><b>2 edits</b> — VLC $1.00 → <b>$1.04</b> · Base $1.56 → <b>$1.49</b>. Reforecast updates Units / Sales / AGP; new values become the base for <b>W31 → W52</b> (22 weeks).</span>
                       <button class="refc-btn">⟳ Reforecast</button>
                     </div>
                   </div>
@@ -504,27 +684,28 @@
           </tbody>
         </table>
 
-        <!-- numbered annotation dots over the pinned card -->
         <div class="anno" style="top:56px;left:772px;"><span class="dot">1</span></div>
         <div class="anno" style="top:118px;left:772px;"><span class="dot">2</span></div>
         <div class="anno" style="top:196px;left:772px;"><span class="dot">3</span></div>
         <div class="anno" style="top:268px;left:772px;"><span class="dot">4</span></div>
-        <div class="anno" style="top:505px;left:772px;"><span class="dot">5</span></div>
+        <div class="anno" style="top:470px;left:772px;"><span class="dot">5</span></div>
+        <div class="anno" style="top:540px;left:772px;"><span class="dot">6</span></div>
       </div>
 
       <div class="anno-key">
-        <div class="row"><span class="dot">1</span><span><b>Header echoes the cell</b> — tactic chip, item, <b>price area + store count</b>, NEW flag and depth / optimized icons carry over, so it reads as the cell growing, not a tooltip appearing. Pin keeps it open.</span></div>
-        <div class="row"><span class="dot">2</span><span><b>KPI tiles</b> — Units / Sales / AGP for the promo week with % vs LY and the LY value. Refresh when Reforecast runs.</span></div>
-        <div class="row"><span class="dot">3</span><span><b>Secondary metrics strip</b> — AIV, List $/U, Funding $/U and Spend rate, each with LY and delta (red when unfavourable).</span></div>
-        <div class="row"><span class="dot">4</span><span><b>Tactic + cost ladder</b> — store vs digital tactic with a condensed ladder down to dead-net, every line showing the grey <b>LY value</b> beside this year's. <b>VLC and base price are editable</b> — amber outline marks an unsaved edit.</span></div>
-        <div class="row"><span class="dot">5</span><span><b>Reforecast bar</b> — lists the pending edits and re-runs Units / Sales / AGP. On confirm, the new VLC / base price become the base for <b>all remaining weeks</b> (this week → W52).</span></div>
+        <div class="row"><span class="dot">1</span><span><b>Header echoes the cell</b> — tactic chip, item, price area + store count, NEW flag and the <b>depth colour chip</b> (shallow / regular / deep) carry over. Pin keeps it open.</span></div>
+        <div class="row"><span class="dot">2</span><span><b>KPI tiles</b> — Units / Sales / AGP with % vs LY and the LY value. Present on promoted <b>and</b> non-promoted weeks.</span></div>
+        <div class="row"><span class="dot">3</span><span><b>Rate strip</b> — AIV, List $/U, Funding $/U, Spend rate. On a non-promo week the funding cells read <b>“—”</b>.</span></div>
+        <div class="row"><span class="dot">4</span><span><b>Tactic + cost ladder</b> — store / digital / <b>LY</b> columns (LY “—” for new items). Every ladder line shows its grey LY. VLC &amp; base price are editable; an override shows the <b>original struck through in grey</b> beside the new value.</span></div>
+        <div class="row"><span class="dot">5</span><span><b>Action buttons</b> — Approve week / Set no promo (or ＋ Add promo on a baseline week). These replace the old separate week screen entirely.</span></div>
+        <div class="row"><span class="dot">6</span><span><b>Reforecast bar</b> — lists pending edits and re-runs the forecast; on confirm the new values become the base for <b>this week → W52</b>.</span></div>
       </div>
     </div>
   </div>
 
-  <!-- ================= FRAME 3 · base-grid markers after a reforecast ================= -->
+  <!-- ================= FRAME 3 · base-grid markers ================= -->
   <div class="frame">
-    <div class="section-cap" style="padding-top:18px;"><span class="n">3</span><strong>Base grid after a reforecast</strong><small>the only change to the 52-week screen itself — tiny cost / price markers from the change week forward</small></div>
+    <div class="section-cap" style="padding-top:18px;"><span class="n">3</span><strong>Grid markers, decoded</strong><small>depth = colour · S/D = store/digital price · C/P = a base cost / price change was made this week</small></div>
     <div class="gridwrap">
       <table class="wkgrid">
         <thead>
@@ -533,7 +714,7 @@
             <th>W30<span class="sub">Jul 20</span></th>
             <th>W31<span class="sub">Jul 27</span></th>
             <th>W32<span class="sub">Aug 3</span></th>
-            <th class="holiday">W33<span class="sub">Aug 10 · HOL</span></th>
+            <th class="holiday">W33<span class="sub">Aug 10</span><span class="holtag">★ LABOR DAY</span></th>
             <th>W34<span class="sub">Aug 17</span></th>
             <th>W35<span class="sub">Aug 24</span></th>
             <th>W36<span class="sub">Aug 31</span></th>
@@ -543,25 +724,24 @@
           <tr>
             <td class="itemcell"><div class="item-name">COCA COLA ZERO SUGAR</div><div class="item-meta">NCRC 30043 · <em>12-12FZ</em></div></td>
             <td></td>
-            <td class="hascell tactic-item">
+            <td class="hascell tactic-item dp-shallow">
               <div class="pcell">
                 <div class="tok"><b>ID</b></div>
                 <div class="tok">@$1</div>
                 <div class="pr"><span class="ch">S</span><b>$1.25</b></div>
                 <div class="pr"><span class="ch chd">D</span><b>$1.15</b></div>
                 <div><span class="newt">NEW</span></div>
-                <div class="tags"><i class="ar-sh">▼</i><i class="opt">✦</i><i class="chg chg-cost" title="base cost changed this week ($1.00 → $1.04)">C</i><i class="chg chg-price" title="base price changed this week ($1.56 → $1.49)">P</i></div>
+                <div class="tags"><span class="depth depth-shallow">Shallow</span><i class="opt">✦</i><span class="mk mk-cost" title="base cost changed this week ($1.00 → $1.04)">C ▲</span><span class="mk mk-price" title="base price changed this week ($1.56 → $1.49)">P ▼</span></div>
               </div>
             </td>
             <td></td>
             <td class="holiday-col"></td>
-            <td class="hascell tactic-bxgx">
+            <td class="hascell tactic-bxgx dp-deep">
               <div class="pcell">
                 <div class="tok"><b>BXGX</b></div>
                 <div class="tok">B2G1</div>
                 <div class="pr"><span class="ch">S</span><b>$1.39</b></div>
-                <div class="tok" style="margin-top:2px;color:var(--faint)">LY 28%</div>
-                <div class="tags"><i class="ar-dp">▲</i><i class="rep">↺</i><i class="chg chg-cost inherit" title="uses new base cost set in W31">C</i><i class="chg chg-price inherit" title="uses new base price set in W31">P</i></div>
+                <div class="tags"><span class="depth depth-deep">Deep</span><i class="rep">↺</i></div>
               </div>
             </td>
             <td></td><td></td>
@@ -569,34 +749,110 @@
         </tbody>
       </table>
       <div class="chg-legend">
-        <span class="lg"><i class="chg chg-cost">C</i> base cost changed this week</span>
-        <span class="lg"><i class="chg chg-price">P</i> base price changed this week</span>
-        <span class="lg"><i class="chg chg-cost inherit">C</i><i class="chg chg-price inherit">P</i> hollow = on the new base (set in an earlier week)</span>
-        <span class="lg" style="color:var(--faint)">Everything else on the grid stays exactly as today.</span>
+        <span class="lg-title">Depth (cell colour rail + chip)</span>
+        <span class="lg"><span class="swatch" style="background:var(--dp-shallow-bg);border-color:var(--dp-shallow-line)"></span><span class="depth depth-shallow">Shallow</span> lighter discount</span>
+        <span class="lg"><span class="swatch" style="background:var(--dp-reg-bg);border-color:var(--dp-reg-line)"></span><span class="depth depth-reg">Regular</span> standard event</span>
+        <span class="lg"><span class="swatch" style="background:var(--dp-deep-bg);border-color:var(--dp-deep-line)"></span><span class="depth depth-deep">Deep</span> aggressive discount</span>
+
+        <span class="lg-title">Price shown</span>
+        <span class="lg"><span class="ch">S</span> store price&nbsp;&nbsp;<span class="ch chd">D</span> digital price</span>
+
+        <span class="lg-title">Base change made this week</span>
+        <span class="lg"><span class="mk mk-cost">C ▲</span> base cost changed (▲ up / ▼ down)</span>
+        <span class="lg"><span class="mk mk-price">P ▼</span> base price changed (▲ up / ▼ down)</span>
+
+        <span class="lg-title">Calendar</span>
+        <span class="lg"><span class="hol-flag">★ HOL</span> holiday / event week</span>
+        <span class="lg"><i class="opt" style="font-style:normal;color:#15805a">✦</i> optimizer pick&nbsp;&nbsp;<i class="rep" style="font-style:normal;color:var(--faint)">↺</i> repeats last year</span>
       </div>
+      <p style="font-size:.64rem;color:var(--faint);margin:8px 0 0;">Removed: the confusing hollow “inherited” badge and the ▼/▲/= depth arrows. Depth now reads instantly as a colour; C/P only appear where a base value actually changed.</p>
     </div>
   </div>
 
-  <!-- ================= FRAME 4 · behaviour ================= -->
+  <!-- ================= FRAME 4 · KPI-in-cell options (calendar point 2) ================= -->
   <div class="frame">
-    <div class="section-cap" style="padding-top:18px;"><span class="n">4</span><strong>Behaviour</strong><small>rules for wiring it into the 52-week screen</small></div>
+    <div class="section-cap" style="padding-top:18px;"><span class="n">4</span><strong>“KPI mode” — all metrics in the cell, no hover · 3 options to choose from</strong>
+      <small>You asked whether everything fits in one card without a hover. It can’t show <em>all</em> of it — so each option makes a different trade-off. Pick one and I’ll wire it up.</small></div>
+
+    <div class="opts">
+      <!-- Option A -->
+      <div class="optcard">
+        <div class="oc-head"><b>A · Headline + 2×2</b><p>One hero metric big, the rest in a tight 2×2, LY as one grey line. Densest / most readable.</p></div>
+        <div class="oc-stage">
+          <div class="kcell kA">
+            <div class="kc-top"><span class="kc-tac">ID @$1</span><span class="kc-dep">Reg</span></div>
+            <div class="biglbl">Sales</div>
+            <div class="big">$28K <span class="up">+19.7%</span></div>
+            <div class="grid2">
+              <div>Units <b>20K</b></div><div>AGP <b>$16K</b></div>
+              <div>AIV <b>$1.67</b></div><div>Fund/u <b>$0.40</b></div>
+            </div>
+            <div class="lyline">LY: $23K · 17K u · $13K AGP</div>
+          </div>
+        </div>
+        <div class="oc-foot"><b>Shows:</b> Sales, Units, AGP, AIV, Funding/u + one LY line.<br><b>Drops from view:</b> per-metric LY deltas, spend rate (still in hover).</div>
+      </div>
+
+      <!-- Option B -->
+      <div class="optcard">
+        <div class="oc-head"><b>B · Mini-bars vs LY</b><p>Each KPI a tiny bar; the grey notch is LY, so “beats LY” is visible at a glance. Most visual.</p></div>
+        <div class="oc-stage">
+          <div class="kcell kB">
+            <div class="kc-top"><span class="kc-tac">ID @$1</span><span class="kc-dep">Reg</span></div>
+            <div class="row"><span class="lb">Sal</span><span class="bar"><i class="g" style="width:82%"></i><span class="ly" style="left:70%"></span></span><b>$28K</b></div>
+            <div class="row"><span class="lb">Un</span><span class="bar"><i style="width:74%"></i><span class="ly" style="left:63%"></span></span><b>20K</b></div>
+            <div class="row"><span class="lb">AGP</span><span class="bar"><i class="g" style="width:68%"></i><span class="ly" style="left:56%"></span></span><b>$16K</b></div>
+            <div class="row"><span class="lb">AIV</span><span class="bar"><i style="width:60%"></i><span class="ly" style="left:58%"></span></span><b>$1.67</b></div>
+            <div class="row"><span class="lb">F/u</span><span class="bar"><i style="width:55%"></i><span class="ly" style="left:52%"></span></span><b>$0.40</b></div>
+          </div>
+        </div>
+        <div class="oc-foot"><b>Shows:</b> 5 KPIs with a value + LY notch each — LY comparison built in.<br><b>Drops from view:</b> exact LY numbers &amp; % (in hover). Tallest layout.</div>
+      </div>
+
+      <!-- Option C -->
+      <div class="optcard">
+        <div class="oc-head"><b>C · Headline + sparkline</b><p>One hero metric + a 52-wk trend landing on this week; two small stats under. Best for “where’s this heading”.</p></div>
+        <div class="oc-stage">
+          <div class="kcell kC">
+            <div class="kc-top"><span class="kc-tac">ID @$1</span><span class="kc-dep">Reg</span></div>
+            <div class="big">$28K <span class="up">+19.7%</span></div>
+            <svg width="134" height="30" viewBox="0 0 134 30">
+              <polyline points="0,22 15,20 30,23 45,16 60,18 75,10 90,14 105,8 120,11 134,5"
+                fill="none" stroke="#8fb8f2" stroke-width="2"/>
+              <line x1="0" y1="24" x2="134" y2="24" stroke="#d9e0ec" stroke-width="1" stroke-dasharray="2 2"/>
+              <circle cx="134" cy="5" r="2.6" fill="#1769e8"/>
+            </svg>
+            <div class="mini"><span>Un <b>20K</b></span><span>AGP <b>$16K</b></span><span>LY <b>$23K</b></span></div>
+          </div>
+        </div>
+        <div class="oc-foot"><b>Shows:</b> Sales hero + trend + Units, AGP, LY.<br><b>Drops from view:</b> AIV, funding, spend rate (in hover). Adds trend context none of the others have.</div>
+      </div>
+    </div>
+    <div class="hint" style="margin:6px 22px 18px;"><b>My take:</b>&nbsp;<b>A</b> if merchants mainly read numbers · <b>B</b> if the daily question is “are we beating LY” · <b>C</b> if trajectory matters most. The KPI-mode toggle sits next to the calendar’s existing view switch; hover still opens the full editable card on top.</div>
+  </div>
+
+  <!-- ================= FRAME 5 · behaviour ================= -->
+  <div class="frame">
+    <div class="section-cap" style="padding-top:18px;"><span class="n">5</span><strong>Behaviour</strong><small>rules for wiring it into the 52-week screen</small></div>
     <div class="notes">
       <div class="note"><h4><span class="ic">⏱</span>Hover intent, not tooltip</h4>
-        <p>Expands after <b>~200ms</b> of hover; collapses <b>~150ms</b> after the pointer leaves cell + card (card is hoverable). Moving along the row never flashes cards open.</p></div>
-      <div class="note"><h4><span class="ic">📌</span>Click pins</h4>
-        <p>Click (or Enter on a focused cell) <b>pins</b> the card so the merchant can compare against other cells or scroll. <b>Esc</b> / click-away unpins. Only one card open at a time.</p></div>
+        <p>Expands after <b>~200ms</b> of hover; collapses <b>~150ms</b> after the pointer leaves cell + card. Applies to promoted <b>and</b> non-promoted cells.</p></div>
+      <div class="note"><h4><span class="ic">🔀</span>Promo ⇄ No-promo toggle</h4>
+        <p>Every week is scored both ways. A non-promo cell shows <b>＋ Promo</b>; a promo card shows <b>Set no promo</b>. Toggling flips the cell to the other scored option — promo cells show the tactic card, baseline cells show base + cost only.</p></div>
       <div class="note"><h4><span class="ic">🧭</span>Edge-aware placement</h4>
-        <p>The card anchors to the cell's top-left and grows right/down. In the last ~5 week columns it flips to grow <b>leftwards</b>; bottom rows grow <b>upwards</b>. It never covers the item name column of its own row.</p></div>
-      <div class="note"><h4><span class="ic">⚡</span>Lazy data</h4>
-        <p>Cost ladder + weekly KPIs fetch on first hover per cell and cache for the session; tiles show a light skeleton for the &lt;300ms load. The compact grid stays as fast as today.</p></div>
+        <p>Card anchors top-left, grows right/down; last columns flip to grow <b>left</b>, bottom rows grow <b>up</b>. Never covers its own item-name column.</p></div>
+      <div class="note"><h4><span class="ic">🎨</span>Depth = colour</h4>
+        <p>Shallow <b>yellow</b>, Regular <b>blue-grey</b>, Deep <b>purple</b> — a left colour rail + chip on each cell. Replaces the old ▼/▲/= arrows so depth reads without decoding.</p></div>
+      <div class="note"><h4><span class="ic">✎</span>Override shows the original</h4>
+        <p>Editing VLC or base price keeps the <b>original value struck through in grey</b> beside the input, and marks the field amber until Reforecast.</p></div>
+      <div class="note"><h4><span class="ic">📅</span>LY on every line</h4>
+        <p>Tactic + cost-ladder rows each show the grey LY value; new items with no history show <b>“LY —”</b> so the column never looks broken.</p></div>
       <div class="note"><h4><span class="ic">🎬</span>Grow-from-cell motion</h4>
-        <p>Card scales from the cell's corner (<b>~160ms</b>, slight overshoot) with a blue focus ring tying cell and card together. Reduced-motion users get a simple fade.</p></div>
-      <div class="note"><h4><span class="ic">📐</span>Fixed anatomy</h4>
-        <p>Sections always appear in the same order — KPIs, rate strip, tactic, ladder — so merchants build muscle memory. Anything missing (e.g. no digital tactic) renders as a muted “—”, the card never reflows.</p></div>
+        <p>Card scales from the cell corner (~160ms, slight overshoot) with a blue focus ring. Reduced-motion users get a fade.</p></div>
+      <div class="note"><h4><span class="ic">🗂</span>No separate week screen</h4>
+        <p>The card’s <b>action buttons</b> (Approve / Set-or-Add promo) do everything the old click-through screen did — so that screen is retired.</p></div>
       <div class="note"><h4><span class="ic">🔁</span>Inline reforecast</h4>
-        <p>VLC and base price are editable in the card (card auto-pins on first keystroke). Base price is <b>one value for both store and digital</b> — never set per channel. <b>Reforecast</b> re-runs Units / Sales / AGP with the edits; on confirm the new values become the base for <b>this week → W52</b>. Ladder-derived lines (net, dead-net) recompute live.</p></div>
-      <div class="note"><h4><span class="ic">🏷</span>Change markers on the grid</h4>
-        <p>After a reforecast the base grid shows tiny <b>C</b> / <b>P</b> badges — solid on the week the change was made, hollow on later weeks running on the new base. Hovering any marked week's card shows the values; nothing else on the grid changes.</p></div>
+        <p>Base price is <b>one value for both store and digital</b>. Reforecast re-runs Units / Sales / AGP; on confirm the new base carries <b>this week → W52</b>. Ladder-derived lines recompute live.</p></div>
     </div>
   </div>
 
