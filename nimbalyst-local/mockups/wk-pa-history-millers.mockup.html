@@ -79,6 +79,8 @@
   .chline .tn{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;}
   .chline small{color:var(--faint);font-size:.56rem;}
   .chline .dt{color:var(--promo-ink);font-weight:700;font-size:.58rem;}
+  .chline .sc{margin-left:auto;flex:none;font-size:.58rem;font-weight:700;color:var(--muted);}
+  .chline .sc.neg{color:var(--red);}
   /* KPI view of a PA row — every PA's metrics in a nutshell, no clicking */
   /* KPI view: metrics as COLUMNS, rows = this year / LY / Δ (abs + %) —
      the same CY / LY / Δ mini-table pattern the plan's month cells use */
@@ -321,12 +323,13 @@
   const FLAT=[]; VENDORS.forEach((v)=>v[1].forEach((it)=>FLAT.push({vendor:v[0],nm:it[0],pack:it[1],id:it[2]})));
   const PA_TOTAL=30;
   // per-option: store + digital lines, each tactic · discount type · MB/Lim · circular
+  // R · G is scored per channel — srg on the store line, drg on the digital line
   const OPTS=[
-    {n:"#1 REC",rec:true,s:77,rg:"R 83 · G 65",st:["Item Discount","PP $1.93","MB 1/6","Circ Y"],dg:["Item Discount","PP $1.90","Lim 6","Circ Y"]},
-    {n:"#2",s:73,rg:"R 82 · G 64",st:["Item Discount","¢ off · 48¢","MB 1/6","Circ Y"],dg:["Personalized","PP $1.90","Lim 6","Circ N"]},
-    {n:"#3",s:71,rg:"R 80 · G 62",st:["Item Discount","% off · 20%","MB 1/6","Circ Y"],dg:["Meal Deal","PP $1.90","Lim 6","Circ N"]},
-    {n:"#4",s:70,rg:"R 79 · G 61",st:["Buy X Get X","BOGO 50%","MB 2/8","Circ Y"],dg:["Must Buy","PP $1.90","Lim 8","Circ Y"]},
-    {n:"#5",s:60,rg:"R 60 · G 59",low:true,st:["Buy X Get X","B1G1 Free","MB 2/8","Circ Y"],dg:["Fab 5","PP $1.43","Lim 8","Circ N"]}
+    {n:"#1 REC",rec:true,s:77,srg:"R 83 · G 65",drg:"R 81 · G 63",st:["Item Discount","PP $1.93","MB 1/6","Circ Y"],dg:["Item Discount","PP $1.90","Lim 6","Circ Y"]},
+    {n:"#2",s:73,srg:"R 82 · G 64",drg:"R 80 · G 62",st:["Item Discount","¢ off · 48¢","MB 1/6","Circ Y"],dg:["Personalized","PP $1.90","Lim 6","Circ N"]},
+    {n:"#3",s:71,srg:"R 80 · G 62",drg:"R 78 · G 60",st:["Item Discount","% off · 20%","MB 1/6","Circ Y"],dg:["Meal Deal","PP $1.90","Lim 6","Circ N"]},
+    {n:"#4",s:70,srg:"R 79 · G 61",drg:"R 77 · G 60",st:["Buy X Get X","BOGO 50%","MB 2/8","Circ Y"],dg:["Must Buy","PP $1.90","Lim 8","Circ Y"]},
+    {n:"#5",s:60,srg:"R 60 · G 59",drg:"R 58 · G 57",low:true,st:["Buy X Get X","B1G1 Free","MB 2/8","Circ Y"],dg:["Fab 5","PP $1.43","Lim 8","Circ N"]}
   ];
   const SEL={n:0,p:0,o:0}; let PMODE="deal";
 
@@ -403,10 +406,9 @@
     OPTS.forEach((x,i)=>{
       h+='<div class="orow'+(SEL.o===i?" drill":"")+'" data-i="'+i+'">'+
         '<div class="omain">'+
-          '<div class="otop"><span class="radio"></span><span class="oname">'+(x.rec?'<span class="rec-pill">#1 REC</span>':x.n)+'</span>'+
-          '<span class="oscore"><small class="'+(x.low?"np-neg":"")+'">'+x.rg+"</small></span></div>"+
-          '<div class="chline"><span class="ch">S</span><span class="tn">'+x.st[0]+'</span><span class="dt">'+x.st[1]+'</span><small>'+x.st[2]+'</small><small>'+x.st[3]+"</small></div>"+
-          '<div class="chline"><span class="ch d">D</span><span class="tn">'+x.dg[0]+'</span><span class="dt">'+x.dg[1]+'</span><small>'+x.dg[2]+'</small><small>'+x.dg[3]+"</small></div>"+
+          '<div class="otop"><span class="radio"></span><span class="oname">'+(x.rec?'<span class="rec-pill">#1 REC</span>':x.n)+"</span></div>"+
+          '<div class="chline"><span class="ch">S</span><span class="tn">'+x.st[0]+'</span><span class="dt">'+x.st[1]+'</span><small>'+x.st[2]+'</small><small>'+x.st[3]+'</small><span class="sc'+(x.low?" neg":"")+'">'+x.srg+"</span></div>"+
+          '<div class="chline"><span class="ch d">D</span><span class="tn">'+x.dg[0]+'</span><span class="dt">'+x.dg[1]+'</span><small>'+x.dg[2]+'</small><small>'+x.dg[3]+'</small><span class="sc'+(x.low?" neg":"")+'">'+x.drg+"</span></div>"+
         "</div></div>";
     });
     h+='<div class="refrow"><span class="refpill ly">LY</span><b>Buy 5 Get 3</b> · $1.50<span class="rv">$5K · 2K · $3K</span></div>';

@@ -1955,15 +1955,20 @@
     pd.offers.forEach((of) => {
       const on = chosen.id === of.id;
       const rank = of.isCustom ? '<span class="npv2-wk-pl">CUSTOM</span>' : of.isRec ? '<span class="npv2-mil-rec">#1 REC</span>' : "#" + of.rank;
-      const rg = of.isCustom || of.total == null ? '<small class="npv2-wk-mut">not scored</small>' : '<small class="' + (of.total < 62 ? "np-neg" : "") + '">R ' + of.R + " · G " + of.G + "</small>";
+      // R · G is scored PER CHANNEL — one pair on the store line, one on the digital line
+      const scored = !of.isCustom && of.total != null;
+      const dR = scored ? Math.max(40, of.R - 1 - (of.rank % 2)) : 0, dG = scored ? Math.max(40, of.G - 2) : 0;
+      const sc = (r, g) => '<span class="npv2-mil-chsc' + (r < 62 ? " np-neg" : "") + '">R ' + r + " · G " + g + "</span>";
+      const sScore = scored ? sc(of.R, of.G) : '<span class="npv2-mil-chsc npv2-wk-mut">not scored</span>';
+      const dScore = scored ? sc(dR, dG) : "";
       const sDisc = of.storeCode === "BXGX" ? esc(of.label) : "Save $" + of.save.toFixed(2);
       const dig = of.digName
-        ? '<div class="npv2-mil-ch"><i class="npv2-mil-chip d">D</i><span class="npv2-mil-tn">' + esc(of.digName) + '</span><b class="npv2-mil-dt">$' + of.digPromo.toFixed(2) + "</b><small>Lim " + esc(of.mb.split("/")[1] || "6") + "</small><small>Circ " + (of.ad.slice(-1) === "Y" ? "Y" : "N") + "</small></div>"
+        ? '<div class="npv2-mil-ch"><i class="npv2-mil-chip d">D</i><span class="npv2-mil-tn">' + esc(of.digName) + '</span><b class="npv2-mil-dt">$' + of.digPromo.toFixed(2) + "</b><small>Lim " + esc(of.mb.split("/")[1] || "6") + "</small><small>Circ " + (of.ad.slice(-1) === "Y" ? "Y" : "N") + "</small>" + dScore + "</div>"
         : '<div class="npv2-mil-ch"><i class="npv2-mil-chip d">D</i><span class="npv2-wk-mut">No digital</span></div>';
       // radio lives in the top line so the S / D lines start at the left edge, like the PA pane
       rows += '<div class="npv2-mil-row npv2-mil-opt' + (on ? " is-on" : "") + '" data-pick="' + pd.pa + "|" + esc(of.id) + '">' +
-        '<div class="npv2-mil-otop"><span class="npv2-wk-radio' + (on ? " on" : "") + '"></span><span class="npv2-mil-oname">' + rank + '</span><span class="npv2-mil-oscore">' + rg + "</span></div>" +
-        '<div class="npv2-mil-ch"><i class="npv2-mil-chip">S</i><span class="npv2-mil-tn">' + esc(of.storeName) + '</span><b class="npv2-mil-dt">' + sDisc + '</b><small>MB ' + esc(of.mb) + "</small><small>Circ " + (of.ad.charAt(0) === "Y" ? "Y" : "N") + "</small></div>" + dig +
+        '<div class="npv2-mil-otop"><span class="npv2-wk-radio' + (on ? " on" : "") + '"></span><span class="npv2-mil-oname">' + rank + "</span></div>" +
+        '<div class="npv2-mil-ch"><i class="npv2-mil-chip">S</i><span class="npv2-mil-tn">' + esc(of.storeName) + '</span><b class="npv2-mil-dt">' + sDisc + '</b><small>MB ' + esc(of.mb) + "</small><small>Circ " + (of.ad.charAt(0) === "Y" ? "Y" : "N") + "</small>" + sScore + "</div>" + dig +
         "</div>";
     });
     rows += '<div class="npv2-mil-ref"><span class="npv2-wk-refpill ly">LY</span><b>' + esc(pd.ly.label) + "</b> · $" + pd.ly.promo.toFixed(2) + '<span class="npv2-mil-refv">' + wkM(pd.ly.sales) + " · " + wkU(pd.ly.units) + " · " + wkM(pd.ly.agp) + "</span></div>";

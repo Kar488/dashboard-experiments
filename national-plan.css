@@ -2958,19 +2958,19 @@ body.dark .npv2-wk-table tfoot td.npv2-wk-buyt { color: #9fe6c8; background: rgb
    override) › week KPIs › 52-week benchmark. Worklist rail and the
    Cost-ladder/Explain side panel frame it. Panes swipe-scroll, no scrollbars. */
 .npv2-wk-body.is-mil { grid-template-columns: minmax(0, 1fr) 272px; }
-.npv2-mil { display: grid; grid-template-columns: minmax(186px,.75fr) minmax(210px,.85fr) minmax(266px,1.1fr) minmax(196px,.8fr) minmax(264px,1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; margin-top: 14px; }
+.npv2-mil { display: grid; grid-template-columns: minmax(196px,.75fr) minmax(224px,.85fr) minmax(286px,1.1fr) minmax(206px,.8fr) minmax(300px,1.05fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; margin-top: 14px; }
 body.dark .npv2-mil { background: #131d30; border-color: #2c3a52; }
 .npv2-mil-pane { border-right: 1px solid var(--line); min-width: 0; display: flex; flex-direction: column; }
 .npv2-mil-pane:last-child { border-right: 0; }
 body.dark .npv2-mil-pane { border-right-color: #2c3a52; }
-.npv2-mil-phead { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 11px; background: #fafbfd; border-bottom: 1px solid var(--line); }
+.npv2-mil-phead { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 16px; background: #fafbfd; border-bottom: 1px solid var(--line); }
 body.dark .npv2-mil-phead { background: #1a2334; border-bottom-color: #2c3a52; }
 .npv2-mil-bench .npv2-mil-phead { background: #f1f5fc; }
 body.dark .npv2-mil-bench .npv2-mil-phead { background: #1d2a44; }
-.npv2-mil-ttl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.npv2-mil-bench .npv2-mil-ttl { text-transform: none; font-size: 0.68rem; color: var(--ink); }
+.npv2-mil-ttl { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.npv2-mil-bench .npv2-mil-ttl { text-transform: none; font-size: 0.72rem; color: var(--ink); }
 body.dark .npv2-mil-bench .npv2-mil-ttl { color: #e6ecf5; }
-.npv2-mil-cnt { margin-left: auto; font-size: 0.58rem; color: var(--faint); font-weight: 600; white-space: nowrap; }
+.npv2-mil-cnt { margin-left: auto; font-size: 0.6rem; color: var(--faint); font-weight: 600; white-space: nowrap; }
 /* Deal ⇄ KPIs capsule — beat the global button sizing (min-height 34 / radius 8 / pad 7 13) */
 .npv2-mil-seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; flex: none; }
 .npv2-mil-seg button { border: 0 !important; border-radius: 0 !important; min-height: 0 !important; height: auto;
@@ -2990,7 +2990,7 @@ body.dark .npv2-mil-loaded { background: linear-gradient(180deg, rgba(19,29,48,0
 body.dark .npv2-mil-vhead { background: #16213a; border-bottom-color: #223047; }
 .npv2-mil-vhead .vc { margin-left: auto; background: #eef1f6; color: var(--muted); border-radius: 10px; padding: 0 7px; font-size: 0.56rem; }
 body.dark .npv2-mil-vhead .vc { background: #223047; color: #9fb0c4; }
-.npv2-mil-irow { display: flex; align-items: flex-start; gap: 7px; padding: 7px 12px; border-bottom: 1px solid #eef1f6; cursor: pointer; position: relative; }
+.npv2-mil-irow { display: flex; align-items: flex-start; gap: 8px; padding: 11px 16px; border-bottom: 1px solid #eef1f6; cursor: pointer; position: relative; }
 body.dark .npv2-mil-irow { border-bottom-color: #223047; }
 .npv2-mil-irow:hover { background: #fbfcfe; }
 body.dark .npv2-mil-irow:hover { background: #182338; }
@@ -3002,58 +3002,60 @@ body.dark .npv2-mil-irow.is-on { background: rgba(23,105,232,0.16); }
 .npv2-mil-irow.is-done .npv2-mil-inum { background: var(--green); color: #fff; }
 body.dark .npv2-mil-inum { background: #223047; color: #9fb0c4; }
 .npv2-mil-imain { min-width: 0; }
-.npv2-mil-imain .icode { display: block; font-size: 0.52rem; color: var(--faint); font-weight: 600; }
-.npv2-mil-imain .iname { display: block; font-size: 0.66rem; font-weight: 700; line-height: 1.25; }
+.npv2-mil-imain .icode { display: block; font-size: 0.56rem; color: var(--faint); font-weight: 600; }
+.npv2-mil-imain .iname { display: block; font-size: 0.72rem; font-weight: 700; line-height: 1.3; }
 .npv2-mil-imain .iname i { font-style: normal; color: var(--faint); font-weight: 500; }
 
 /* rows shared by the PA + promotion panes */
-.npv2-mil-row { padding: 9px 12px; border-bottom: 1px solid #eef1f6; cursor: pointer; position: relative; }
+.npv2-mil-row { padding: 15px 16px; border-bottom: 1px solid #eef1f6; cursor: pointer; position: relative; }
 body.dark .npv2-mil-row { border-bottom-color: #223047; }
 .npv2-mil-row:hover { background: #fbfcfe; }
 body.dark .npv2-mil-row:hover { background: #182338; }
 .npv2-mil-row.is-on { background: var(--blue-soft, #eef4ff); }
 .npv2-mil-row.is-on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--blue); }
 body.dark .npv2-mil-row.is-on { background: rgba(23,105,232,0.16); }
-.npv2-mil-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-.npv2-mil-pa { font-size: 0.66rem; font-weight: 750; }
-.npv2-mil-costs { margin-left: auto; font-size: 0.56rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.npv2-mil-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+.npv2-mil-pa { font-size: 0.74rem; font-weight: 750; }
+.npv2-mil-costs { margin-left: auto; font-size: 0.62rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .npv2-mil-costs b { color: var(--ink); font-weight: 700; }
 body.dark .npv2-mil-costs b { color: #e6ecf5; }
-.npv2-mil-ch { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 0.64rem; white-space: nowrap; overflow: hidden; }
+.npv2-mil-ch { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 0.7rem; white-space: nowrap; overflow: hidden; }
 /* S / D channel chips — exact mockup treatment (Inter, square, solid) */
-.npv2-mil-chip { flex: none; font-style: normal; font-family: inherit; font-size: 0.5rem; font-weight: 800; color: #fff; background: #8aa0bd; border-radius: 2px; padding: 0 3px; line-height: 1.5; }
+.npv2-mil-chip { flex: none; font-style: normal; font-family: inherit; font-size: 0.54rem; font-weight: 800; color: #fff; background: #8aa0bd; border-radius: 2px; padding: 0 3px; line-height: 1.5; }
 .npv2-mil-chip.d { background: #3b6fb5; }
 .npv2-mil-pp { font-weight: 800; color: var(--promo-ink, #9a7926); }
 .npv2-mil-ch span { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .npv2-mil-tn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
-.npv2-mil-dt { color: var(--promo-ink, #9a7926); font-weight: 700; font-size: 0.6rem; }
-.npv2-mil-ch small { color: var(--faint); font-size: 0.56rem; font-weight: 500; }
+.npv2-mil-dt { color: var(--promo-ink, #9a7926); font-weight: 700; font-size: 0.66rem; }
+.npv2-mil-ch small { color: var(--faint); font-size: 0.62rem; font-weight: 500; }
 
 /* PA rows: KPI view — metrics as columns, rows CY / LY / Δ */
 .npv2-mil-kt { width: 100%; border-collapse: collapse; margin-top: 3px; }
-.npv2-mil-kt td { padding: 1px 0 1px 8px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; border: 0; font-size: 0.56rem; }
+.npv2-mil-kt td { padding: 1.5px 0 1.5px 8px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; border: 0; font-size: 0.6rem; }
 .npv2-mil-kt td:first-child { padding-left: 0; text-align: left; width: 14px; }
-.npv2-mil-kt .h td { font-size: 0.46rem; letter-spacing: 0.03em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
-.npv2-mil-kt .cy td { font-size: 0.6rem; font-weight: 750; color: var(--ink); }
+.npv2-mil-kt .h td { font-size: 0.5rem; letter-spacing: 0.03em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
+.npv2-mil-kt .cy td { font-size: 0.66rem; font-weight: 750; color: var(--ink); }
 body.dark .npv2-mil-kt .cy td { color: #e6ecf5; }
-.npv2-mil-kt .lyr td { font-size: 0.54rem; color: var(--faint); }
-.npv2-mil-kt .rl { font-size: 0.46rem !important; font-weight: 800; color: var(--faint) !important; text-transform: uppercase; }
-.npv2-mil-kt .d td { font-size: 0.5rem; font-weight: 700; padding-top: 2px; }
+.npv2-mil-kt .lyr td { font-size: 0.58rem; color: var(--faint); }
+.npv2-mil-kt .rl { font-size: 0.5rem !important; font-weight: 800; color: var(--faint) !important; text-transform: uppercase; }
+.npv2-mil-kt .d td { font-size: 0.54rem; font-weight: 700; padding-top: 2px; }
 .npv2-mil-kt .d i { display: block; font-style: normal; font-weight: 600; }
 
 /* promotion pane — radio in the top line; S / D lines left-aligned like the PA pane */
 .npv2-mil-opt { display: block; }
-.npv2-mil-otop { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.npv2-mil-otop { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .npv2-mil-otop .npv2-wk-radio { flex: none; margin: 0; }
-.npv2-mil-oname { font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
-.npv2-mil-rec { font-size: 0.54rem; font-weight: 800; color: #fff; background: var(--blue); border-radius: 10px; padding: 1px 7px; }
+.npv2-mil-oname { font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+.npv2-mil-rec { font-size: 0.58rem; font-weight: 800; color: #fff; background: var(--blue); border-radius: 10px; padding: 2px 8px; }
 .npv2-mil-oscore { margin-left: auto; flex: none; }
 .npv2-mil-oscore small { font-size: 0.58rem; font-weight: 700; color: var(--muted); }
-.npv2-mil-ref { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #eef1f6; font-size: 0.62rem; color: var(--muted); }
+/* per-channel R · G — right-aligned on the S and D lines */
+.npv2-mil-chsc { margin-left: auto; flex: none; font-size: 0.62rem; font-weight: 700; color: var(--muted); }
+.npv2-mil-ref { display: flex; align-items: center; gap: 8px; padding: 13px 16px; border-bottom: 1px solid #eef1f6; font-size: 0.68rem; color: var(--muted); }
 .npv2-mil-ref b { color: var(--ink); font-weight: 700; }
 body.dark .npv2-mil-ref b { color: #e6ecf5; }
 .npv2-mil-refv { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.npv2-mil-ovlink { padding: 10px 12px; font-size: 0.66rem; color: var(--muted); }
+.npv2-mil-ovlink { padding: 15px 16px; font-size: 0.7rem; color: var(--muted); }
 
 /* KPI pane */
 .npv2-mil-ktot { padding: 11px 12px; border-bottom: 1px solid var(--line); background: #fcfdff; }
@@ -3063,19 +3065,19 @@ body.dark .npv2-mil-ktot { background: #16213a; border-bottom-color: #2c3a52; }
 .npv2-mil-kt2 span { display: block; font-size: 0.5rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
 .npv2-mil-kt2 b { display: block; font-size: 0.74rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .npv2-mil-kt2 i { display: block; font-style: normal; font-size: 0.54rem; font-weight: 700; }
-.npv2-mil-kscope { padding: 9px 12px; border-bottom: 1px solid #eef1f6; font-size: 0.6rem; color: var(--muted); }
+.npv2-mil-kscope { padding: 12px 16px; border-bottom: 1px solid #eef1f6; font-size: 0.66rem; color: var(--muted); }
 .npv2-mil-kscope b { color: var(--ink); }
 body.dark .npv2-mil-kscope { border-bottom-color: #223047; }
-.npv2-mil-krow { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 10px; padding: 11px 12px; border-bottom: 1px solid #eef1f6; }
+.npv2-mil-krow { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 10px; padding: 14px 16px; border-bottom: 1px solid #eef1f6; }
 body.dark .npv2-mil-krow { border-bottom-color: #223047; }
-.npv2-mil-krow .kl { font-size: 0.68rem; font-weight: 600; }
+.npv2-mil-krow .kl { font-size: 0.72rem; font-weight: 600; }
 .npv2-mil-krow .kr { text-align: right; }
-.npv2-mil-krow .kr b { display: block; font-size: 0.74rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.npv2-mil-krow .kr i { display: block; font-style: normal; font-size: 0.56rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.npv2-mil-krow .kr small { display: block; font-size: 0.52rem; color: var(--faint); font-variant-numeric: tabular-nums; }
-.npv2-mil-buyrow { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 10px; padding: 11px 12px; background: #eef8f3; border-bottom: 1px solid #d9ede3; }
-.npv2-mil-buyrow .kl { font-size: 0.66rem; font-weight: 700; color: #0f7a5c; }
-.npv2-mil-buyrow .kl small { display: block; font-size: 0.52rem; color: #2a8a68; font-weight: 600; }
+.npv2-mil-krow .kr b { display: block; font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.npv2-mil-krow .kr i { display: block; font-style: normal; font-size: 0.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.npv2-mil-krow .kr small { display: block; font-size: 0.56rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.npv2-mil-buyrow { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 10px; padding: 14px 16px; background: #eef8f3; border-bottom: 1px solid #d9ede3; }
+.npv2-mil-buyrow .kl { font-size: 0.7rem; font-weight: 700; color: #0f7a5c; }
+.npv2-mil-buyrow .kl small { display: block; font-size: 0.56rem; color: #2a8a68; font-weight: 600; }
 .npv2-mil-buyrow.is-edited { background: #d7eee1; }
 body.dark .npv2-mil-buyrow { background: rgba(25,160,106,0.1); border-bottom-color: #2c4a3d; }
 body.dark .npv2-mil-buyrow .kl { color: #6fd0ab; }
@@ -3084,16 +3086,16 @@ body.dark .npv2-mil-buyrow.is-edited { background: rgba(25,160,106,0.22); }
 
 /* benchmark pane — promoted weeks only, values + tactic & discount type */
 .npv2-mil-bt { width: 100%; border-collapse: collapse; }
-.npv2-mil-bt th { position: sticky; top: 0; background: var(--soft, #f5f7fb); color: var(--muted); font-size: 0.5rem; letter-spacing: 0.04em; font-weight: 700; text-transform: uppercase; text-align: right; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; z-index: 2; }
+.npv2-mil-bt th { position: sticky; top: 0; background: var(--soft, #f5f7fb); color: var(--muted); font-size: 0.52rem; letter-spacing: 0.04em; font-weight: 700; text-transform: uppercase; text-align: right; padding: 7px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; z-index: 2; }
 .npv2-mil-bt th.l { text-align: left; }
 body.dark .npv2-mil-bt th { background: #1a2334; border-bottom-color: #2c3a52; }
-.npv2-mil-bt td { font-size: 0.6rem; padding: 4px 6px; border-bottom: 1px solid #eef1f6; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; vertical-align: top; background: #f7faff; }
+.npv2-mil-bt td { font-size: 0.64rem; padding: 5px 6px; border-bottom: 1px solid #eef1f6; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; vertical-align: top; background: #f7faff; }
 .npv2-mil-bt td.l { text-align: left; }
 body.dark .npv2-mil-bt td { background: rgba(23,105,232,0.07); border-bottom-color: #223047; }
 .npv2-mil-wk b { font-weight: 700; }
-.npv2-mil-wk .disc { display: block; margin-top: 1px; font-size: 0.54rem; color: var(--muted); white-space: nowrap; }
+.npv2-mil-wk .disc { display: block; margin-top: 1px; font-size: 0.58rem; color: var(--muted); white-space: nowrap; }
 .npv2-mil-wk .disc .dt { color: var(--promo-ink, #9a7926); font-weight: 700; }
-.npv2-mil-tchip { display: inline-block; font-size: 0.48rem; font-weight: 800; border-radius: 3px; padding: 0 4px; margin-right: 4px; vertical-align: 1px; }
+.npv2-mil-tchip { display: inline-block; font-size: 0.52rem; font-weight: 800; border-radius: 3px; padding: 0 4px; margin-right: 4px; vertical-align: 1px; }
 .npv2-mil-tchip.id { color: #0f57d6; background: #e2edff; }
 .npv2-mil-tchip.bxgx { color: #047857; background: #dff3e9; }
 .npv2-mil-tchip.mb { color: #b0620a; background: #fbeed7; }
