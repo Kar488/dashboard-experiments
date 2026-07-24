@@ -2895,6 +2895,210 @@ body.dark .npv2-wk-buyhint { color: #74c7a5; }
 body.dark .npv2-wk-table td.npv2-wk-buyc.is-edited { background: rgba(25,160,106,0.2); }
 body.dark .npv2-wk-table tfoot td.npv2-wk-buyt { color: #9fe6c8; background: rgba(25,160,106,0.14); }
 
+/* ===== Override-recommendation polish (scoped to the week-view takeover) =====
+   The override screen reuses the exec screen's pd-* classes; these overrides
+   only apply inside .npv2-wk-takeover so the original screens are untouched. */
+.npv2-wk-takeover .pd-manual { max-width: 1520px; margin: 0 auto; padding: 22px 26px 40px; }
+.npv2-wk-takeover .pd-manual-topbar { display: flex; align-items: flex-start; gap: 24px; margin-bottom: 18px; }
+.npv2-wk-takeover .pd-manual-topbar h3 { margin: 0 0 4px; font-size: 1.16rem; font-weight: 800; letter-spacing: -0.01em; }
+.npv2-wk-takeover .pd-manual-topbar p { margin: 0; font-size: 0.74rem; color: var(--muted); max-width: 860px; line-height: 1.5; }
+.npv2-wk-takeover .pd-manual-topbar p strong { color: var(--ink); }
+.npv2-wk-takeover .pd-override-flip { margin-left: auto; white-space: nowrap; border: 1px solid var(--line-strong); background: #fff; color: var(--blue); font-weight: 600; font-size: 0.74rem; border-radius: 9px; padding: 9px 15px; }
+.npv2-wk-takeover .pd-override-flip:hover { border-color: var(--blue); }
+
+/* default + override cards share one clean card language */
+.npv2-wk-takeover .pd-manual-default { border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,0.05); margin-bottom: 14px; }
+.npv2-wk-takeover .pd-manual-default-head { padding: 13px 18px; }
+.npv2-wk-takeover .pd-manual-fields { padding: 4px 18px 18px; }
+.npv2-wk-takeover .pd-md-title p { margin-top: 2px; }
+/* the active edit panel is the focus layer — purple override accent; the default card recedes */
+.npv2-wk-takeover .pd-manual-editpanel { border-color: #d9c9f2; background: #fff; box-shadow: 0 10px 30px rgba(93,54,170,0.1), 0 0 0 1px #d9c9f2; }
+.npv2-wk-takeover:has(.pd-manual-editpanel) .pd-manual-default:not(.pd-manual-editpanel) { opacity: 0.6; filter: saturate(0.7); }
+.npv2-wk-takeover:has(.pd-manual-editpanel) .pd-manual-default:not(.pd-manual-editpanel):hover { opacity: 1; filter: none; }
+
+/* APEX / OMS cards: header strips, no empty-stretch, tighter fields */
+.npv2-wk-takeover .pd-promo-systems { align-items: start; gap: 16px; }
+.npv2-wk-takeover .pd-promo-sys-card { padding: 0; overflow: hidden; border-radius: 11px; }
+.npv2-wk-takeover .pd-promo-sys-card > header { margin: 0 0 14px; padding: 10px 16px; background: var(--soft, #f5f7fb); border-bottom: 1px solid var(--line); font-size: 0.72rem; }
+.npv2-wk-takeover .pd-promo-sys-card .pd-override-fields,
+.npv2-wk-takeover .pd-promo-sys-card .pd-allow { margin: 0 16px; }
+.npv2-wk-takeover .pd-promo-sys-card .pd-allow { margin-bottom: 14px; }
+.npv2-wk-takeover .pd-promo-sys-card .pd-override-fields { margin-bottom: 14px; grid-template-columns: repeat(3, 1fr); }
+.npv2-wk-takeover .pd-of-field span { font-size: 0.56rem; }
+.npv2-wk-takeover .pd-allow { margin: 0 16px 16px; }
+.npv2-wk-takeover .pd-allow-item { border-radius: 9px; }
+
+/* action rows aligned and weighted like the plan's footers */
+.npv2-wk-takeover .pd-manual-default-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 0 18px 16px; margin-top: 2px; }
+.npv2-wk-takeover .pd-btn-primary { background: var(--blue); border: 1px solid var(--blue); color: #fff; font-weight: 700; font-size: 0.76rem; border-radius: 9px; padding: 9px 18px; }
+.npv2-wk-takeover .pd-btn-secondary { border: 1px solid var(--line-strong); background: #fff; color: var(--muted); font-weight: 600; font-size: 0.76rem; border-radius: 9px; padding: 9px 16px; }
+
+/* warning + cascade note as quiet strips, not raw text */
+.npv2-wk-takeover .pd-override-disclaimer { margin: 14px 0; border-left: 3px solid #e8930c; background: #fff8ec; color: #8a6d2f; font-size: 0.7rem; padding: 10px 14px; border-radius: 0 9px 9px 0; }
+.npv2-wk-takeover .pd-override-disclaimer strong { color: #6f5622; }
+.npv2-wk-takeover .pd-manual-cascade { margin: 12px 2px; font-size: 0.68rem; color: var(--faint); }
+
+/* price-areas table as a proper card */
+.npv2-wk-takeover .pd-rec-head h3 { margin: 18px 0 3px; font-size: 0.92rem; font-weight: 800; }
+.npv2-wk-takeover .pd-rec-head p { margin: 0 0 10px; font-size: 0.7rem; color: var(--muted); }
+.npv2-wk-takeover .pd-pa-table-wrap { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,0.05); }
+.npv2-wk-takeover .pd-manual-table { width: 100%; border-collapse: collapse; }
+.npv2-wk-takeover .pd-manual-table thead th { background: var(--soft, #f5f7fb); font-size: 0.56rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 700; text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+.npv2-wk-takeover .pd-manual-table tbody td { padding: 11px 14px; border-bottom: 1px solid #eef1f6; font-size: 0.74rem; }
+.npv2-wk-takeover .pd-manual-table tbody tr:hover td { background: #fbfcfe; }
+.npv2-wk-takeover .pd-manual-table tbody tr.is-editing-row td { background: var(--blue-soft, #eef4ff); }
+.npv2-wk-takeover .pd-manual-table tbody tr.is-editing-row td:first-child { box-shadow: inset 3px 0 0 #7c5cd6; }
+.npv2-wk-takeover .pd-status-badge { font-size: 0.6rem; font-weight: 700; border-radius: 20px; padding: 3px 10px; }
+.npv2-wk-takeover .pd-override-link { font-size: 0.72rem; font-weight: 600; color: var(--blue); text-decoration: none; white-space: nowrap; }
+.npv2-wk-takeover .pd-pa-totals-row td { background: #fbfcfe; border-top: 2px solid var(--line-strong); padding: 10px 14px; }
+.npv2-wk-takeover .pd-totals-sub { display: inline; margin-left: 8px; font-size: 0.64rem; color: var(--faint); font-weight: 500; }
+
+/* ===== Week-by-week MILLER PANES ============================================
+   The centre of the week view: price areas › promotion (top-5 + LY/NP +
+   override) › week KPIs › 52-week benchmark. Worklist rail and the
+   Cost-ladder/Explain side panel frame it. Panes swipe-scroll, no scrollbars. */
+.npv2-wk-body.is-mil { grid-template-columns: minmax(0, 1fr) 272px; }
+.npv2-mil { display: grid; grid-template-columns: minmax(186px,.75fr) minmax(210px,.85fr) minmax(266px,1.1fr) minmax(196px,.8fr) minmax(264px,1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; margin-top: 14px; }
+body.dark .npv2-mil { background: #131d30; border-color: #2c3a52; }
+.npv2-mil-pane { border-right: 1px solid var(--line); min-width: 0; display: flex; flex-direction: column; }
+.npv2-mil-pane:last-child { border-right: 0; }
+body.dark .npv2-mil-pane { border-right-color: #2c3a52; }
+.npv2-mil-phead { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 11px; background: #fafbfd; border-bottom: 1px solid var(--line); }
+body.dark .npv2-mil-phead { background: #1a2334; border-bottom-color: #2c3a52; }
+.npv2-mil-bench .npv2-mil-phead { background: #f1f5fc; }
+body.dark .npv2-mil-bench .npv2-mil-phead { background: #1d2a44; }
+.npv2-mil-ttl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.npv2-mil-bench .npv2-mil-ttl { text-transform: none; font-size: 0.68rem; color: var(--ink); }
+body.dark .npv2-mil-bench .npv2-mil-ttl { color: #e6ecf5; }
+.npv2-mil-cnt { margin-left: auto; font-size: 0.58rem; color: var(--faint); font-weight: 600; white-space: nowrap; }
+/* Deal ⇄ KPIs capsule — beat the global button sizing (min-height 34 / radius 8 / pad 7 13) */
+.npv2-mil-seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; flex: none; }
+.npv2-mil-seg button { border: 0 !important; border-radius: 0 !important; min-height: 0 !important; height: auto;
+  background: #fff; color: var(--muted); font-family: inherit; font-size: 0.58rem; font-weight: 700;
+  line-height: 1.3; padding: 3px 9px !important; cursor: pointer; box-shadow: none; }
+.npv2-mil-seg button:hover { border-color: transparent; color: var(--ink); }
+.npv2-mil-seg button.is-on { background: var(--ink); color: #fff !important; }
+body.dark .npv2-mil-seg button { background: #0f1828; color: #9fb0c4; }
+body.dark .npv2-mil-seg button.is-on { background: var(--blue); color: #fff; }
+.npv2-mil-body { overflow-y: auto; max-height: 520px; scrollbar-width: none; }
+.npv2-mil-body::-webkit-scrollbar { display: none; }
+.npv2-mil-loaded { position: sticky; bottom: 0; background: linear-gradient(180deg, rgba(255,255,255,0) 0%, #fff 42%); padding: 12px 11px 8px; font-size: 0.58rem; color: var(--faint); font-weight: 600; text-align: center; }
+body.dark .npv2-mil-loaded { background: linear-gradient(180deg, rgba(19,29,48,0) 0%, #131d30 42%); }
+
+/* NCRC pane — the worklist as miller column 1 (vendor groups, numbered items) */
+.npv2-mil-vhead { display: flex; align-items: center; gap: 8px; padding: 7px 12px 4px; font-size: 0.56rem; letter-spacing: 0.05em; font-weight: 700; color: var(--faint); text-transform: uppercase; background: #fcfdff; border-bottom: 1px solid #eef1f6; }
+body.dark .npv2-mil-vhead { background: #16213a; border-bottom-color: #223047; }
+.npv2-mil-vhead .vc { margin-left: auto; background: #eef1f6; color: var(--muted); border-radius: 10px; padding: 0 7px; font-size: 0.56rem; }
+body.dark .npv2-mil-vhead .vc { background: #223047; color: #9fb0c4; }
+.npv2-mil-irow { display: flex; align-items: flex-start; gap: 7px; padding: 7px 12px; border-bottom: 1px solid #eef1f6; cursor: pointer; position: relative; }
+body.dark .npv2-mil-irow { border-bottom-color: #223047; }
+.npv2-mil-irow:hover { background: #fbfcfe; }
+body.dark .npv2-mil-irow:hover { background: #182338; }
+.npv2-mil-irow.is-on { background: var(--blue-soft, #eef4ff); }
+.npv2-mil-irow.is-on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--blue); }
+body.dark .npv2-mil-irow.is-on { background: rgba(23,105,232,0.16); }
+.npv2-mil-inum { flex: none; width: 16px; height: 16px; border-radius: 50%; background: #eef1f6; color: var(--muted); font-size: 0.54rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.npv2-mil-irow.is-on .npv2-mil-inum { background: var(--blue); color: #fff; }
+.npv2-mil-irow.is-done .npv2-mil-inum { background: var(--green); color: #fff; }
+body.dark .npv2-mil-inum { background: #223047; color: #9fb0c4; }
+.npv2-mil-imain { min-width: 0; }
+.npv2-mil-imain .icode { display: block; font-size: 0.52rem; color: var(--faint); font-weight: 600; }
+.npv2-mil-imain .iname { display: block; font-size: 0.66rem; font-weight: 700; line-height: 1.25; }
+.npv2-mil-imain .iname i { font-style: normal; color: var(--faint); font-weight: 500; }
+
+/* rows shared by the PA + promotion panes */
+.npv2-mil-row { padding: 9px 12px; border-bottom: 1px solid #eef1f6; cursor: pointer; position: relative; }
+body.dark .npv2-mil-row { border-bottom-color: #223047; }
+.npv2-mil-row:hover { background: #fbfcfe; }
+body.dark .npv2-mil-row:hover { background: #182338; }
+.npv2-mil-row.is-on { background: var(--blue-soft, #eef4ff); }
+.npv2-mil-row.is-on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--blue); }
+body.dark .npv2-mil-row.is-on { background: rgba(23,105,232,0.16); }
+.npv2-mil-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.npv2-mil-pa { font-size: 0.66rem; font-weight: 750; }
+.npv2-mil-costs { margin-left: auto; font-size: 0.56rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.npv2-mil-costs b { color: var(--ink); font-weight: 700; }
+body.dark .npv2-mil-costs b { color: #e6ecf5; }
+.npv2-mil-ch { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 0.64rem; white-space: nowrap; overflow: hidden; }
+/* S / D channel chips — exact mockup treatment (Inter, square, solid) */
+.npv2-mil-chip { flex: none; font-style: normal; font-family: inherit; font-size: 0.5rem; font-weight: 800; color: #fff; background: #8aa0bd; border-radius: 2px; padding: 0 3px; line-height: 1.5; }
+.npv2-mil-chip.d { background: #3b6fb5; }
+.npv2-mil-pp { font-weight: 800; color: var(--promo-ink, #9a7926); }
+.npv2-mil-ch span { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.npv2-mil-tn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.npv2-mil-dt { color: var(--promo-ink, #9a7926); font-weight: 700; font-size: 0.6rem; }
+.npv2-mil-ch small { color: var(--faint); font-size: 0.56rem; font-weight: 500; }
+
+/* PA rows: KPI view — metrics as columns, rows CY / LY / Δ */
+.npv2-mil-kt { width: 100%; border-collapse: collapse; margin-top: 3px; }
+.npv2-mil-kt td { padding: 1px 0 1px 8px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; border: 0; font-size: 0.56rem; }
+.npv2-mil-kt td:first-child { padding-left: 0; text-align: left; width: 14px; }
+.npv2-mil-kt .h td { font-size: 0.46rem; letter-spacing: 0.03em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
+.npv2-mil-kt .cy td { font-size: 0.6rem; font-weight: 750; color: var(--ink); }
+body.dark .npv2-mil-kt .cy td { color: #e6ecf5; }
+.npv2-mil-kt .lyr td { font-size: 0.54rem; color: var(--faint); }
+.npv2-mil-kt .rl { font-size: 0.46rem !important; font-weight: 800; color: var(--faint) !important; text-transform: uppercase; }
+.npv2-mil-kt .d td { font-size: 0.5rem; font-weight: 700; padding-top: 2px; }
+.npv2-mil-kt .d i { display: block; font-style: normal; font-weight: 600; }
+
+/* promotion pane — radio in the top line; S / D lines left-aligned like the PA pane */
+.npv2-mil-opt { display: block; }
+.npv2-mil-otop { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.npv2-mil-otop .npv2-wk-radio { flex: none; margin: 0; }
+.npv2-mil-oname { font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
+.npv2-mil-rec { font-size: 0.54rem; font-weight: 800; color: #fff; background: var(--blue); border-radius: 10px; padding: 1px 7px; }
+.npv2-mil-oscore { margin-left: auto; flex: none; }
+.npv2-mil-oscore small { font-size: 0.58rem; font-weight: 700; color: var(--muted); }
+.npv2-mil-ref { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #eef1f6; font-size: 0.62rem; color: var(--muted); }
+.npv2-mil-ref b { color: var(--ink); font-weight: 700; }
+body.dark .npv2-mil-ref b { color: #e6ecf5; }
+.npv2-mil-refv { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.npv2-mil-ovlink { padding: 10px 12px; font-size: 0.66rem; color: var(--muted); }
+
+/* KPI pane */
+.npv2-mil-ktot { padding: 11px 12px; border-bottom: 1px solid var(--line); background: #fcfdff; }
+body.dark .npv2-mil-ktot { background: #16213a; border-bottom-color: #2c3a52; }
+.npv2-mil-ktot .cap { font-size: 0.54rem; letter-spacing: 0.05em; font-weight: 700; color: var(--faint); text-transform: uppercase; }
+.npv2-mil-ktot .g { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 5px; }
+.npv2-mil-kt2 span { display: block; font-size: 0.5rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+.npv2-mil-kt2 b { display: block; font-size: 0.74rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.npv2-mil-kt2 i { display: block; font-style: normal; font-size: 0.54rem; font-weight: 700; }
+.npv2-mil-kscope { padding: 9px 12px; border-bottom: 1px solid #eef1f6; font-size: 0.6rem; color: var(--muted); }
+.npv2-mil-kscope b { color: var(--ink); }
+body.dark .npv2-mil-kscope { border-bottom-color: #223047; }
+.npv2-mil-krow { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 10px; padding: 11px 12px; border-bottom: 1px solid #eef1f6; }
+body.dark .npv2-mil-krow { border-bottom-color: #223047; }
+.npv2-mil-krow .kl { font-size: 0.68rem; font-weight: 600; }
+.npv2-mil-krow .kr { text-align: right; }
+.npv2-mil-krow .kr b { display: block; font-size: 0.74rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.npv2-mil-krow .kr i { display: block; font-style: normal; font-size: 0.56rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.npv2-mil-krow .kr small { display: block; font-size: 0.52rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.npv2-mil-buyrow { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 10px; padding: 11px 12px; background: #eef8f3; border-bottom: 1px solid #d9ede3; }
+.npv2-mil-buyrow .kl { font-size: 0.66rem; font-weight: 700; color: #0f7a5c; }
+.npv2-mil-buyrow .kl small { display: block; font-size: 0.52rem; color: #2a8a68; font-weight: 600; }
+.npv2-mil-buyrow.is-edited { background: #d7eee1; }
+body.dark .npv2-mil-buyrow { background: rgba(25,160,106,0.1); border-bottom-color: #2c4a3d; }
+body.dark .npv2-mil-buyrow .kl { color: #6fd0ab; }
+body.dark .npv2-mil-buyrow .kl small { color: #74c7a5; }
+body.dark .npv2-mil-buyrow.is-edited { background: rgba(25,160,106,0.22); }
+
+/* benchmark pane — promoted weeks only, values + tactic & discount type */
+.npv2-mil-bt { width: 100%; border-collapse: collapse; }
+.npv2-mil-bt th { position: sticky; top: 0; background: var(--soft, #f5f7fb); color: var(--muted); font-size: 0.5rem; letter-spacing: 0.04em; font-weight: 700; text-transform: uppercase; text-align: right; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; z-index: 2; }
+.npv2-mil-bt th.l { text-align: left; }
+body.dark .npv2-mil-bt th { background: #1a2334; border-bottom-color: #2c3a52; }
+.npv2-mil-bt td { font-size: 0.6rem; padding: 4px 6px; border-bottom: 1px solid #eef1f6; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; vertical-align: top; background: #f7faff; }
+.npv2-mil-bt td.l { text-align: left; }
+body.dark .npv2-mil-bt td { background: rgba(23,105,232,0.07); border-bottom-color: #223047; }
+.npv2-mil-wk b { font-weight: 700; }
+.npv2-mil-wk .disc { display: block; margin-top: 1px; font-size: 0.54rem; color: var(--muted); white-space: nowrap; }
+.npv2-mil-wk .disc .dt { color: var(--promo-ink, #9a7926); font-weight: 700; }
+.npv2-mil-tchip { display: inline-block; font-size: 0.48rem; font-weight: 800; border-radius: 3px; padding: 0 4px; margin-right: 4px; vertical-align: 1px; }
+.npv2-mil-tchip.id { color: #0f57d6; background: #e2edff; }
+.npv2-mil-tchip.bxgx { color: #047857; background: #dff3e9; }
+.npv2-mil-tchip.mb { color: #b0620a; background: #fbeed7; }
+.npv2-mil-aiv { color: var(--muted); }
+
 /* ===== Hover-expand week-cell card + base-change markers =====================
    A promoted 52-week cell grows into a card on hover (replaces the tooltip):
    week KPI tiles, secondary rate strip, store/digital tactic, condensed cost

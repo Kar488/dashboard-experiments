@@ -1513,12 +1513,12 @@
   }
   function sidePanelHTML(o, week, pds) {
     const selPa = WKST.selPa || pds[0].pa, pd = pds.find((p) => p.pa === selPa) || pds[0], chosen = chosenFor(o, week, pd);
-    const tab = WKST.tab;
-    const phead = tab === "cost" ? esc(chosen.label) + " · " + esc(pd.pa) : tab === "hist" ? esc(o.ncrc) + " · last 6 ad-breaks" : "";
+    const tab = WKST.tab === "hist" ? "cost" : WKST.tab;   // History tab retired — benchmark pane covers it
+    const phead = tab === "cost" ? esc(chosen.label) + " · " + esc(pd.pa) : "";
     return '<aside class="npv2-wk-panel">' +
-      '<div class="npv2-wk-ptabs"><button type="button" data-ptab="cost" class="' + (tab === "cost" ? "is-on" : "") + '">Cost ladder</button><button type="button" data-ptab="hist" class="' + (tab === "hist" ? "is-on" : "") + '">Promotion History</button><button type="button" data-ptab="explain" class="' + (tab === "explain" ? "is-on" : "") + '">Explain</button></div>' +
+      '<div class="npv2-wk-ptabs"><button type="button" data-ptab="cost" class="' + (tab === "cost" ? "is-on" : "") + '">Cost ladder</button><button type="button" data-ptab="explain" class="' + (tab === "explain" ? "is-on" : "") + '">Explain</button></div>' +
       (phead ? '<div class="npv2-wk-phead">' + phead + "</div>" : "") +
-      (tab === "hist" ? promoHistoryHTML(o) : tab === "explain" ? explainPanelHTML(o) : ladderHTML(o, chosen) + nopaPanelHTML(o, pd.pa)) + "</aside>";
+      (tab === "explain" ? explainPanelHTML(o) : ladderHTML(o, chosen) + nopaPanelHTML(o, pd.pa)) + "</aside>";
   }
 
   // ============================ OVERRIDE RECOMMENDATION (ported: default + per-PA exceptions,
@@ -1893,6 +1893,137 @@
       "</div>";
   }
 
+  /* ================= WEEK-BY-WEEK MILLER PANES =================
+     The centre of the week view is a miller-columns read: price areas ›
+     promotion (top-5 + LY/NP + override) › week KPIs (all-PA totals +
+     selected PA) › 52-week benchmark (promoted weeks only). The worklist
+     rail (NCRC pane) and the Cost-ladder/Explain side panel stay put. */
+  function milAiv(salesM, unitsK) { return unitsK ? (salesM * 1000) / unitsK : 0; }
+  // pane 1 — the worklist as a true miller column: vendor groups + numbered items
+  function milNcrcPane(items, active, week) {
+    const byV = {}, order = [];
+    items.forEach((x) => { if (!byV[x.vendor]) { byV[x.vendor] = []; order.push(x.vendor); } byV[x.vendor].push(x); });
+    let rows = "";
+    order.forEach((v) => {
+      rows += '<div class="npv2-mil-vhead">' + esc(v) + '<span class="vc">' + byV[v].length + "</span></div>";
+      byV[v].forEach((x) => {
+        const n = items.indexOf(x) + 1, inCart = !!WKCART[cartKey(x, week)];
+        rows += '<div class="npv2-mil-irow' + (x.uid === active ? " is-on" : "") + (inCart ? " is-done" : "") + '" data-wl="' + x.uid + '">' +
+          '<span class="npv2-mil-inum">' + (inCart ? "✓" : n) + "</span>" +
+          '<span class="npv2-mil-imain"><span class="icode">' + esc(x.ncrc) + '</span><span class="iname">' + esc(x.item) + " <i>" + esc(x.pack) + "</i></span></span></div>";
+      });
+    });
+    return '<section class="npv2-mil-pane npv2-mil-ncrc">' +
+      '<div class="npv2-mil-phead"><span class="npv2-mil-ttl">NCRC · Item</span><span class="npv2-mil-cnt">' + items.length + " in view</span></div>" +
+      '<div class="npv2-mil-body" data-live="' + items.length + '|NCRCs">' + rows + '<div class="npv2-mil-loaded" data-liveout></div></div></section>';
+  }
+  function milPaPane(o, week, pds, selPa) {
+    const mode = WKST.paMode || "deal";
+    let rows = "";
+    pds.forEach((pd) => {
+      const c = chosenFor(o, week, pd), on = pd.pa === selPa;
+      rows += '<div class="npv2-mil-row' + (on ? " is-on" : "") + '" data-milpa="' + pd.pa + '">';
+      if (mode === "deal") {
+        const dig = c.digName ? '<div class="npv2-mil-ch"><i class="npv2-mil-chip d">D</i><b class="npv2-mil-pp">$' + c.digPromo.toFixed(2) + "</b><span>" + esc(c.digName) + "</span></div>" : '<div class="npv2-mil-ch"><i class="npv2-mil-chip d">D</i><span class="npv2-wk-mut">No digital</span></div>';
+        rows += '<div class="npv2-mil-top"><b class="npv2-mil-pa">' + pd.pa + '</b><span class="npv2-mil-costs">VLC <b>$' + c.vlc.toFixed(2) + "</b> · DNC <b>$" + c.dnc.toFixed(2) + "</b> · Base <b>$" + c.base.toFixed(2) + "</b></span></div>" +
+          '<div class="npv2-mil-ch"><i class="npv2-mil-chip">S</i><b class="npv2-mil-pp">$' + c.promo.toFixed(2) + "</b><span>" + esc(c.storeName) + "</span></div>" + dig;
+      } else {
+        const lyAiv = milAiv(pd.ly.sales, pd.ly.units), aiv = milAiv(c.sales, c.units);
+        const M = [
+          ["Sales", c.sales, pd.ly.sales, wkM], ["Units", c.units, pd.ly.units, wkU], ["AGP", c.agp, pd.ly.agp, wkM],
+          ["AIV", aiv, lyAiv, (v) => "$" + v.toFixed(2)], ["Fund", c.funding, c.funding * 0.94, (v) => "$" + v.toFixed(2)]
+        ];
+        const dcell = (cv, lv, f) => { const d = cv - lv, p = lv ? d / lv * 100 : 0, pos = d >= 0; return '<td class="' + (pos ? "np-pos" : "np-neg") + '">' + (pos ? "+" : "−") + f(Math.abs(d)) + "<i>" + (pos ? "+" : "") + p.toFixed(1) + "%</i></td>"; };
+        rows += '<div class="npv2-mil-top"><b class="npv2-mil-pa">' + pd.pa + "</b></div>" +
+          '<table class="npv2-mil-kt">' +
+          '<tr class="h"><td></td>' + M.map((x) => "<td>" + x[0] + "</td>").join("") + "</tr>" +
+          '<tr class="cy"><td></td>' + M.map((x) => "<td>" + x[3](x[1]) + "</td>").join("") + "</tr>" +
+          '<tr class="lyr"><td class="rl">LY</td>' + M.map((x) => "<td>" + x[3](x[2]) + "</td>").join("") + "</tr>" +
+          '<tr class="d"><td class="rl">Δ</td>' + M.map((x) => dcell(x[1], x[2], x[3])).join("") + "</tr></table>";
+      }
+      rows += "</div>";
+    });
+    return '<section class="npv2-mil-pane">' +
+      '<div class="npv2-mil-phead"><span class="npv2-mil-ttl">Price areas</span>' +
+      '<span class="npv2-mil-seg"><button type="button" data-pamode="deal" class="' + (mode === "deal" ? "is-on" : "") + '">Deal</button><button type="button" data-pamode="kpi" class="' + (mode === "kpi" ? "is-on" : "") + '">KPIs</button></span>' +
+      '<span class="npv2-mil-cnt">' + pds.length + " PAs</span></div>" +
+      '<div class="npv2-mil-body" data-live="' + pds.length + '|price areas">' + rows + '<div class="npv2-mil-loaded" data-liveout></div></div></section>';
+  }
+  function milPromoPane(o, week, pd, selPa) {
+    const chosen = chosenFor(o, week, pd);
+    let rows = "";
+    pd.offers.forEach((of) => {
+      const on = chosen.id === of.id;
+      const rank = of.isCustom ? '<span class="npv2-wk-pl">CUSTOM</span>' : of.isRec ? '<span class="npv2-mil-rec">#1 REC</span>' : "#" + of.rank;
+      const rg = of.isCustom || of.total == null ? '<small class="npv2-wk-mut">not scored</small>' : '<small class="' + (of.total < 62 ? "np-neg" : "") + '">R ' + of.R + " · G " + of.G + "</small>";
+      const sDisc = of.storeCode === "BXGX" ? esc(of.label) : "Save $" + of.save.toFixed(2);
+      const dig = of.digName
+        ? '<div class="npv2-mil-ch"><i class="npv2-mil-chip d">D</i><span class="npv2-mil-tn">' + esc(of.digName) + '</span><b class="npv2-mil-dt">$' + of.digPromo.toFixed(2) + "</b><small>Lim " + esc(of.mb.split("/")[1] || "6") + "</small><small>Circ " + (of.ad.slice(-1) === "Y" ? "Y" : "N") + "</small></div>"
+        : '<div class="npv2-mil-ch"><i class="npv2-mil-chip d">D</i><span class="npv2-wk-mut">No digital</span></div>';
+      // radio lives in the top line so the S / D lines start at the left edge, like the PA pane
+      rows += '<div class="npv2-mil-row npv2-mil-opt' + (on ? " is-on" : "") + '" data-pick="' + pd.pa + "|" + esc(of.id) + '">' +
+        '<div class="npv2-mil-otop"><span class="npv2-wk-radio' + (on ? " on" : "") + '"></span><span class="npv2-mil-oname">' + rank + '</span><span class="npv2-mil-oscore">' + rg + "</span></div>" +
+        '<div class="npv2-mil-ch"><i class="npv2-mil-chip">S</i><span class="npv2-mil-tn">' + esc(of.storeName) + '</span><b class="npv2-mil-dt">' + sDisc + '</b><small>MB ' + esc(of.mb) + "</small><small>Circ " + (of.ad.charAt(0) === "Y" ? "Y" : "N") + "</small></div>" + dig +
+        "</div>";
+    });
+    rows += '<div class="npv2-mil-ref"><span class="npv2-wk-refpill ly">LY</span><b>' + esc(pd.ly.label) + "</b> · $" + pd.ly.promo.toFixed(2) + '<span class="npv2-mil-refv">' + wkM(pd.ly.sales) + " · " + wkU(pd.ly.units) + " · " + wkM(pd.ly.agp) + "</span></div>";
+    rows += '<div class="npv2-mil-ref"><span class="npv2-wk-refpill np">NP</span><b>No promo</b> · base $' + pd.np.base.toFixed(2) + '<span class="npv2-mil-refv">' + wkM(pd.np.sales) + " · " + wkU(pd.np.units) + " · " + wkM(pd.np.agp) + "</span></div>";
+    rows += '<div class="npv2-mil-ovlink">None of these fit? <a href="#" class="npv2-wk-ovlink" data-override="' + pd.pa + '">Override the recommendation →</a></div>';
+    return '<section class="npv2-mil-pane npv2-mil-promo">' +
+      '<div class="npv2-mil-phead"><span class="npv2-mil-ttl">Promotion · ' + pd.pa + '</span><span class="npv2-mil-cnt">top ' + pd.offers.filter((x) => !x.isCustom).length + " · LY · NP</span></div>" +
+      '<div class="npv2-mil-body" data-live="">' + rows + '<div class="npv2-mil-loaded" data-liveout></div></div></section>';
+  }
+  function milKpiPane(o, week, pds, pd, tot) {
+    const c = chosenFor(o, week, pd);
+    const lyAiv = milAiv(pd.ly.sales, pd.ly.units), aiv = milAiv(c.sales, c.units);
+    const rows = [
+      ["Sales", wkM(c.sales), wkM(pd.ly.sales), pd.ly.sales ? (c.sales - pd.ly.sales) / pd.ly.sales : 0],
+      ["Units", wkU(c.units), wkU(pd.ly.units), pd.ly.units ? (c.units - pd.ly.units) / pd.ly.units : 0],
+      ["AGP", wkM(c.agp), wkM(pd.ly.agp), pd.ly.agp ? (c.agp - pd.ly.agp) / pd.ly.agp : 0],
+      ["AIV", "$" + aiv.toFixed(2), "$" + lyAiv.toFixed(2), lyAiv ? (aiv - lyAiv) / lyAiv : 0],
+      ["Funding $/u", "$" + c.funding.toFixed(2), "$" + (c.funding * 0.94).toFixed(2), 0.064]
+    ].map((k) => '<div class="npv2-mil-krow"><span class="kl">' + k[0] + '</span><span class="kr"><b>' + k[1] + '</b><i class="' + (k[3] >= 0 ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(k[3]) + "</i><small>LY " + k[2] + "</small></span></div>").join("");
+    // send-to-buying — same per-PA state the table version used
+    const k = paKey(o, week, pd.pa), predU = Math.round(c.units * 1000);
+    const s = buySuggest(k, predU), cur = BUYUNITS[k], val = cur != null ? cur : s.adj;
+    const edited = cur != null && cur !== s.adj;
+    return '<section class="npv2-mil-pane">' +
+      '<div class="npv2-mil-phead"><span class="npv2-mil-ttl">Week KPIs</span><span class="npv2-mil-cnt">W' + week + " · vs LY</span></div>" +
+      '<div class="npv2-mil-body" data-live="">' +
+      // no all-PA totals block here — the item header above already carries them
+      '<div class="npv2-mil-kscope"><b>' + pd.pa + "</b> · " + (chosenFor(o, week, pd).isRec ? "#1 REC" : esc(chosenFor(o, week, pd).isCustom ? "CUSTOM" : "#" + chosenFor(o, week, pd).rank)) + " · store + digital union</div>" +
+      rows +
+      '<div class="npv2-mil-buyrow" data-buycell' + (edited ? ' class="is-edited"' : "") + ' title="Units to send for buying — predicted ' + predU.toLocaleString() + " · MAE ±" + (buyMaePct(k) * 100).toFixed(1) + "% → MAE-adjusted " + s.adj.toLocaleString() + '">' +
+        '<span class="kl">Send to buying<small>pred ' + predU.toLocaleString() + " · MAE-adj " + s.adj.toLocaleString() + "</small></span>" +
+        '<input class="npv2-wk-buyin" type="text" inputmode="numeric" data-buypa="' + esc(k) + '" data-adj="' + s.adj + '" value="' + val + '">' +
+      '</div><div class="npv2-mil-loaded" data-liveout></div></div></section>';
+  }
+  function milBenchPane(o, week, pd) {
+    const c = chosenFor(o, week, pd), pa = pd.pa, seed = o.uid + "|" + pa;
+    const TACS = [["Item Discount", "id", "ID"], ["Buy X Get X", "bxgx", "BXGX"], ["Must Buy", "mb", "MB"]];
+    const DISC = { id: ["PP $1.84", "% off · 20%", "¢ off · 48¢", "$ off · $0.50"], bxgx: ["BOGO 50%", "B1G1 Free"], mb: ["4/$5", "2/$4"] };
+    const h0 = NP.util.hashStr(seed);
+    let rows = "", n = 0;
+    for (let i = 1; i <= 52; i++) {
+      const w = week - i <= 0 ? week - i + 52 : week - i, yr = week - i <= 0 ? "’25" : "’26";
+      const promo = ((h0 + i * 37) % 100) / 100 > 0.6;
+      if (!promo) continue;
+      n++;
+      const t = TACS[(h0 + i) % 3], dl = DISC[t[1]], disc = dl[(h0 + i) % dl.length];
+      const f = (0.62 + wkNoise(o, week * 3 + i, 4) * 0.5) * 1.4;
+      const sales = c.sales * f, units = c.units * f * 1.02, agp = c.agp * f * 0.92;
+      const aiv = milAiv(sales, units) * 0.86, fund = units * (0.3 + wkNoise(o, week * 5 + i, 8) * 0.15);
+      rows += '<tr><td class="l npv2-mil-wk"><b>W' + w + yr + "</b>" +
+        '<span class="disc"><span class="npv2-mil-tchip ' + t[1] + '">' + t[2] + '</span><span class="dt">' + disc + "</span></span></td>" +
+        "<td>" + wkM(sales) + "</td><td>" + wkU(units) + "</td><td>" + wkM(agp) + '</td><td class="npv2-mil-aiv">$' + aiv.toFixed(2) + "</td><td>$" + (fund).toFixed(1) + "K</td></tr>";
+    }
+    return '<section class="npv2-mil-pane npv2-mil-bench">' +
+      '<div class="npv2-mil-phead"><span class="npv2-mil-ttl">52-week benchmark · ' + pa + '</span><span class="npv2-mil-cnt">newest first</span></div>' +
+      '<div class="npv2-mil-body" data-live="' + n + '|promo weeks · last 52">' +
+      '<table class="npv2-mil-bt"><thead><tr><th class="l">Week</th><th>Sales</th><th>Units</th><th>AGP</th><th>AIV</th><th>Fund $</th></tr></thead><tbody>' + rows + "</tbody></table>" +
+      '<div class="npv2-mil-loaded" data-liveout></div></div></section>';
+  }
+
   function renderWeekView() {
     const front = document.getElementById(FRONT); if (!front) return;
     const all = NP.cat().items;
@@ -1910,12 +2041,17 @@
     const kpi = (lab, big, cur, ly, money) => '<div class="npv2-wk-kpi"><span class="npv2-wk-kl">' + lab + '</span><b class="npv2-wk-kv">' + big + '</b><span class="npv2-wk-kd ' + (cur >= ly ? "np-pos" : "np-neg") + '">' + NP.fmt.pct(ly ? (cur - ly) / ly : 0) + " vs LY · LY " + (money ? wkM(ly) : wkU(ly)) + "</span></div>";
     const stratName = (window.NPViews && NPViews.cfStratName) ? NPViews.cfStratName(NP.state.cf.strategy) : "Optimized";
     const bm = weekBaseMetrics(o, week), inCart = !!WKCART[cartKey(o, week)];
-    const center = '<div class="npv2-wk-recs"><div class="npv2-wk-recshead"><h4>Promo recommendations by price area</h4>' + (bm.promoted ? '<span class="npv2-wk-chip is-ok">✓ Allowance linked</span>' : '<span class="npv2-wk-chip is-off">No promo recommended</span>') + '<span class="npv2-wk-recshint">expand a PA for its alternates, LY actual &amp; no-promo baseline</span></div>' +
-        recTableHTML(o, week, pds, selPa) + "</div>";
+    const selPd = pds.find((p) => p.pa === selPa) || pds[0];
+    const center = '<div class="npv2-mil">' +
+        milNcrcPane(items, o.uid, week) +
+        milPaPane(o, week, pds, selPd.pa) +
+        milPromoPane(o, week, selPd, selPd.pa) +
+        milKpiPane(o, week, pds, selPd, tot) +
+        milBenchPane(o, week, selPd) +
+      "</div>";
     front.innerHTML =
       wkToolsHTML(all) +
-      '<div class="npv2-wk-scroll"><div class="npv2-wk-body">' +
-        '<aside class="npv2-wk-worklist">' + worklistHTML(items, o.uid, week) + "</aside>" +
+      '<div class="npv2-wk-scroll"><div class="npv2-wk-body is-mil">' +
         '<div class="npv2-wk-center">' +
           '<div class="npv2-wk-mhead">' +
             '<div class="npv2-wk-mtitle"><span class="npv2-wk-eyebrow">' + esc(o.ncrc) + " · " + esc(stratName) + " plan" + (isLocked(week) ? " · LOCKED ACTUAL" : "") + "</span><h3>" + esc(o.item) + " <i>" + esc(o.pack) + "</i></h3><span class=\"npv2-wk-msub\">" + esc(o.vendor) + " · " + esc(weekLabel(week)) + "</span></div>" +
@@ -1940,6 +2076,22 @@
     front.querySelectorAll("[data-pick]").forEach((tr) => (tr.onclick = () => { const p = tr.dataset.pick.split("|"); WKST.chosen[paKey(o, week, p[0])] = p[1]; WKST.selPa = p[0]; renderWeekView(); }));
     // click a PA summary row → focus it in the side panel (but not from the buy input — a re-render would steal its focus)
     front.querySelectorAll(".npv2-wk-parow[data-pa]").forEach((tr) => (tr.onclick = (e) => { if (e.target.closest("[data-toggle]") || e.target.closest(".npv2-wk-buyc")) return; WKST.selPa = tr.dataset.pa; renderWeekView(); }));
+    // miller panes: select a price area · flip Deal ⇄ KPIs
+    front.querySelectorAll("[data-milpa]").forEach((r) => (r.onclick = (e) => { if (e.target.closest(".npv2-wk-buyin")) return; WKST.selPa = r.dataset.milpa; renderWeekView(); }));
+    front.querySelectorAll("[data-pamode]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); WKST.paMode = b.dataset.pamode; renderWeekView(); }));
+    // live "x of y — swipe ↓" counts on every swipeable pane (data-live="" = plain swipe cue)
+    front.querySelectorAll(".npv2-mil-body[data-live]").forEach((el) => {
+      const p = el.dataset.live.split("|"), total = +p[0], label = p[1];
+      const out = el.querySelector("[data-liveout]"); if (!out) return;
+      const upd = () => {
+        const fits = el.scrollHeight <= el.clientHeight + 4;
+        if (!total) { out.textContent = fits ? "" : "swipe ↓"; return; }
+        if (fits) { out.textContent = total + " " + label; return; }
+        const frac = (el.scrollTop + el.clientHeight) / el.scrollHeight;
+        out.textContent = Math.max(1, Math.min(total, Math.round(frac * total))) + " of " + total + " " + label + " — swipe ↓";
+      };
+      el.addEventListener("scroll", upd, { passive: true }); upd();
+    });
     // send-to-buying inputs — per PA, MAE-adjusted suggestion as the default
     const updBuyTot = () => {
       const cell = front.querySelector("[data-buytot]"); if (!cell) return;
@@ -1952,12 +2104,13 @@
         const k = inp.dataset.buypa, adj = +inp.dataset.adj;
         const v = parseInt(String(inp.value).replace(/[^0-9]/g, ""), 10);
         if (isNaN(v)) delete BUYUNITS[k]; else BUYUNITS[k] = v;
-        inp.closest("td").classList.toggle("is-edited", BUYUNITS[k] != null && BUYUNITS[k] !== adj);
+        const cell = inp.closest("td, [data-buycell]");
+        if (cell) cell.classList.toggle("is-edited", BUYUNITS[k] != null && BUYUNITS[k] !== adj);
         updBuyTot();
       });
       inp.addEventListener("blur", () => {
         const k = inp.dataset.buypa;
-        if (BUYUNITS[k] == null) { inp.value = inp.dataset.adj; inp.closest("td").classList.remove("is-edited"); updBuyTot(); }
+        if (BUYUNITS[k] == null) { inp.value = inp.dataset.adj; const cell = inp.closest("td, [data-buycell]"); if (cell) cell.classList.remove("is-edited"); updBuyTot(); }
         else inp.value = String(BUYUNITS[k]);
       });
     });
@@ -1995,7 +2148,7 @@
       renderWeekView();
     };
     // per-PA override / edit / reset from the price-areas table
-    front.querySelectorAll("[data-ovedit]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovedit, cust = WKST.custom[paKey(o, week, pa)]; WKST.manualEditPa = pa; WKST.manualEditForm = (cust && cust._form) ? Object.assign({}, cust._form) : Object.assign({}, WKST.oform || freshPromoForm()); renderWeekView(); }));
+    front.querySelectorAll("[data-ovedit]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovedit, cust = WKST.custom[paKey(o, week, pa)]; WKST.manualEditPa = pa; WKST.defaultOpen = false; WKST.manualEditForm = (cust && cust._form) ? Object.assign({}, cust._form) : Object.assign({}, WKST.oform || freshPromoForm()); renderWeekView(); }));
     front.querySelectorAll("[data-ovclear]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovclear, k = paKey(o, week, pa); delete WKST.custom[k]; if (WKST.chosen[k] === "custom-" + pa) delete WKST.chosen[k]; renderWeekView(); }));
     const save = front.querySelector("[data-ovsave]"); if (save) save.onclick = () => { const pa = WKST.manualEditPa; if (pa) { const k = paKey(o, week, pa); WKST.custom[k] = customOfferFrom(o, week, pa, WKST.manualEditForm || WKST.oform); WKST.chosen[k] = "custom-" + pa; } WKST.manualEditPa = null; WKST.manualEditForm = null; renderWeekView(); };
     const cancel = front.querySelector("[data-ovcancel]"); if (cancel) cancel.onclick = () => { WKST.manualEditPa = null; WKST.manualEditForm = null; renderWeekView(); };

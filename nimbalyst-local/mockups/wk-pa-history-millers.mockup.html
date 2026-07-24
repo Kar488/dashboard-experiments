@@ -93,14 +93,15 @@
   .pamt2 .d i{display:block;font-style:normal;font-weight:600;}
 
   /* --- promotion pane: full detail per channel --- */
-  .orow{display:flex;align-items:flex-start;gap:8px;padding:9px 13px;border-bottom:1px solid #eef1f6;cursor:pointer;position:relative;}
+  /* radio sits in the top line — S / D lines start at the left edge, like the PA pane */
+  .orow{display:block;padding:9px 13px;border-bottom:1px solid #eef1f6;cursor:pointer;position:relative;}
   .orow:hover{background:#fbfcfe;}
   .orow.drill{background:var(--blue-soft);}
   .orow.drill::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);}
-  .radio{flex:none;display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--line-strong);margin-top:3px;}
+  .radio{flex:none;display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--line-strong);}
   .orow.drill .radio{border-color:var(--blue);background:var(--blue);box-shadow:inset 0 0 0 2.5px #fff;}
-  .omain{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px;}
-  .otop{display:flex;align-items:baseline;gap:8px;}
+  .omain{min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .otop{display:flex;align-items:center;gap:8px;}
   .oname{font-size:.7rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .oname .rec-pill{font-size:.54rem;font-weight:800;color:#fff;background:var(--blue);border-radius:10px;padding:1px 7px;margin-right:2px;vertical-align:1px;}
   .oscore{margin-left:auto;flex:none;white-space:nowrap;}
@@ -401,9 +402,8 @@
     let h="";
     OPTS.forEach((x,i)=>{
       h+='<div class="orow'+(SEL.o===i?" drill":"")+'" data-i="'+i+'">'+
-        '<span class="radio"></span>'+
         '<div class="omain">'+
-          '<div class="otop"><span class="oname">'+(x.rec?'<span class="rec-pill">#1 REC</span>':x.n)+'</span>'+
+          '<div class="otop"><span class="radio"></span><span class="oname">'+(x.rec?'<span class="rec-pill">#1 REC</span>':x.n)+'</span>'+
           '<span class="oscore"><small class="'+(x.low?"np-neg":"")+'">'+x.rg+"</small></span></div>"+
           '<div class="chline"><span class="ch">S</span><span class="tn">'+x.st[0]+'</span><span class="dt">'+x.st[1]+'</span><small>'+x.st[2]+'</small><small>'+x.st[3]+"</small></div>"+
           '<div class="chline"><span class="ch d">D</span><span class="tn">'+x.dg[0]+'</span><span class="dt">'+x.dg[1]+'</span><small>'+x.dg[2]+'</small><small>'+x.dg[3]+"</small></div>"+
@@ -424,13 +424,8 @@
     const m=paMetrics(seed), sc=(1-SEL.o*.03);
     const sales=m.sales*sc, units=m.units*sc, agp=m.agp*sc, aiv=m.aiv, fund=m.fund;
     const tS=6*PA_TOTAL*.92, tU=3*PA_TOTAL*.92, tA=4*PA_TOTAL*.92;
-    let h='<div class="ktot"><span class="cap">All '+PA_TOTAL+" price areas · W7 total</span>"+
-      '<div class="ktotgrid">'+
-      '<span class="kt"><span>Sales</span><b>'+money(tS)+'</b><i class="np-pos">+22.0%</i></span>'+
-      '<span class="kt"><span>Units</span><b>'+fu(tU)+'</b><i class="np-pos">+20.4%</i></span>'+
-      '<span class="kt"><span>AGP</span><b>'+money(tA)+'</b><i class="np-pos">+21.8%</i></span>'+
-      "</div></div>";
-    h+='<div class="kscope"><b>'+pa+"</b> · "+(SEL.o===0?"#1 REC":OPTS[SEL.o].n)+" · store + digital union</div>";
+    // no all-PA totals block — the week-by-week item header already carries them
+    let h='<div class="kscope"><b>'+pa+"</b> · "+(SEL.o===0?"#1 REC":OPTS[SEL.o].n)+" · store + digital union</div>";
     const K=[["Sales",money(sales),money(sales*.85),9+rnd(seed,7)*12],
              ["Units",fu(units),fu(units*.87),6+rnd(seed,8)*14],
              ["AGP",money(agp),money(agp*.86),5+rnd(seed,9)*16],
