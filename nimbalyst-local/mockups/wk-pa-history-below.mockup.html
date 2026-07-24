@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design 1 — promotion history docked under the price areas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f4f6fa; --line:#dfe5ef; --line-strong:#c8d2e2; --muted:#667085;
+    --blue:#1769e8; --soft:#f5f7fb; --ink:#0f172a; --faint:#98a4b6;
+    --green:#177245; --red:#c0392b; --blue-soft:#eef4ff;
+    --promo-bg:#fdfaee; --promo-ink:#9a7926;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px;padding:24px;}
+  .np-pos{color:var(--green);} .np-neg{color:var(--red);}
+  .frame{max-width:1500px;margin:0 auto 22px;background:#fff;border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 24px 60px rgba(15,23,42,.12);overflow:hidden;}
+  .head{padding:14px 22px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:24px;align-items:flex-start;}
+  .eyebrow{font-size:.62rem;letter-spacing:.14em;font-weight:700;color:var(--blue);}
+  .head h2{margin:4px 0 5px;font-size:1.12rem;font-weight:700;}
+  .head p{margin:0;font-size:.72rem;color:var(--muted);max-width:780px;line-height:1.5;}
+  .state-pill{font-size:.62rem;font-weight:700;letter-spacing:.05em;border-radius:20px;padding:5px 12px;
+    background:var(--blue-soft);color:var(--blue);border:1px solid #cfe1ff;white-space:nowrap;}
+
+  /* ---- item header — exact week-by-week look ---- */
+  .mhead{display:flex;align-items:flex-start;gap:24px;padding:16px 22px 12px;}
+  .mtitle .eyeb{font-size:.62rem;letter-spacing:.06em;font-weight:700;color:var(--blue);text-transform:uppercase;}
+  .mtitle h3{margin:3px 0 4px;font-size:1.24rem;font-weight:800;letter-spacing:-.01em;}
+  .mtitle h3 i{font-style:normal;color:var(--faint);font-weight:500;font-size:1.02rem;}
+  .mtitle .sub{font-size:.74rem;color:var(--muted);}
+  .kpis{margin-left:auto;display:flex;gap:26px;}
+  .kpi{min-width:96px;}
+  .kpi label{display:block;font-size:.58rem;letter-spacing:.08em;font-weight:700;color:var(--faint);text-transform:uppercase;}
+  .kpi b{display:block;font-size:1.14rem;font-weight:800;margin-top:1px;}
+  .kpi span{display:block;font-size:.62rem;color:var(--faint);margin-top:2px;white-space:nowrap;}
+  .kpi span em{font-style:normal;font-weight:700;color:var(--green);}
+
+  /* ---- PA table — faithful to the week-by-week plan (no regression on port) ---- */
+  /* PA table swipes vertically inside a fixed window — no scrollbars, live count below */
+  .twrap{margin:0 22px;border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:480px;scrollbar-width:none;}
+  .twrap::-webkit-scrollbar{display:none;}
+  .rec thead th{position:sticky;top:0;z-index:3;}
+  .rec tfoot td{position:sticky;bottom:0;z-index:3;}
+  .swipeline{padding:7px 22px 0;font-size:.6rem;color:var(--faint);font-weight:600;text-align:center;}
+  table.rec{width:max-content;min-width:100%;border-collapse:collapse;font-size:.74rem;white-space:nowrap;}
+  .rec thead th{background:var(--soft);text-align:right;font-size:.56rem;letter-spacing:.05em;font-weight:700;color:var(--muted);
+    text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line);}
+  .rec thead th.l{text-align:left;} .rec thead th.c{text-align:center;}
+  .rec tbody td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle;}
+  .rec tbody td.l{text-align:left;} .rec tbody td.c{text-align:center;}
+  tr.parow{cursor:pointer;}
+  tr.parow:hover{background:var(--blue-soft);}
+  tr.parow.is-sel{background:var(--blue-soft);box-shadow:inset 3px 0 0 var(--blue);}
+  .pa{font-weight:700;font-size:.78rem;}
+  td.promo{background:var(--promo-bg);color:var(--promo-ink);font-weight:700;}
+  .tac b{display:block;font-weight:600;font-size:.72rem;}
+  .tac small{color:var(--muted);font-size:.62rem;}
+  .score b{font-size:.9rem;font-weight:700;}
+  .score small{display:block;font-size:.58rem;color:var(--faint);}
+  .toggle{border:1px solid var(--line-strong);background:#fff;border-radius:7px;font-family:inherit;font-weight:600;
+    font-size:.68rem;color:var(--blue);padding:5px 12px;cursor:pointer;}
+  .toggle.is-open{border-color:var(--blue);}
+  /* expanded options — exact structure of the plan's nest */
+  tr.nesthead td{background:#fbfcfe;color:var(--muted);font-size:.62rem;padding:7px 12px;border-bottom:1px solid var(--line);}
+  tr.nesthead .cap{color:var(--blue);font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+  tr.altrow{cursor:pointer;}
+  tr.altrow:hover{background:#fbfcfe;}
+  tr.altrow.is-chosen{background:var(--blue-soft);}
+  .radio{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid var(--line-strong);vertical-align:-2px;margin-right:7px;}
+  .radio.on{border-color:var(--blue);box-shadow:inset 0 0 0 3px #fff;background:var(--blue);}
+  .rec-pill{font-size:.6rem;font-weight:800;color:#fff;background:var(--blue);border-radius:12px;padding:2px 9px;}
+  .refpill{font-size:.6rem;font-weight:800;border-radius:5px;padding:2px 8px;}
+  .refpill.ly{color:#7c5cd6;background:#f2eeff;}
+  .refpill.np{color:var(--muted);background:#eef1f6;}
+  .mut{color:var(--faint);}
+  tr.ovrow td{padding:9px 12px;font-size:.7rem;color:var(--muted);border-bottom:2px solid var(--line);background:#fbfcfe;text-align:left !important;}
+  tr.ovrow a{color:var(--blue);font-weight:600;text-decoration:none;cursor:pointer;}
+  /* send-to-buying — compact */
+  th.buyh{color:#0f7a5c !important;background:#e3f3ec !important;}
+  td.buyc{background:#eef8f3;}
+  .buyin{width:52px;border:1px solid #b7ddcb;border-radius:5px;padding:2px 5px;font-family:inherit;font-size:.68rem;
+    font-weight:700;color:#0d6b4f;text-align:right;background:#fff;}
+  .buyin:focus{outline:none;border-color:#19a06a;}
+  .buyhint{display:block;font-size:.52rem;color:#2a8a68;margin-top:1px;}
+  tfoot td{padding:9px 10px;border-top:2px solid var(--line-strong);font-weight:700;background:#fbfcfe;text-align:right;}
+  tfoot td.l{text-align:left;}
+
+  /* ---- history — clean, same design language as the table above ---- */
+  .hist{margin:14px 22px 22px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+  .hist-head{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--soft);border-bottom:1px solid var(--line);}
+  .hist-head strong{font-size:.76rem;}
+  .hist-head .pasel{color:var(--blue);}
+  .hist-head small{color:var(--muted);font-size:.64rem;}
+  .hist-head .upd{margin-left:auto;font-size:.6rem;color:var(--faint);font-weight:600;}
+  .histscroll{max-height:400px;overflow-y:auto;scrollbar-width:none;}
+  .histscroll::-webkit-scrollbar{display:none;}
+  table.ht{width:100%;border-collapse:collapse;font-size:.72rem;}
+  .ht thead th{background:var(--soft);color:var(--muted);font-size:.56rem;letter-spacing:.05em;font-weight:700;
+    text-transform:uppercase;text-align:right;padding:7px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;}
+  .ht thead th.l{text-align:left;}
+  .ht tbody td{padding:6px 12px;border-bottom:1px solid #eef1f6;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .ht tbody td.l{text-align:left;}
+  .ht tbody tr.pr td{background:#f7faff;}
+  .wkc b{font-weight:700;} .wkc small{color:var(--faint);margin-left:6px;font-size:.6rem;}
+  .tchip{display:inline-block;font-size:.56rem;font-weight:800;border-radius:4px;padding:1px 6px;margin-left:8px;}
+  .tchip.id{color:#0f57d6;background:#e2edff;} .tchip.bxgx{color:#047857;background:#dff3e9;} .tchip.mb{color:#b0620a;background:#fbeed7;}
+  .tchip.none{color:var(--faint);background:var(--soft);font-weight:600;}
+  .aiv{color:var(--muted);}
+
+  /* ---- override modal (same as the week-by-week plan) ---- */
+  .ovbg{position:fixed;inset:0;background:rgba(15,23,42,.44);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:38px 20px;}
+  .ovbg[hidden]{display:none;}
+  .ovbox{background:#fff;border-radius:14px;max-width:1180px;width:100%;max-height:calc(100vh - 76px);overflow-y:auto;box-shadow:0 30px 80px rgba(15,23,42,.35);}
+  .ovhead{display:flex;align-items:flex-start;gap:20px;padding:16px 22px 12px;}
+  .ovhead h3{margin:0 0 3px;font-size:.92rem;font-weight:700;}
+  .ovhead p{margin:0;font-size:.68rem;color:var(--muted);}
+  .ovback{margin-left:auto;border:1px solid var(--line-strong);background:#fff;border-radius:8px;font-family:inherit;
+    font-weight:600;font-size:.72rem;color:var(--blue);padding:8px 14px;cursor:pointer;white-space:nowrap;}
+  .ovwarn{margin:0 22px 12px;border-left:3px solid #e8930c;background:#fff8ec;color:#8a6d2f;font-size:.68rem;padding:8px 12px;border-radius:0 8px 8px 0;}
+  .ovwarn b{color:#6f5622;}
+  .ovgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 22px 16px;}
+  .syscard{border:1px solid var(--line);border-radius:10px;padding:13px 15px;}
+  .syscard header{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:.72rem;color:var(--muted);}
+  .systag{font-size:.58rem;font-weight:800;border-radius:4px;padding:2px 7px;}
+  .systag.apex{color:#0f57d6;background:#e2edff;} .systag.oms{color:#047857;background:#dff3e9;}
+  .fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 12px;}
+  .fld{display:flex;flex-direction:column;gap:4px;}
+  .fld span{font-size:.56rem;letter-spacing:.06em;font-weight:700;color:var(--faint);text-transform:uppercase;}
+  .fld input,.fld select{border:1px solid var(--line-strong);border-radius:7px;padding:7px 9px;font-size:.72rem;font-family:inherit;color:var(--ink);background:#fff;width:100%;}
+  .chk{display:flex;align-items:center;gap:7px;font-size:.7rem;color:var(--ink);align-self:end;padding-bottom:7px;}
+  .allow{margin-top:13px;}
+  .allow > span{display:block;font-size:.56rem;letter-spacing:.06em;font-weight:700;color:var(--faint);text-transform:uppercase;margin-bottom:7px;}
+  .arow{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin-bottom:7px;font-size:.7rem;cursor:pointer;}
+  .arow.sel{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);}
+  .arow .id{color:var(--blue);font-weight:700;} .arow .meta{margin-left:auto;color:var(--muted);font-size:.64rem;}
+  .abadge{font-size:.54rem;font-weight:800;color:#fff;background:var(--blue);border-radius:10px;padding:1px 7px;}
+  .ovact{display:flex;justify-content:flex-end;gap:10px;padding:0 22px 20px;}
+  .btn2{border:1px solid var(--line-strong);background:#fff;color:var(--muted);font-family:inherit;font-weight:600;font-size:.74rem;padding:9px 18px;border-radius:9px;cursor:pointer;}
+  .btn1{background:var(--blue);border:1px solid var(--blue);color:#fff;font-family:inherit;font-weight:700;font-size:.74rem;padding:9px 18px;border-radius:9px;cursor:pointer;}
+
+  .notes{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:12px 22px 22px;}
+  .note{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .note h4{margin:0 0 5px;font-size:.7rem;}
+  .note p{margin:0;font-size:.66rem;color:var(--muted);line-height:1.5;}
+  .note p b{color:var(--ink);}
+</style>
+</head>
+<body>
+
+  <div class="frame">
+    <header class="head">
+      <div>
+        <span class="eyebrow">WEEK-BY-WEEK · DESIGN 1 — HISTORY DOCKED BELOW</span>
+        <h2>Promotion history under the price areas — click a PA, the history follows</h2>
+        <p>The week-by-week screen stays exactly as it is (same header, same PA table with its top-5 options, LY / no-promo
+           baselines and the override flow) — a <b>52-week history panel</b> docks below. Click a PA row to re-point it.
+           With many price areas the page simply scrolls.</p>
+      </div>
+      <span class="state-pill">INTERACTIVE — CLICK PA ROWS · EXPAND OPTIONS · OVERRIDE</span>
+    </header>
+
+    <!-- item header — exact look & data of the plan -->
+    <div class="mhead">
+      <div class="mtitle">
+        <span class="eyeb">NCRC 30048 · Optimized plan</span>
+        <h3>BRAWNY TEAR-A-SQUARE 4 ROLL <i>4CT</i></h3>
+        <span class="sub">GEORGIA-PACIFIC · Week 7 · Valentine's</span>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><label>Sales</label><b>$27K</b><span><em>+22.0%</em> vs LY · LY $22K</span></div>
+        <div class="kpi"><label>Units</label><b>12K</b><span><em>+20.4%</em> vs LY · LY 10K</span></div>
+        <div class="kpi"><label>AGP</label><b>$17K</b><span><em>+21.8%</em> vs LY · LY $14K</span></div>
+        <div class="kpi"><label>AIV</label><b>$2.25</b><span><em>+1.4%</em> vs LY · LY $2.22</span></div>
+        <div class="kpi"><label>Fund rate</label><b>24.2%</b><span><em>-3.2pp</em> vs LY · LY 27.3%</span></div>
+      </div>
+    </div>
+
+    <div class="twrap">
+      <table class="rec">
+        <thead><tr>
+          <th class="l">PA</th><th>VLC</th><th>DNC</th><th>Base $</th><th>Promo $</th><th class="l">Store tactic</th><th class="l">Digital tactic</th>
+          <th class="c">MB / Lim</th><th class="c">Ad / Disp</th><th>Funding $</th><th>Sales</th><th>Units</th>
+          <th class="buyh" title="Units to send for buying — prefilled with the MAE-adjusted suggestion">Send to buying</th><th>AGP</th><th>Total score</th><th class="c"></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+        <tfoot><tr>
+          <td class="l">Total</td><td colspan="8" class="l" style="font-weight:500;color:var(--muted)"><small>30 price areas</small></td>
+          <td>$11.10</td><td>$186K</td><td>93K</td><td class="buyc" style="color:#0d6b4f" id="buytot"></td><td>$124K</td><td></td><td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div class="swipeline" id="paLive"></div>
+
+    <!-- docked history — same clean design language as everything above -->
+    <div class="hist">
+      <div class="hist-head">
+        <strong>Promotion history — <span class="pasel" id="histPa">PA01</span></strong>
+        <small>last 52 weeks · newest first from W7</small>
+        <span class="upd">updates when you click a price area ↑</span>
+      </div>
+      <div class="histscroll" id="histscroll">
+        <table class="ht">
+          <thead><tr>
+            <th class="l" style="width:210px">Week</th><th class="l">Promotion</th>
+            <th>Sales</th><th>Units</th><th>AGP</th><th>AIV</th><th>Funding $</th>
+          </tr></thead>
+          <tbody id="histrows"></tbody>
+        </table>
+      </div>
+      <div class="swipeline" id="histLive" style="padding:7px 14px 10px;"></div>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="notes">
+      <div class="note"><h4>What this design accepts</h4>
+        <p>History lives below the table, so with 30 PAs × 52 weeks you scroll. In exchange, <b>nothing above changes</b>
+           — header, options, LY / NP baselines and the override flow port 1:1.</p></div>
+      <div class="note"><h4>Wiring notes</h4>
+        <p>History follows the same <b>selected-PA</b> state the cost-ladder side panel uses. Rows are plain values —
+           Sales / Units / AGP / AIV / Funding $ — promoted weeks tinted with the tactic chip. Send-to-buying stays beside
+           Units, sized to the column.</p></div>
+    </div>
+  </div>
+
+  <!-- ===== override modal — same content as the plan's override screen ===== -->
+  <div class="ovbg" id="ovbg" hidden>
+    <div class="ovbox">
+      <div class="ovhead">
+        <div>
+          <h3>Override recommendation</h3>
+          <p><b>BRAWNY TEAR-A-SQUARE 4 ROLL</b> · CIG 113016952 · GEORGIA-PACIFIC — build a custom promo across every price area, or override individual price areas.</p>
+        </div>
+        <button class="ovback" id="ovclose1">← Back to recommendations</button>
+      </div>
+      <div class="ovwarn"><b>Override mode.</b> Results are not optimised by the recommender. Linked items in store may be impacted. No guardrail or reliability scores will be shown.</div>
+      <div class="ovgrid">
+        <section class="syscard">
+          <header><span class="systag apex">APEX</span> Price-point promotion</header>
+          <div class="fgrid">
+            <label class="fld"><span>Discount</span><select><option>PP</option><option>%</option><option>Cents</option><option>BXG1</option></select></label>
+            <label class="fld"><span>Factor</span><input value="0"></label>
+            <label class="fld"><span>Amount</span><input placeholder="$ –"></label>
+            <label class="fld"><span>UOM</span><select><option>E — Each</option><option>W — Weighted</option></select></label>
+            <label class="fld"><span>Min buy</span><input value="1"></label>
+            <label class="fld"><span>Limit</span><input value="6"></label>
+            <label class="chk"><input type="checkbox"> In Ad</label>
+          </div>
+          <div class="allow"><span>Allowance</span>
+            <div class="arow sel"><span class="id">4379527</span> Buying allowance <span class="abadge">PRIMARY</span><span class="meta">Active · $11,550.00</span></div>
+            <div class="arow"><span class="id">4381002</span> Off-invoice allowance<span class="meta">Active · $8,200.00</span></div>
+            <div class="arow"><span class="id">4390115</span> Bill-back allowance<span class="meta">Pending · $4,300.00</span></div>
+          </div>
+        </section>
+        <section class="syscard">
+          <header><span class="systag oms">OMS</span> Multi-channel promotion</header>
+          <div class="fgrid">
+            <label class="fld"><span>Channel</span><select><option>Store Only</option><option>Print Only</option><option>Clip Click</option><option>Digital Only</option></select></label>
+            <label class="fld"><span>Tactic</span><select><option>Item Discount</option><option>BXGX</option><option>MB</option></select></label>
+            <label class="fld"><span>UOM</span><select><option>E — Each</option><option>W — Weighted</option></select></label>
+            <label class="fld"><span>Min buy</span><input value="0"></label>
+            <label class="fld"><span>Discount</span><select><option>PP Ea</option><option>% Ea</option><option>Cents Ea</option><option>Free Ea</option></select></label>
+            <label class="fld"><span>Amount</span><input placeholder="$ –"></label>
+            <label class="fld"><span>Lim</span><input value="6"></label>
+            <label class="fld"><span>Lim Lb</span><input value="0"></label>
+          </div>
+        </section>
+      </div>
+      <div class="ovact"><button class="btn2" id="ovclose2">Cancel</button><button class="btn1" id="ovsave">Save override</button></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  function hash(s){let h=0;for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(0+i))|0;}return Math.abs(h);}
+  function rnd(seed,k){return ((hash(seed)*(k+7)*2654435761)>>>8)%1000/1000;}
+  const money=(v)=>"$"+Math.round(v)+"K", fu=(v)=>Math.round(v)+"K";
+  let sel="PA01", expanded={PA01:true}, chosen={};
+
+  // exact option set from the plan (screenshot parity)
+  const OPTS=[
+    {n:"#1 REC",rec:true, store:["Item Discount","Save $0.48"], dig:["Item Discount","$1.90"], promo:1.93, mb:"1 / 6", s:77, rg:"R 83 · G 65"},
+    {n:"#2", store:["Item Discount","Save $0.48"], dig:["Personalized","$1.90"], promo:1.93, mb:"1 / 6", s:73, rg:"R 82 · G 64"},
+    {n:"#3", store:["Item Discount","Save $0.48"], dig:["Meal Deal","$1.90"], promo:1.93, mb:"1 / 6", s:71, rg:"R 80 · G 62"},
+    {n:"#4", store:["Buy X Get X","BOGO 50%"], dig:["Must Buy","$1.90"], promo:1.93, mb:"2 / 8", s:70, rg:"R 79 · G 61"},
+    {n:"#5", store:["Buy X Get X","B1G1 Free"], dig:["Fab 5","$1.43"], promo:1.45, mb:"2 / 8", s:60, rg:"R 60 · G 59", low:true}
+  ];
+  const PAS=Array.from({length:30},(_,i)=>{
+    const pa="PA"+String(i+1).padStart(2,"0"), f=.8+rnd(pa,3)*.5;
+    return {pa:pa, vlc:1.42+rnd(pa,1)*.08, dnc:.86+rnd(pa,2)*.05, base:2.41+rnd(pa,6)*.09, sales:6*f, units:3*f, agp:4*f, buy:Math.round(3000*f*1.08)};
+  });
+
+  function optCells(o,r){
+    return '<td>$'+r.vlc.toFixed(2)+'</td><td>$'+r.dnc.toFixed(2)+'</td><td>$'+r.base.toFixed(2)+'</td><td class="promo">$'+o.promo.toFixed(2)+'</td>'+
+      '<td class="l tac"><b>'+o.store[0]+'</b><small>'+o.store[1]+'</small></td>'+
+      '<td class="l tac"><b>'+o.dig[0]+'</b><small>'+o.dig[1]+'</small></td>'+
+      '<td class="c">'+o.mb+'</td><td class="c">Y / Y</td><td>$0.37</td>';
+  }
+  function render(){
+    let h="";
+    PAS.forEach((r)=>{
+      const cIdx=chosen[r.pa]||0, o=OPTS[cIdx], exp=!!expanded[r.pa];
+      h+='<tr class="parow'+(sel===r.pa?" is-sel":"")+'" data-pa="'+r.pa+'">'+
+        '<td class="l pa">'+r.pa+"</td>"+optCells(o,r)+
+        '<td><b>'+money(r.sales)+'</b></td><td><b>'+fu(r.units)+'</b></td>'+
+        '<td class="buyc" title="Units to send for buying — predicted '+Math.round(r.buy/1.08).toLocaleString()+' · MAE-adjusted '+r.buy.toLocaleString()+'"><input class="buyin" value="'+r.buy.toLocaleString()+'"><small class="buyhint">adj '+r.buy.toLocaleString()+'</small></td>'+
+        '<td><b>'+money(r.agp)+'</b></td>'+
+        '<td class="score"><b class="'+(o.low?"np-neg":"")+'">'+o.s+'</b><small>'+o.rg+'</small></td>'+
+        '<td class="c"><button class="toggle'+(exp?" is-open":"")+'" data-t="'+r.pa+'">'+(exp?"Hide ▾":"+4 ▾")+'</button></td></tr>';
+      if(exp){
+        h+='<tr class="nesthead"><td colspan="16"><span class="cap">Options for '+r.pa+'</span> — alternates · LY actual · no-promo baseline</td></tr>';
+        OPTS.forEach((x,xi)=>{
+          h+='<tr class="altrow'+(cIdx===xi?" is-chosen":"")+'" data-pick="'+r.pa+'|'+xi+'">'+
+            '<td class="l"><span class="radio'+(cIdx===xi?" on":"")+'"></span>'+(x.rec?'<span class="rec-pill">#1 REC</span>':x.n)+'</td>'+
+            optCells(x,r)+
+            '<td>'+money(r.sales*(1-xi*.01)+(xi===4?1:0))+'</td><td>'+fu(r.units+(xi===4?1:0))+'</td><td class="c mut">–</td><td>'+money(r.agp)+'</td>'+
+            '<td class="score"><b class="'+(x.low?"np-neg":"")+'">'+x.s+'</b><small>'+x.rg+'</small></td><td></td></tr>';
+        });
+        h+='<tr class="altrow"><td class="l"><span class="refpill ly">LY</span></td><td class="mut c">–</td><td class="mut c">–</td><td class="mut c">–</td><td class="promo">$1.50</td>'+
+          '<td class="l tac"><b>Buy 5 Get 3</b><small>Last year</small></td><td class="mut c">–</td><td class="mut c">–</td><td class="mut c">–</td><td class="mut c">–</td>'+
+          '<td>$5K</td><td>2K</td><td class="c mut">–</td><td>$3K</td><td class="score"><small>actual</small></td><td></td></tr>';
+        h+='<tr class="altrow"><td class="l"><span class="refpill np">NP</span></td><td class="mut c">–</td><td class="mut c">–</td><td>$2.42</td><td class="mut c">–</td>'+
+          '<td class="l tac"><b>No promo</b><small>Skip promo</small></td><td class="mut c">–</td><td class="mut c">–</td><td class="mut c">–</td><td class="mut c">–</td>'+
+          '<td>$6K</td><td>3K</td><td class="c mut">–</td><td>$4K</td><td class="score"><b>60</b><small>R 85 · G 70</small></td><td></td></tr>';
+        h+='<tr class="ovrow"><td colspan="16">None of these fit? <a data-ov>Override the recommendation →</a></td></tr>';
+      }
+    });
+    document.getElementById("rows").innerHTML=h;
+    document.getElementById("buytot").textContent=PAS.reduce((t,r)=>t+r.buy,0).toLocaleString();
+    document.querySelectorAll(".parow").forEach((tr)=>tr.onclick=(e)=>{
+      if(e.target.closest(".buyc")||e.target.closest(".toggle"))return;
+      sel=tr.dataset.pa; render(); hist();
+    });
+    document.querySelectorAll(".toggle").forEach((b)=>b.onclick=(e)=>{e.stopPropagation();const pa=b.dataset.t;expanded[pa]=!expanded[pa];render();});
+    document.querySelectorAll("[data-pick]").forEach((tr)=>tr.onclick=()=>{const p=tr.dataset.pick.split("|");chosen[p[0]]=+p[1];render();});
+    document.querySelectorAll("[data-ov]").forEach((a)=>a.onclick=()=>{document.getElementById("ovbg").hidden=false;});
+  }
+  function hist(){
+    document.getElementById("histPa").textContent=sel;
+    const base=PAS.find(r=>r.pa===sel);
+    const TAC=[["Item Discount","id","ID"],["Buy X Get X","bxgx","BXGX"],["Must Buy","mb","MB"]];
+    let h="", d=new Date(2026,1,9);   // week of Feb 9 2026 = W7
+    for(let i=0;i<52;i++){
+      const wk=7-i<=0?7-i+52:7-i, yr=7-i<=0?"’25":"’26";
+      const promo=rnd(sel+"w"+i,2)>0.62||i===0, tac=TAC[(i+hash(sel))%3];
+      const f=(.62+rnd(sel+"h"+i,4)*.5)*(promo?1.5:1);
+      const sales=base.sales*f*.9, units=base.units*f*.92, agp=base.agp*f*.85;
+      const aiv=(sales/units)*(promo?.82:.98)*(0.94+rnd(sel+"a"+i,6)*.12);
+      const fund=promo?units*(0.3+rnd(sel+"f"+i,8)*.15):0;
+      const dstr=(d.getMonth()+1)+"/"+d.getDate(); d.setDate(d.getDate()-7);
+      h+='<tr class="'+(promo?"pr":"")+'">'+
+        '<td class="l wkc"><b>W'+wk+yr+'</b><small>wk of '+dstr+'</small></td>'+
+        '<td class="l">'+(promo?tac[0]+' <span class="tchip '+tac[1]+'">'+tac[2]+"</span>":'<span class="tchip none">no promo</span>')+"</td>"+
+        '<td>'+money(sales)+'</td><td>'+fu(units)+'</td><td>'+money(agp)+'</td><td class="aiv">$'+aiv.toFixed(2)+'</td>'+
+        '<td>'+(promo?"$"+fund.toFixed(1)+"K":'<span class="mut">–</span>')+'</td></tr>';
+    }
+    document.getElementById("histrows").innerHTML=h;
+  }
+  const close=()=>document.getElementById("ovbg").hidden=true;
+  document.getElementById("ovclose1").onclick=close;
+  document.getElementById("ovclose2").onclick=close;
+  document.getElementById("ovsave").onclick=close;
+  document.getElementById("ovbg").addEventListener("mousedown",(e)=>{if(e.target.id==="ovbg")close();});
+  // live "x of y — swipe ↓" counts for the two swipe windows
+  function live(el,out,total,label){
+    const upd=()=>{
+      const frac=el.scrollHeight<=el.clientHeight?1:(el.scrollTop+el.clientHeight)/el.scrollHeight;
+      out.textContent=Math.max(1,Math.min(total,Math.round(frac*total)))+" of "+total+" "+label+" — swipe ↓";
+    };
+    el.addEventListener("scroll",upd); upd();
+  }
+  render(); hist();
+  live(document.querySelector(".twrap"),document.getElementById("paLive"),30,"price areas");
+  live(document.getElementById("histscroll"),document.getElementById("histLive"),52,"weeks");
+})();
+</script>
+</body>
+</html>

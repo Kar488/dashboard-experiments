@@ -2878,6 +2878,23 @@ body.dark .npv2-fg-buyc.is-edited { background: rgba(25,160,106,0.28) !important
 body.dark .npv2-fg-buyc.is-edited .npv2-fg-input { color: #9fe6c8 !important; }
 body.dark .npv2-fg-buyc:focus-within { background: rgba(25,160,106,0.18) !important; }
 
+/* week-by-week PA table: Send-to-buying input column (teal = editable) */
+.npv2-wk-table th.npv2-wk-buyh { color: #0f7a5c; background: #e3f3ec; }
+.npv2-wk-table td.npv2-wk-buyc { background: #eef8f3; white-space: nowrap; }
+.npv2-wk-buyin { width: 62px; border: 1px solid #b7ddcb; border-radius: 6px; padding: 4px 6px;
+  font-family: inherit; font-size: 0.72rem; font-weight: 700; color: #0d6b4f; text-align: right; background: #fff; }
+.npv2-wk-buyin:focus { outline: none; border-color: #19a06a; box-shadow: 0 0 0 2px rgba(25,160,106,0.22); }
+.npv2-wk-buyhint { display: block; font-size: 0.56rem; color: #2a8a68; margin-top: 2px; white-space: nowrap; }
+.npv2-wk-table td.npv2-wk-buyc.is-edited { background: #d7eee1; }
+.npv2-wk-table td.npv2-wk-buyc.is-edited .npv2-wk-buyin { background: #f2fbf7; border-color: #19a06a; }
+.npv2-wk-table tfoot td.npv2-wk-buyt { color: #0d6b4f; background: #e3f3ec; }
+body.dark .npv2-wk-table th.npv2-wk-buyh { color: #6fd0ab; background: rgba(25,160,106,0.14); }
+body.dark .npv2-wk-table td.npv2-wk-buyc { background: rgba(25,160,106,0.08); }
+body.dark .npv2-wk-buyin { background: #0f1828; border-color: #2c4a3d; color: #9fe6c8; }
+body.dark .npv2-wk-buyhint { color: #74c7a5; }
+body.dark .npv2-wk-table td.npv2-wk-buyc.is-edited { background: rgba(25,160,106,0.2); }
+body.dark .npv2-wk-table tfoot td.npv2-wk-buyt { color: #9fe6c8; background: rgba(25,160,106,0.14); }
+
 /* ===== Hover-expand week-cell card + base-change markers =====================
    A promoted 52-week cell grows into a card on hover (replaces the tooltip):
    week KPI tiles, secondary rate strip, store/digital tactic, condensed cost

@@ -70,33 +70,13 @@
   ];
   // pinned inputs: VLC · Promo cost (Reg / Deep) · Events (Store / Dig / S+D, toggled Reg↔Deep)
   const VLCCOL = { k: "vlc", label: "$/u", edit: true, dec: true, val: (o, e) => e.vlc.toFixed(2) };
-  // Send-to-buying units — merchant-entered quantity that goes to buying.
-  // Prefilled with the MAE-adjusted suggestion (predicted units + the learnt MAE
-  // across price areas); the hint line keeps both numbers visible.
-  const BUYUNITS = {};   // uid → entered units (K)
-  function buyMaePct(o) { return 0.05 + (Math.abs(NP.util.hashStr(o.uid + "|mae")) % 100) / 1000; }   // learnt 5–14.9%
-  function buySuggest(o, res) { const pred = res.units, mae = pred * buyMaePct(o); return { pred: pred, mae: mae, adj: pred + mae }; }
-  function buyCellHTML(o, res) {
-    const s = buySuggest(o, res), adjR = Math.round(s.adj);
-    const cur = BUYUNITS[o.uid], val = cur != null ? cur : adjR;
-    const edited = cur != null && Math.round(cur) !== adjR;
-    const tip = "Units to send for buying (K) — predicted " + NP.fmt.u(s.pred) + " · learnt MAE across price areas ±" + (buyMaePct(o) * 100).toFixed(1) + "% (" + NP.fmt.u(s.mae) + ") → MAE-adjusted " + NP.fmt.u(s.adj);
-    return '<div class="npv2-fg-cell npv2-fg-inc npv2-fg-edit npv2-fg-evc npv2-fg-buyc' + (edited ? " is-edited" : "") + '" data-cell="' + o.uid + ':buyUnits" title="' + esc(tip) + '">' +
-      '<input class="npv2-fg-input npv2-fg-buyin" type="text" inputmode="numeric" data-uid="' + o.uid + '" data-adj="' + adjR + '" value="' + Math.round(val) + '">' +
-      '<span class="npv2-fg-evsplit npv2-fg-buyhint">pred ' + NP.fmt.u(s.pred) + " · adj " + NP.fmt.u(s.adj) + "</span></div>";
-  }
-  function onBuyInput(e) {
-    const inp = e.target, uid = inp.dataset.uid, adj = +inp.dataset.adj;
-    const v = parseInt(String(inp.value).replace(/[^0-9]/g, ""), 10);
-    if (isNaN(v)) delete BUYUNITS[uid]; else BUYUNITS[uid] = v;
-    const cell = inp.closest(".npv2-fg-inc");
-    if (cell) cell.classList.toggle("is-edited", BUYUNITS[uid] != null && BUYUNITS[uid] !== adj);
-  }
-  function onBuyBlur(e) {
-    const inp = e.target, uid = inp.dataset.uid;
-    if (BUYUNITS[uid] == null) { inp.value = inp.dataset.adj; const cell = inp.closest(".npv2-fg-inc"); if (cell) cell.classList.remove("is-edited"); }
-    else inp.value = String(Math.round(BUYUNITS[uid]));
-  }
+  // Send-to-buying units — merchant-entered buy quantity. Buying commits per
+  // PRICE AREA, so this is NOT a Promotional Calendar column: the input lives in
+  // the week-by-week view beside each PA's Units, prefilled with the
+  // MAE-adjusted suggestion (predicted units + the learnt MAE for that PA).
+  const BUYUNITS = {};   // `${uid}:${week}:${pa}` → entered units
+  function buyMaePct(seed) { return 0.05 + (Math.abs(NP.util.hashStr(seed + "|mae")) % 100) / 1000; }   // learnt 5–14.9%
+  function buySuggest(seed, predUnits) { const mae = predUnits * buyMaePct(seed); return { pred: predUnits, mae: mae, adj: Math.round(predUnits + mae) }; }
   // Promo cost (Reg / Deep) is now the DERIVED result of the allowance breakup — read-only
   const COSTCOLS = [
     { k: "deadNet", label: "Reg" },
@@ -230,8 +210,7 @@
       '<div class="npv2-fg-name"><b>' + esc(o.item) + " " + esc(o.pack) + '</b><span class="np-rc-id">' + esc(String(o.ncrc).replace(/^NCRC\s*/i, "")) + '</span><span class="np-rc-id npv2-fg-base">Base ' + NP.fmt.price(o.basePrice) + "</span></div>" +
       grpBody("out", OUTCOLS.map((c) => outCellHTML(c, res, ly)).join("")) +
       (inputsOn()
-        ? grpBody("buy", buyCellHTML(o, res)) +
-          grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
+        ? grpBody("vlc", inCellHTML(VLCCOL, o, eDraft)) +
           grpBody("cost", costCellHTML(o, false) + costCellHTML(o, true)) +
           grpBody("alw", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft, false)).join("")) +
           (sbsOn() ? grpBody("alw npv2-fg-alwdeep", ALLOWCOLS.map((c) => allowCellHTML(c, o, eDraft, true)).join("")) : "") +
@@ -245,8 +224,7 @@
       '<div class="npv2-fg-name npv2-fg-nameh">NCRC · item</div>' +
       grpHead("out", "Outputs vs LY", OUTCOLS) +
       (inputsOn()
-        ? grpHead("buy", "Send to buying", [{ k: "buyUnits", label: "Units (K)", edit: true }]) +
-          grpHead("vlc", "List", [VLCCOL]) +
+        ? grpHead("vlc", "List", [VLCCOL]) +
           grpHead("cost", "Promo cost $/u", COSTCOLS) +
           grpHead("alw", allowCap(false), ALLOWCOLS) +
           (sbsOn() ? grpHead("alw npv2-fg-alwdeep", allowCap(true), ALLOWCOLS) : "") +
@@ -279,9 +257,8 @@
     const lyd = o.lyDepth || 0;
     const dtier = depthTier(c.depth), dLbl = DEPTH_LABEL[dtier];
     const depthDot = '<span class="npv2-dp-dot npv2-dp-' + dtier + '" title="' + dLbl + " depth · " + (c.depth * 100).toFixed(0) + '%"></span>';
-    // LY status: repeats last year's week (show LY depth) vs a new/optimized placement
+    // LY status: repeats last year's week vs a new/optimized placement (icon only — see legend)
     const repeat = !!(lyset && lyset.has(w));
-    const stHtml = repeat ? '<span class="npv2-wk-st st-rep">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-st st-new">new</span>';
     const ixt = ixf === "cann" ? " · ⚠ cluster rival also on deal (cannibalisation)" : ixf === "halo" ? " · ✦ co-promoted with a complement (halo)" : "";
     // promo prices: store at this week's depth; digital a touch deeper; plus the LY price
     const hasDig = c.digital.length > 0, digDepth = Math.min(0.5, c.depth + 0.06);
@@ -310,7 +287,6 @@
         '<div class="npv2-wk-pr"><span class="npv2-wk-ch">S</span><b>' + sp + "</b></div>" +
         (repeat ? '<div class="npv2-wk-lp">LY ' + lySp + "</div>" : "") +
         (hasDig ? '<div class="npv2-wk-pr npv2-wk-prd"><span class="npv2-wk-ch npv2-wk-chd">D</span><b>' + dp + "</b></div>" + (repeat ? '<div class="npv2-wk-lp">LY ' + lyDp + "</div>" : "") : "") +
-        (!repeat ? '<div class="npv2-wk-lp"><span class="npv2-wk-newt">new</span></div>' : "") +
         '<div class="npv2-wk-tags">' + holI + depthDot + optIcon + lockI + warnI + chgBadges(o, c.week) + "</div>" +
       "</div></td>";
   }
@@ -619,7 +595,7 @@
     const cell = inp.closest(".npv2-fg-inc");
     if (cell) { const edited = NP.isEdited(o, field); cell.classList.toggle("is-edited", edited); cell.classList.toggle("is-outband", edited && !NP.inBand(o, field, inp.value)); }
     if (field === "vlc") updateCostCells(o);   // promo cost is derived from VLC × (1 − allowances)
-    showBand(inp, o); updateScenarioUI();
+    updateScenarioUI();
   }
   // allowance edits build the (read-only) promo cost — update the derived cost cells live
   function onAllowInput(e) {
@@ -644,20 +620,10 @@
   }
   function onEditBlur(e) {
     const inp = e.target, field = inp.dataset.field, o = NP.cat().items.find((x) => x.uid === inp.dataset.uid), d = NP.effective(o, NP.state.draft);
-    if (field === "evTotal" || field === "deepEvTotal") { const sp = evSplitOf(d, field === "deepEvTotal"); inp.value = String(sp[0] + sp[1] + sp[2]); hideBand(); return; }
+    if (field === "evTotal" || field === "deepEvTotal") { const sp = evSplitOf(d, field === "deepEvTotal"); inp.value = String(sp[0] + sp[1] + sp[2]); return; }
     const dec = field === "vlc" || field === "deadNet" || field === "deepDeadNet";
     if (d[field] != null) inp.value = dec ? Number(d[field]).toFixed(2) : String(d[field]);
-    hideBand();
   }
-  function showBand(inp, o) {
-    const hint = document.getElementById("npCellHint"); if (!hint) return;
-    const field = inp.dataset.field, r = NP.ranges(o)[field]; if (!r) return;
-    const f = (v) => (r.unit === "$" ? "$" + v.toFixed(2) : Math.round(v)), within = NP.inBand(o, field, inp.value);
-    hint.innerHTML = "Discovered band <b>" + f(r.lo) + "–" + f(r.hi) + "</b> · " + (within ? '<span class="np-pos">within band — no reforecast needed</span>' : '<span class="np-neg">outside band — Rerun to reforecast</span>');
-    const rect = inp.getBoundingClientRect();
-    hint.style.left = Math.min(rect.left, window.innerWidth - 340) + "px"; hint.style.top = (rect.bottom + 4) + "px"; hint.hidden = false;
-  }
-  function hideBand() { const h = document.getElementById("npCellHint"); if (h) h.hidden = true; }
 
   function renderFront() {
     const front = document.getElementById(FRONT); if (!front) return;
@@ -717,13 +683,7 @@
     // editable pinned inputs (VLC, events) — allowance + buy-units inputs are handled separately below
     front.querySelectorAll(".npv2-fg-input:not(.npv2-fg-alwin):not(.npv2-fg-buyin)").forEach((inp) => {
       inp.addEventListener("input", onEditInput);
-      inp.addEventListener("focus", (e) => showBand(e.target, NP.cat().items.find((x) => x.uid === e.target.dataset.uid)));
       inp.addEventListener("blur", onEditBlur);
-    });
-    // send-to-buying units — local state with the MAE-adjusted suggestion as default
-    front.querySelectorAll(".npv2-fg-buyin").forEach((inp) => {
-      inp.addEventListener("input", onBuyInput);
-      inp.addEventListener("blur", onBuyBlur);
     });
     // allowance inputs build the (read-only) promo cost — write to the regular/deep ladder live
     front.querySelectorAll(".npv2-fg-alwin").forEach((inp) => {
@@ -997,7 +957,7 @@
     const arr = promoted ? '<span class="npv2-cp-depth npv2-dp-' + dtier + '">' + DEPTH_LABEL[dtier] + "</span>" : "";
     const opt = !promoted ? "" : (repeat ? '<i class="npv2-wk-opt is-rep" title="repeats last year">↺</i>' : '<i class="npv2-wk-opt is-opt" title="optimized — new placement vs last year">✦</i>');
     let paN = 4; try { paN = paData(o, w1).length; } catch (x) {}   // PA count only — never let it kill the card
-    const st = promoted ? (repeat ? '<span class="npv2-wk-ly">LY ' + (lyd * 100).toFixed(0) + "%</span>" : '<span class="npv2-wk-newt">NEW</span>') : '<span class="npv2-cp-baselbl">baseline</span>';
+    const st = promoted ? (repeat ? '<span class="npv2-wk-ly">LY ' + (lyd * 100).toFixed(0) + "%</span>" : "") : '<span class="npv2-cp-baselbl">baseline</span>';
     const remaining = 52 - w1;
     const chip = applied ? '<span class="npv2-cp-refchip" title="running on the base set in W' + ch.week + '">⟳ reforecast W' + ch.week + " → W52</span>" : "";
     const refc = locked
@@ -1016,7 +976,7 @@
     return '<div class="npv2-cp-head">' +
         headChip +
         '<div class="npv2-cp-main"><b>' + esc(o.item) + " " + esc(o.pack) + "</b>" +
-          '<span class="npv2-cp-sub">' + esc(weekLabel(w1)) + " · " + paN + " price areas · 245 stores · " + st + (locked ? ' · <span class="npv2-cp-lockt">LOCKED</span>' : "") + "</span></div>" +
+          '<span class="npv2-cp-sub">' + esc(weekLabel(w1)) + " · " + paN + " price areas · 245 stores" + (st ? " · " + st : "") + (locked ? ' · <span class="npv2-cp-lockt">LOCKED</span>' : "") + "</span></div>" +
         '<div class="npv2-cp-hr">' + arr + opt +
           '<button type="button" class="npv2-cp-hbtn" data-cppin>' + (CELLPOP.pinned ? "📌 Pinned" : "📌 Pin") + "</button>" +
           '<button type="button" class="npv2-cp-hbtn npv2-cp-x" data-cpclose title="Clear">×</button></div>' +
@@ -1440,7 +1400,7 @@
   }
 
   // --- table cell groups ---
-  function offerCells(of) {
+  function offerCells(of, buyCell) {
     const digCell = of.digName ? '<div class="npv2-wk-tac"><b>' + esc(of.digName) + '</b><small>$' + of.digPromo.toFixed(2) + "</small></div>" : '<span class="npv2-wk-mut">No digital</span>';
     return '<td class="r">$' + of.vlc.toFixed(2) + '</td><td class="r">$' + of.dnc.toFixed(2) + '</td><td class="r">$' + of.base.toFixed(2) + "</td>" +
       '<td class="r npv2-wk-promo">$' + of.promo.toFixed(2) + "</td>" +
@@ -1450,18 +1410,31 @@
       '<td class="r">$' + of.funding.toFixed(2) + "</td>" +
       '<td class="r"><b>' + wkM(of.sales) + "</b></td>" +
       '<td class="r"><b>' + wkU(of.units) + "</b></td>" +
+      (buyCell || dashCells(1)) +   // Send to buying — input on the chosen PA row only
       '<td class="r"><b>' + wkM(of.agp) + "</b></td>" +
       '<td class="r npv2-wk-score">' + (of.isCustom || of.total == null ? '<b class="npv2-wk-mut">—</b><small>custom</small>' : '<b class="' + scoreTone(of.total) + '">' + of.total + "</b><small>R " + of.R + " · G " + of.G + "</small>") + "</td>";
+  }
+  // Send-to-buying input for one PA row — units for THIS price area / week,
+  // prefilled with the MAE-adjusted suggestion; hint keeps pred + adj visible
+  function wkBuyCellHTML(o, week, pd, chosen) {
+    const k = paKey(o, week, pd.pa), predU = Math.round(chosen.units * 1000);
+    const s = buySuggest(k, predU);
+    const cur = BUYUNITS[k], val = cur != null ? cur : s.adj;
+    const edited = cur != null && cur !== s.adj;
+    const tip = "Units to send for buying — " + pd.pa + " predicted " + predU.toLocaleString() + " · learnt MAE ±" + (buyMaePct(k) * 100).toFixed(1) + "% → MAE-adjusted " + s.adj.toLocaleString();
+    return '<td class="r npv2-wk-buyc' + (edited ? " is-edited" : "") + '" title="' + esc(tip) + '">' +
+      '<input class="npv2-wk-buyin" type="text" inputmode="numeric" data-buypa="' + esc(k) + '" data-adj="' + s.adj + '" value="' + val + '">' +
+      '<small class="npv2-wk-buyhint">pred ' + predU.toLocaleString() + " · adj " + s.adj.toLocaleString() + "</small></td>";
   }
   function dashCells(n) { let s = ""; for (let i = 0; i < n; i++) s += '<td class="c npv2-wk-mut">–</td>'; return s; }
   function paBlockHTML(o, week, pd, selPa) {
     const chosen = chosenFor(o, week, pd), expanded = !!WKST.expanded[pd.pa], alts = pd.offers.length;
     let h = '<tr class="npv2-wk-parow' + (selPa === pd.pa ? " is-sel" : "") + (expanded ? " is-exp" : "") + '" data-pa="' + pd.pa + '">' +
       '<td class="l npv2-wk-pa">' + pd.pa + (chosen.isCustom ? ' <span class="npv2-wk-pl">CUSTOM</span>' : "") + "</td>" +
-      offerCells(chosen) +
+      offerCells(chosen, wkBuyCellHTML(o, week, pd, chosen)) +
       '<td class="c npv2-wk-altc"><button type="button" class="npv2-wk-toggle' + (expanded ? " is-open" : "") + '" data-toggle="' + pd.pa + '">' + (expanded ? "Hide" : "+" + (alts - 1)) + " ▾</button></td></tr>";
     if (!expanded) return h;
-    h += '<tr class="npv2-wk-exphead npv2-wk-nest"><td colspan="15" class="l"><span class="npv2-wk-nestcap">Options for ' + pd.pa + "</span> — alternates · LY actual · no-promo baseline</td></tr>";
+    h += '<tr class="npv2-wk-exphead npv2-wk-nest"><td colspan="16" class="l"><span class="npv2-wk-nestcap">Options for ' + pd.pa + "</span> — alternates · LY actual · no-promo baseline</td></tr>";
     pd.offers.forEach((of) => {
       const isC = chosen.id === of.id;
       h += '<tr class="npv2-wk-altrow npv2-wk-nest' + (isC ? " is-chosen" : "") + '" data-pick="' + pd.pa + "|" + esc(of.id) + '">' +
@@ -1472,30 +1445,34 @@
     h += '<tr class="npv2-wk-refrow npv2-wk-nest"><td class="l npv2-wk-pa"><span class="npv2-wk-refpill ly">LY</span></td>' +
       dashCells(3) + '<td class="r npv2-wk-promo">$' + pd.ly.promo.toFixed(2) + "</td>" +
       '<td class="l"><div class="npv2-wk-tac"><b>' + esc(pd.ly.label) + "</b><small>Last year</small></div></td>" + dashCells(4) +
-      '<td class="r">' + wkM(pd.ly.sales) + '</td><td class="r">' + wkU(pd.ly.units) + '</td><td class="r">' + wkM(pd.ly.agp) + "</td>" +
+      '<td class="r">' + wkM(pd.ly.sales) + '</td><td class="r">' + wkU(pd.ly.units) + "</td>" + dashCells(1) + '<td class="r">' + wkM(pd.ly.agp) + "</td>" +
       '<td class="r npv2-wk-score"><small>actual</small></td><td></td></tr>';
     // NP baseline row
     h += '<tr class="npv2-wk-refrow npv2-wk-nest"><td class="l npv2-wk-pa"><span class="npv2-wk-refpill np">NP</span></td>' +
       dashCells(2) + '<td class="r">$' + pd.np.base.toFixed(2) + '</td><td class="c npv2-wk-mut">–</td>' +
       '<td class="l"><div class="npv2-wk-tac"><b>No promo</b><small>Skip promo</small></div></td>' + dashCells(4) +
-      '<td class="r">' + wkM(pd.np.sales) + '</td><td class="r">' + wkU(pd.np.units) + '</td><td class="r">' + wkM(pd.np.agp) + "</td>" +
+      '<td class="r">' + wkM(pd.np.sales) + '</td><td class="r">' + wkU(pd.np.units) + "</td>" + dashCells(1) + '<td class="r">' + wkM(pd.np.agp) + "</td>" +
       '<td class="r npv2-wk-score"><b>' + pd.np.total + "</b><small>R " + pd.np.R + " · G " + pd.np.G + "</small></td><td></td></tr>";
     // override link
     const cust = WKST.custom[paKey(o, week, pd.pa)];
-    h += '<tr class="npv2-wk-ovrow npv2-wk-nest"><td colspan="15">' + (cust
+    h += '<tr class="npv2-wk-ovrow npv2-wk-nest"><td colspan="16">' + (cust
       ? "Custom override saved for <strong>" + pd.pa + '</strong>. <a href="#" class="npv2-wk-ovlink" data-override="' + pd.pa + '">Edit</a> · <a href="#" class="npv2-wk-ovlink npv2-wk-ovclear" data-ovclear="' + pd.pa + '">Clear</a>.'
       : 'None of these fit? <a href="#" class="npv2-wk-ovlink" data-override="' + pd.pa + '">Override the recommendation →</a>') + "</td></tr>";
     return h;
   }
   function recTableHTML(o, week, pds, selPa) {
     const tot = pds.reduce((t, pd) => { const c = chosenFor(o, week, pd); return { funding: t.funding + c.funding, sales: t.sales + c.sales, units: t.units + c.units, agp: t.agp + c.agp }; }, { funding: 0, sales: 0, units: 0, agp: 0 });
+    const buyTot = pds.reduce((t, pd) => {
+      const c = chosenFor(o, week, pd), k = paKey(o, week, pd.pa);
+      return t + (BUYUNITS[k] != null ? BUYUNITS[k] : buySuggest(k, Math.round(c.units * 1000)).adj);
+    }, 0);
     return '<div class="npv2-wk-tablewrap"><table class="npv2-wk-table"><thead><tr>' +
       '<th class="l">PA</th><th class="r">VLC</th><th class="r">DNC</th><th class="r">Base $</th><th class="r">Promo $</th><th class="l">Store tactic</th><th class="l">Digital tactic</th>' +
       '<th class="c">MB / Lim</th><th class="c">Ad / Disp</th><th class="r">Funding $</th>' +
-      '<th class="r">Sales</th><th class="r">Units</th><th class="r">AGP</th><th class="r">Total score</th><th class="c npv2-wk-altc"></th>' +
+      '<th class="r">Sales</th><th class="r">Units</th><th class="r npv2-wk-buyh" title="Units to send for buying — editable, prefilled with the MAE-adjusted suggestion">Send to buying</th><th class="r">AGP</th><th class="r">Total score</th><th class="c npv2-wk-altc"></th>' +
       "</tr></thead><tbody>" + pds.map((pd) => paBlockHTML(o, week, pd, selPa)).join("") + "</tbody><tfoot>" +
       '<tr class="npv2-wk-tot"><td class="l">Total</td><td colspan="8" class="l"><small>' + pds.length + " price areas</small></td>" +
-      '<td class="r">$' + tot.funding.toFixed(2) + '</td><td class="r">' + wkM(tot.sales) + '</td><td class="r">' + wkU(tot.units) + '</td><td class="r">' + wkM(tot.agp) + "</td><td></td><td></td></tr>" +
+      '<td class="r">$' + tot.funding.toFixed(2) + '</td><td class="r">' + wkM(tot.sales) + '</td><td class="r">' + wkU(tot.units) + '</td><td class="r npv2-wk-buyt" data-buytot>' + buyTot.toLocaleString() + '</td><td class="r">' + wkM(tot.agp) + "</td><td></td><td></td></tr>" +
       "</tfoot></table></div>";
   }
 
@@ -1961,8 +1938,29 @@
     front.querySelectorAll("[data-toggle]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const pa = b.dataset.toggle; WKST.expanded[pa] = !WKST.expanded[pa]; WKST.selPa = pa; renderWeekView(); }));
     // pick an offer (radio)
     front.querySelectorAll("[data-pick]").forEach((tr) => (tr.onclick = () => { const p = tr.dataset.pick.split("|"); WKST.chosen[paKey(o, week, p[0])] = p[1]; WKST.selPa = p[0]; renderWeekView(); }));
-    // click a PA summary row → focus it in the side panel
-    front.querySelectorAll(".npv2-wk-parow[data-pa]").forEach((tr) => (tr.onclick = (e) => { if (e.target.closest("[data-toggle]")) return; WKST.selPa = tr.dataset.pa; renderWeekView(); }));
+    // click a PA summary row → focus it in the side panel (but not from the buy input — a re-render would steal its focus)
+    front.querySelectorAll(".npv2-wk-parow[data-pa]").forEach((tr) => (tr.onclick = (e) => { if (e.target.closest("[data-toggle]") || e.target.closest(".npv2-wk-buyc")) return; WKST.selPa = tr.dataset.pa; renderWeekView(); }));
+    // send-to-buying inputs — per PA, MAE-adjusted suggestion as the default
+    const updBuyTot = () => {
+      const cell = front.querySelector("[data-buytot]"); if (!cell) return;
+      let t = 0;
+      front.querySelectorAll(".npv2-wk-buyin").forEach((i) => { const k = i.dataset.buypa; t += BUYUNITS[k] != null ? BUYUNITS[k] : +i.dataset.adj; });
+      cell.textContent = t.toLocaleString();
+    };
+    front.querySelectorAll(".npv2-wk-buyin").forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const k = inp.dataset.buypa, adj = +inp.dataset.adj;
+        const v = parseInt(String(inp.value).replace(/[^0-9]/g, ""), 10);
+        if (isNaN(v)) delete BUYUNITS[k]; else BUYUNITS[k] = v;
+        inp.closest("td").classList.toggle("is-edited", BUYUNITS[k] != null && BUYUNITS[k] !== adj);
+        updBuyTot();
+      });
+      inp.addEventListener("blur", () => {
+        const k = inp.dataset.buypa;
+        if (BUYUNITS[k] == null) { inp.value = inp.dataset.adj; inp.closest("td").classList.remove("is-edited"); updBuyTot(); }
+        else inp.value = String(BUYUNITS[k]);
+      });
+    });
     // open the Override recommendation builder (full-screen), jumping to the clicked PA
     front.querySelectorAll("[data-override]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.override; const cust = WKST.custom[paKey(o, week, pa)]; WKST.oform = WKST.oform || freshPromoForm(); WKST.override = true; WKST.manualEditPa = pa; WKST.defaultOpen = false; WKST.manualEditForm = (cust && cust._form) ? Object.assign({}, cust._form) : Object.assign({}, WKST.oform); renderWeekView(); }));
     front.querySelectorAll("[data-ovclear]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const pa = a.dataset.ovclear; delete WKST.custom[paKey(o, week, pa)]; if (WKST.chosen[paKey(o, week, pa)] === "custom-" + pa) delete WKST.chosen[paKey(o, week, pa)]; renderWeekView(); }));

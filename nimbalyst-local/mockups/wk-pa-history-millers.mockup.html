@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design 2 — true miller columns: NCRC › PA › promotion › KPIs › 52-week benchmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f4f6fa; --line:#dfe5ef; --line-strong:#c8d2e2; --muted:#667085;
+    --blue:#1769e8; --soft:#f5f7fb; --ink:#0f172a; --faint:#98a4b6;
+    --green:#177245; --red:#c0392b; --blue-soft:#eef4ff;
+    --promo-ink:#9a7926;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px;padding:24px;}
+  .np-pos{color:var(--green);} .np-neg{color:var(--red);}
+  .frame{max-width:1540px;margin:0 auto 22px;background:#fff;border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 24px 60px rgba(15,23,42,.12);overflow:hidden;}
+  .head{padding:14px 22px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:24px;align-items:flex-start;}
+  .eyebrow{font-size:.62rem;letter-spacing:.14em;font-weight:700;color:var(--blue);}
+  .head h2{margin:4px 0 5px;font-size:1.12rem;font-weight:700;}
+  .head p{margin:0;font-size:.72rem;color:var(--muted);max-width:800px;line-height:1.5;}
+  .state-pill{font-size:.62rem;font-weight:700;letter-spacing:.05em;border-radius:20px;padding:5px 12px;
+    background:var(--blue-soft);color:var(--blue);border:1px solid #cfe1ff;white-space:nowrap;}
+
+  /* ============ true miller columns ============ */
+  /* proportions: promotion is the focus (grows first, capped so it never becomes
+     whitespace); the rest of the slack spreads across PA / benchmark / KPIs */
+  .miller{display:grid;grid-template-columns:minmax(152px,.6fr) minmax(214px,.9fr) minmax(300px,400px) minmax(188px,.7fr) minmax(320px,1.1fr);margin:16px 22px;
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+  .pane{border-right:1px solid var(--line);min-width:0;display:flex;flex-direction:column;}
+  .pane:last-child{border-right:0;}
+  .pane-head{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;
+    background:#fafbfd;border-bottom:1px solid var(--line);}
+  .pane-head .ttl{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pane-head .cnt{margin-left:auto;font-size:.58rem;color:var(--faint);font-weight:600;white-space:nowrap;}
+  .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;flex:none;}
+  .seg button{border:0;background:#fff;color:var(--muted);font-family:inherit;font-size:.58rem;font-weight:700;padding:3px 8px;cursor:pointer;}
+  .seg button.on{background:var(--ink);color:#fff;}
+  /* panes scroll by swipe / wheel — no scrollbars; the live count says where you are */
+  .pane-body{overflow-y:auto;max-height:560px;scrollbar-width:none;}
+  .pane-body::-webkit-scrollbar{display:none;}
+  .loaded{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,#fff 42%);
+    padding:12px 12px 8px;font-size:.58rem;color:var(--faint);font-weight:600;text-align:center;}
+
+  /* --- NCRC pane: compact, grouped by vendor --- */
+  .vhead{display:flex;align-items:center;gap:8px;padding:7px 12px 4px;font-size:.56rem;letter-spacing:.05em;
+    font-weight:700;color:var(--faint);text-transform:uppercase;background:#fcfdff;border-bottom:1px solid #eef1f6;}
+  .vhead .vc{margin-left:auto;background:#eef1f6;color:var(--muted);border-radius:10px;padding:0 7px;font-size:.56rem;}
+  .irow{display:flex;align-items:flex-start;gap:7px;padding:7px 12px;border-bottom:1px solid #eef1f6;cursor:pointer;position:relative;}
+  .irow:hover{background:#fbfcfe;}
+  .irow.drill{background:var(--blue-soft);}
+  .irow.drill::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);}
+  .inum{flex:none;width:16px;height:16px;border-radius:50%;background:#eef1f6;color:var(--muted);font-size:.54rem;
+    font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-top:1px;}
+  .irow.drill .inum{background:var(--blue);color:#fff;}
+  .imain{min-width:0;}
+  .icode{display:block;font-size:.52rem;color:var(--faint);font-weight:600;}
+  .iname{display:block;font-size:.66rem;font-weight:700;line-height:1.25;}
+  .iname i{font-style:normal;color:var(--faint);font-weight:500;}
+
+  /* --- PA pane: deal facts, comfortable padding; toggle flips rows to KPI view --- */
+  .parow2{padding:10px 13px;border-bottom:1px solid #eef1f6;cursor:pointer;position:relative;}
+  .parow2:hover{background:#fbfcfe;}
+  .parow2.drill{background:var(--blue-soft);}
+  .parow2.drill::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);}
+  .parow2 .top{display:flex;align-items:baseline;gap:8px;margin-bottom:5px;}
+  .parow2 .pa{font-size:.64rem;font-weight:750;}
+  .parow2 .costs{margin-left:auto;font-size:.56rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .parow2 .costs b{color:var(--ink);font-weight:700;}
+  .chline{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:.62rem;white-space:nowrap;overflow:hidden;}
+  .ch{flex:none;font-size:.5rem;font-weight:800;color:#fff;background:#8aa0bd;border-radius:2px;padding:0 3px;line-height:1.5;}
+  .ch.d{background:#3b6fb5;}
+  .chline .pp{font-weight:800;color:var(--promo-ink);}
+  .chline .tn{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;}
+  .chline small{color:var(--faint);font-size:.56rem;}
+  .chline .dt{color:var(--promo-ink);font-weight:700;font-size:.58rem;}
+  /* KPI view of a PA row — every PA's metrics in a nutshell, no clicking */
+  /* KPI view: metrics as COLUMNS, rows = this year / LY / Δ (abs + %) —
+     the same CY / LY / Δ mini-table pattern the plan's month cells use */
+  .pamt2{width:100%;border-collapse:collapse;margin-top:3px;}
+  .pamt2 td{padding:1px 0 1px 8px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .pamt2 td:first-child{padding-left:0;text-align:left;width:14px;}
+  .pamt2 .h td{font-size:.46rem;letter-spacing:.03em;font-weight:700;color:var(--faint);text-transform:uppercase;}
+  .pamt2 .cy td{font-size:.6rem;font-weight:750;color:var(--ink);}
+  .pamt2 .lyr td{font-size:.54rem;color:var(--faint);}
+  .pamt2 .rl{font-size:.46rem !important;font-weight:800;color:var(--faint) !important;text-transform:uppercase;}
+  .pamt2 .d td{font-size:.5rem;font-weight:700;padding-top:2px;}
+  .pamt2 .d i{display:block;font-style:normal;font-weight:600;}
+
+  /* --- promotion pane: full detail per channel --- */
+  .orow{display:flex;align-items:flex-start;gap:8px;padding:9px 13px;border-bottom:1px solid #eef1f6;cursor:pointer;position:relative;}
+  .orow:hover{background:#fbfcfe;}
+  .orow.drill{background:var(--blue-soft);}
+  .orow.drill::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);}
+  .radio{flex:none;display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--line-strong);margin-top:3px;}
+  .orow.drill .radio{border-color:var(--blue);background:var(--blue);box-shadow:inset 0 0 0 2.5px #fff;}
+  .omain{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px;}
+  .otop{display:flex;align-items:baseline;gap:8px;}
+  .oname{font-size:.7rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .oname .rec-pill{font-size:.54rem;font-weight:800;color:#fff;background:var(--blue);border-radius:10px;padding:1px 7px;margin-right:2px;vertical-align:1px;}
+  .oscore{margin-left:auto;flex:none;white-space:nowrap;}
+  .oscore small{font-size:.58rem;font-weight:700;color:var(--muted);}
+  .refrow{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid #eef1f6;font-size:.62rem;color:var(--muted);}
+  .refpill{flex:none;font-size:.56rem;font-weight:800;border-radius:5px;padding:1px 7px;}
+  .refpill.ly{color:#7c5cd6;background:#f2eeff;} .refpill.np{color:var(--muted);background:#eef1f6;}
+  .refrow b{color:var(--ink);font-weight:700;}
+  .refrow .rv{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .ovlink{display:block;padding:10px 13px;font-size:.66rem;color:var(--muted);}
+  .ovlink a{color:var(--blue);font-weight:600;cursor:pointer;text-decoration:none;}
+
+  /* --- KPI pane --- */
+  .ktot{padding:13px 16px;border-bottom:1px solid var(--line);background:#fcfdff;}
+  .ktot .cap{font-size:.54rem;letter-spacing:.05em;font-weight:700;color:var(--faint);text-transform:uppercase;}
+  .ktotgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:5px;}
+  .kt b{display:block;font-size:.74rem;font-weight:800;font-variant-numeric:tabular-nums;}
+  .kt span{display:block;font-size:.5rem;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
+  .kt i{display:block;font-style:normal;font-size:.54rem;font-weight:700;}
+  .kscope{padding:10px 16px;border-bottom:1px solid #eef1f6;font-size:.6rem;color:var(--muted);}
+  .kscope b{color:var(--ink);}
+  .kpirow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:10px;padding:13px 16px;border-bottom:1px solid #eef1f6;}
+  .kpirow .kl{font-size:.68rem;font-weight:600;}
+  .kpirow .kr{text-align:right;}
+  .kpirow .kv{display:block;font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums;}
+  .kpirow .kd{display:block;font-size:.56rem;font-weight:700;font-variant-numeric:tabular-nums;}
+  .kpirow .kly{display:block;font-size:.52rem;color:var(--faint);font-variant-numeric:tabular-nums;}
+  .buyrow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:10px;padding:13px 16px;
+    border-bottom:1px solid #d9ede3;background:#eef8f3;}
+  .buyrow .kl{font-size:.68rem;font-weight:700;color:#0f7a5c;}
+  .buyrow .kl small{display:block;font-size:.52rem;color:#2a8a68;font-weight:600;}
+  .buyin{width:62px;border:1px solid #b7ddcb;border-radius:5px;padding:3px 6px;font-family:inherit;font-size:.68rem;
+    font-weight:700;color:#0d6b4f;text-align:right;background:#fff;}
+  .buyin:focus{outline:none;border-color:#19a06a;}
+
+  /* --- 52-week benchmark: values + tactic AND discount type --- */
+  .pane.hist .pane-head{background:#f1f5fc;}
+  .pane.hist .pane-head .ttl{color:var(--ink);text-transform:none;font-size:.7rem;font-weight:700;}
+  table.ht{width:100%;border-collapse:collapse;}
+  .ht th{position:sticky;top:0;background:var(--soft);color:var(--muted);font-size:.5rem;letter-spacing:.04em;font-weight:700;
+    text-transform:uppercase;text-align:right;padding:6px 5px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:2;}
+  .ht th.l{text-align:left;}
+  .ht td{font-size:.6rem;padding:4px 5px;border-bottom:1px solid #eef1f6;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;vertical-align:top;}
+  .ht td.l{text-align:left;}
+  .ht tr.pr td{background:#f7faff;}
+  .wk b{font-weight:700;} .wk small{color:var(--faint);margin-left:4px;font-size:.54rem;}
+  .wk .disc{display:block;margin-top:1px;font-size:.54rem;color:var(--muted);white-space:nowrap;}
+  .wk .disc .dt{color:var(--promo-ink);font-weight:700;}
+  .tchip{display:inline-block;font-size:.48rem;font-weight:800;border-radius:3px;padding:0 4px;margin-right:4px;vertical-align:1px;}
+  .tchip.id{color:#0f57d6;background:#e2edff;} .tchip.bxgx{color:#047857;background:#dff3e9;} .tchip.mb{color:#b0620a;background:#fbeed7;}
+  .aivc{color:var(--muted);} .mut{color:var(--faint);}
+
+  /* override modal — same as the plan */
+  .ovbg{position:fixed;inset:0;background:rgba(15,23,42,.44);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:38px 20px;}
+  .ovbg[hidden]{display:none;}
+  .ovbox{background:#fff;border-radius:14px;max-width:1180px;width:100%;max-height:calc(100vh - 76px);overflow-y:auto;box-shadow:0 30px 80px rgba(15,23,42,.35);}
+  .ovhead{display:flex;align-items:flex-start;gap:20px;padding:16px 22px 12px;}
+  .ovhead h3{margin:0 0 3px;font-size:.92rem;font-weight:700;}
+  .ovhead p{margin:0;font-size:.68rem;color:var(--muted);}
+  .ovback{margin-left:auto;border:1px solid var(--line-strong);background:#fff;border-radius:8px;font-family:inherit;
+    font-weight:600;font-size:.72rem;color:var(--blue);padding:8px 14px;cursor:pointer;white-space:nowrap;}
+  .ovwarn{margin:0 22px 12px;border-left:3px solid #e8930c;background:#fff8ec;color:#8a6d2f;font-size:.68rem;padding:8px 12px;border-radius:0 8px 8px 0;}
+  .ovwarn b{color:#6f5622;}
+  .ovgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 22px 16px;}
+  .syscard{border:1px solid var(--line);border-radius:10px;padding:13px 15px;}
+  .syscard header{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:.72rem;color:var(--muted);}
+  .systag{font-size:.58rem;font-weight:800;border-radius:4px;padding:2px 7px;}
+  .systag.apex{color:#0f57d6;background:#e2edff;} .systag.oms{color:#047857;background:#dff3e9;}
+  .fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 12px;}
+  .fld{display:flex;flex-direction:column;gap:4px;}
+  .fld span{font-size:.56rem;letter-spacing:.06em;font-weight:700;color:var(--faint);text-transform:uppercase;}
+  .fld input,.fld select{border:1px solid var(--line-strong);border-radius:7px;padding:7px 9px;font-size:.72rem;font-family:inherit;color:var(--ink);background:#fff;width:100%;}
+  .chk{display:flex;align-items:center;gap:7px;font-size:.7rem;color:var(--ink);align-self:end;padding-bottom:7px;}
+  .allow{margin-top:13px;}
+  .allow > span{display:block;font-size:.56rem;letter-spacing:.06em;font-weight:700;color:var(--faint);text-transform:uppercase;margin-bottom:7px;}
+  .arow{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin-bottom:7px;font-size:.7rem;cursor:pointer;}
+  .arow.sel{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);}
+  .arow .id{color:var(--blue);font-weight:700;} .arow .meta{margin-left:auto;color:var(--muted);font-size:.64rem;}
+  .abadge{font-size:.54rem;font-weight:800;color:#fff;background:var(--blue);border-radius:10px;padding:1px 7px;}
+  .ovact{display:flex;justify-content:flex-end;gap:10px;padding:0 22px 20px;}
+  .btn2{border:1px solid var(--line-strong);background:#fff;color:var(--muted);font-family:inherit;font-weight:600;font-size:.74rem;padding:9px 18px;border-radius:9px;cursor:pointer;}
+  .btn1{background:var(--blue);border:1px solid var(--blue);color:#fff;font-family:inherit;font-weight:700;font-size:.74rem;padding:9px 18px;border-radius:9px;cursor:pointer;}
+
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px 22px 22px;}
+  .note{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .note h4{margin:0 0 5px;font-size:.7rem;}
+  .note p{margin:0;font-size:.66rem;color:var(--muted);line-height:1.5;}
+  .note p b{color:var(--ink);}
+</style>
+</head>
+<body>
+
+  <div class="frame">
+    <header class="head">
+      <div>
+        <span class="eyebrow">WEEK-BY-WEEK · DESIGN 2 — TRUE MILLER COLUMNS</span>
+        <h2>NCRC › price area › promotion › KPIs › 52-week benchmark</h2>
+        <p>Every pane swipe-scrolls with a live <b>“x of y”</b> count — no scrollbars. The <b>Deal ⇄ KPIs</b> toggle on the
+           price-area pane flips every PA row to its Sales / Units / AGP / AIV / Funding in a nutshell, so nothing needs
+           clicking to compare. The promotion pane carries the full story per channel; the benchmark shows the tactic
+           <b>and its discount type</b> against every week's values.</p>
+      </div>
+      <span class="state-pill">INTERACTIVE — CLICK · TOGGLE · SWIPE</span>
+    </header>
+
+    <div class="miller">
+      <div class="pane">
+        <div class="pane-head"><span class="ttl">NCRC · Item</span><span class="cnt" id="cN"></span></div>
+        <div class="pane-body" id="pN"></div>
+      </div>
+      <div class="pane">
+        <div class="pane-head"><span class="ttl">Price areas</span>
+          <span class="seg"><button id="pmDeal" class="on">Deal</button><button id="pmKpi">KPIs</button></span>
+          <span class="cnt" id="cP"></span></div>
+        <div class="pane-body" id="pP"></div>
+      </div>
+      <div class="pane">
+        <div class="pane-head"><span class="ttl">Promotion</span><span class="cnt">top 5 · LY · NP</span></div>
+        <div class="pane-body" id="pO"></div>
+      </div>
+      <div class="pane">
+        <div class="pane-head"><span class="ttl">Week KPIs</span><span class="cnt">W7 · vs LY</span></div>
+        <div class="pane-body" id="pK"></div>
+      </div>
+      <div class="pane hist">
+        <div class="pane-head"><span class="ttl" id="cHt">52-week benchmark</span><span class="cnt" id="cH"></span></div>
+        <div class="pane-body" id="pHwrap">
+          <table class="ht">
+            <thead><tr><th class="l" style="width:84px">Week</th><th>Sales</th><th>Units</th><th>AGP</th><th>AIV</th><th>Fund $</th></tr></thead>
+            <tbody id="pH"></tbody>
+          </table>
+          <div class="loaded" data-live></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="notes">
+      <div class="note"><h4>Compare without clicking</h4>
+        <p>The <b>KPIs toggle</b> answers “how do all 30 price areas look?” — every row flips to Sales · Units · AGP · AIV ·
+           Fund $/u at once, while the KPI pane keeps the full read for the selected PA × promotion.</p></div>
+      <div class="note"><h4>Promotion carries the full story</h4>
+        <p>Per option: store and digital lines each with <b>tactic · discount type · MB / Lim · circular</b>, plus LY and
+           no-promo baselines and the <b>override link</b> into the APEX + OMS modal.</p></div>
+      <div class="note"><h4>Benchmark stays secondary</h4>
+        <p>The narrowest pane: 52 weeks of values, tactic chip + discount type under the week, Fund $ included, no special
+           current-week treatment. Swipe with the live week count.</p></div>
+    </div>
+  </div>
+
+  <!-- override modal -->
+  <div class="ovbg" id="ovbg" hidden>
+    <div class="ovbox">
+      <div class="ovhead">
+        <div>
+          <h3>Override recommendation</h3>
+          <p><b id="ovItem">BRAWNY TEAR-A-SQUARE 4 ROLL</b> · CIG 113016952 — build a custom promo across every price area, or override individual price areas.</p>
+        </div>
+        <button class="ovback" id="ovclose1">← Back to recommendations</button>
+      </div>
+      <div class="ovwarn"><b>Override mode.</b> Results are not optimised by the recommender. Linked items in store may be impacted. No guardrail or reliability scores will be shown.</div>
+      <div class="ovgrid">
+        <section class="syscard">
+          <header><span class="systag apex">APEX</span> Price-point promotion</header>
+          <div class="fgrid">
+            <label class="fld"><span>Discount</span><select><option>PP</option><option>%</option><option>Cents</option><option>BXG1</option></select></label>
+            <label class="fld"><span>Factor</span><input value="0"></label>
+            <label class="fld"><span>Amount</span><input placeholder="$ –"></label>
+            <label class="fld"><span>UOM</span><select><option>E — Each</option><option>W — Weighted</option></select></label>
+            <label class="fld"><span>Min buy</span><input value="1"></label>
+            <label class="fld"><span>Limit</span><input value="6"></label>
+            <label class="chk"><input type="checkbox"> In Ad</label>
+          </div>
+          <div class="allow"><span>Allowance</span>
+            <div class="arow sel"><span class="id">4379527</span> Buying allowance <span class="abadge">PRIMARY</span><span class="meta">Active · $11,550.00</span></div>
+            <div class="arow"><span class="id">4381002</span> Off-invoice allowance<span class="meta">Active · $8,200.00</span></div>
+            <div class="arow"><span class="id">4390115</span> Bill-back allowance<span class="meta">Pending · $4,300.00</span></div>
+          </div>
+        </section>
+        <section class="syscard">
+          <header><span class="systag oms">OMS</span> Multi-channel promotion</header>
+          <div class="fgrid">
+            <label class="fld"><span>Channel</span><select><option>Store Only</option><option>Print Only</option><option>Clip Click</option><option>Digital Only</option></select></label>
+            <label class="fld"><span>Tactic</span><select><option>Item Discount</option><option>BXGX</option><option>MB</option></select></label>
+            <label class="fld"><span>UOM</span><select><option>E — Each</option><option>W — Weighted</option></select></label>
+            <label class="fld"><span>Min buy</span><input value="0"></label>
+            <label class="fld"><span>Discount</span><select><option>PP Ea</option><option>% Ea</option><option>Cents Ea</option><option>Free Ea</option></select></label>
+            <label class="fld"><span>Amount</span><input placeholder="$ –"></label>
+            <label class="fld"><span>Lim</span><input value="6"></label>
+            <label class="fld"><span>Lim Lb</span><input value="0"></label>
+          </div>
+        </section>
+      </div>
+      <div class="ovact"><button class="btn2" id="ovclose2">Cancel</button><button class="btn1" id="ovsave">Save override</button></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  function hash(s){let h=0;for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h);}
+  function rnd(seed,k){return ((hash(seed)*(k+7)*2654435761)>>>8)%1000/1000;}
+  const money=(v)=>"$"+Math.round(v)+"K", fu=(v)=>Math.round(v)+"K";
+  const TAC=[["Item Discount","id","ID"],["Buy X Get X","bxgx","BXGX"],["Must Buy","mb","MB"]];
+  const DISC={id:["PP $1.84","% off · 20%","¢ off · 48¢","$ off · $0.50"],bxgx:["BOGO 50%","B1G1 Free"],mb:["4/$5","2/$4"]};
+
+  const VENDORS=[
+    ["GEORGIA-PACIFIC",[["BRAWNY TEAR-A-SQUARE 4 ROLL","4CT","NCRC 30048"],["SPARKLE PICK-A-SIZE 6 ROLL","6CT","NCRC 30056"],["VANITY FAIR NAPKINS","200CT","NCRC 30061"],["QUILTED NORTHERN ULTRA","12CT","NCRC 30064"]]],
+    ["KIMBERLY-CLARK",[["SCOTT CHOOSE-A-SHEET 6 ROLL","6CT","NCRC 30027"],["VIVA SIGNATURE CLOTH 4 ROLL","4CT","NCRC 30038"],["COTTONELLE ULTRA 9 ROLL","9CT","NCRC 30041"],["KLEENEX SOFT PACK","120CT","NCRC 30044"]]],
+    ["PROCTER & GAMBLE",[["BOUNTY SELECT-A-SIZE 8 ROLL","8CT","NCRC 30112"],["CHARMIN ULTRA SOFT 12 ROLL","12CT","NCRC 30118"],["PUFFS PLUS LOTION","124CT","NCRC 30124"],["BOUNTY ESSENTIALS 6 ROLL","6CT","NCRC 30126"]]],
+    ["CLOROX CO",[["CLOROX DISINFECTING WIPES","75CT","NCRC 30131"],["CLOROX TOILET WAND KIT","1CT","NCRC 30134"],["PINE-SOL ORIGINAL","48OZ","NCRC 30137"]]],
+    ["SC JOHNSON",[["WINDEX ORIGINAL","23OZ","NCRC 30141"],["SCRUBBING BUBBLES","20OZ","NCRC 30144"],["PLEDGE MULTISURFACE","9.7OZ","NCRC 30147"]]],
+    ["RECKITT",[["LYSOL ALL PURPOSE","32OZ","NCRC 30151"],["FINISH QUANTUM","82CT","NCRC 30154"],["AIR WICK REFILL","2CT","NCRC 30157"]]],
+    ["ESSITY",[["TORK PAPER TOWELS","6CT","NCRC 30161"],["CUSHELLE COMFORT","16CT","NCRC 30164"]]],
+    ["OWN BRANDS",[["OWN LABEL BIG ROLL 2PK","2CT","NCRC 30077"],["OWN LABEL FACIAL TISSUE","160CT","NCRC 30081"],["OWN LABEL DISINFECTANT","32OZ","NCRC 30084"],["OWN LABEL SPONGES","6CT","NCRC 30087"]]]
+  ];
+  const FLAT=[]; VENDORS.forEach((v)=>v[1].forEach((it)=>FLAT.push({vendor:v[0],nm:it[0],pack:it[1],id:it[2]})));
+  const PA_TOTAL=30;
+  // per-option: store + digital lines, each tactic · discount type · MB/Lim · circular
+  const OPTS=[
+    {n:"#1 REC",rec:true,s:77,rg:"R 83 · G 65",st:["Item Discount","PP $1.93","MB 1/6","Circ Y"],dg:["Item Discount","PP $1.90","Lim 6","Circ Y"]},
+    {n:"#2",s:73,rg:"R 82 · G 64",st:["Item Discount","¢ off · 48¢","MB 1/6","Circ Y"],dg:["Personalized","PP $1.90","Lim 6","Circ N"]},
+    {n:"#3",s:71,rg:"R 80 · G 62",st:["Item Discount","% off · 20%","MB 1/6","Circ Y"],dg:["Meal Deal","PP $1.90","Lim 6","Circ N"]},
+    {n:"#4",s:70,rg:"R 79 · G 61",st:["Buy X Get X","BOGO 50%","MB 2/8","Circ Y"],dg:["Must Buy","PP $1.90","Lim 8","Circ Y"]},
+    {n:"#5",s:60,rg:"R 60 · G 59",low:true,st:["Buy X Get X","B1G1 Free","MB 2/8","Circ Y"],dg:["Fab 5","PP $1.43","Lim 8","Circ N"]}
+  ];
+  const SEL={n:0,p:0,o:0}; let PMODE="deal";
+
+  function paMetrics(seed){
+    const f=.8+rnd(seed,4)*.4;
+    const sales=6*f, units=3*f, agp=4*f;
+    return {sales:sales,units:units,agp:agp,aiv:(sales/units)*.92,fund:.34+rnd(seed,5)*.08};
+  }
+  // live "x of y" count — updates as the pane swipes
+  function live(el,total,label,extra){
+    const d=el.querySelector("[data-live]")||el.querySelector(".loaded"); if(!d)return;
+    const upd=()=>{
+      const frac=el.scrollHeight<=el.clientHeight?1:(el.scrollTop+el.clientHeight)/el.scrollHeight;
+      d.textContent=Math.max(1,Math.min(total,Math.round(frac*total)))+" of "+total+" "+label+(extra?" · "+extra:"")+" — swipe ↓";
+    };
+    el.onscroll=upd; upd();
+  }
+
+  function renderN(){
+    let h="", idx=0;
+    VENDORS.forEach((v)=>{
+      h+='<div class="vhead">'+v[0]+'<span class="vc">'+v[1].length+"</span></div>";
+      v[1].forEach(()=>{
+        const o=FLAT[idx], i=idx;
+        h+='<div class="irow'+(SEL.n===i?" drill":"")+'" data-i="'+i+'">'+
+          '<span class="inum">'+(i+1)+'</span>'+
+          '<span class="imain"><span class="icode">'+o.id+'</span><span class="iname">'+o.nm+' <i>'+o.pack+"</i></span></span></div>";
+        idx++;
+      });
+    });
+    h+='<div class="loaded" data-live></div>';
+    const el=document.getElementById("pN"); el.innerHTML=h;
+    document.getElementById("cN").textContent=FLAT.length+" loaded · 104 total";
+    bind("pN",".irow",(i)=>{SEL.n=i;SEL.p=0;SEL.o=0;renderAll();});
+    live(el,FLAT.length,"loaded","104 total");
+  }
+  function renderP(){
+    const o=FLAT[SEL.n];
+    let h="";
+    for(let p=0;p<PA_TOTAL;p++){
+      const pa="PA"+String(p+1).padStart(2,"0"), seed=o.id+pa;
+      const vlc=1.42+rnd(seed,1)*.1, dnc=.86+rnd(seed,2)*.06, base=2.41+rnd(seed,3)*.1;
+      const t=TAC[hash(seed)%3], m=paMetrics(seed);
+      h+='<div class="parow2'+(SEL.p===p?" drill":"")+'" data-i="'+p+'">';
+      if(PMODE==="deal"){
+        h+='<div class="top"><span class="pa">'+pa+'</span>'+
+          '<span class="costs">VLC <b>$'+vlc.toFixed(2)+'</b> · DNC <b>$'+dnc.toFixed(2)+'</b> · Base <b>$'+base.toFixed(2)+"</b></span></div>"+
+          '<div class="chline"><span class="ch">S</span><span class="pp">$1.93</span><span class="tn">'+t[0]+'</span></div>'+
+          '<div class="chline"><span class="ch d">D</span><span class="pp">$1.90</span><span class="tn">Item Discount</span></div>';
+      } else {
+        // metrics as columns; rows = this year / LY / Δ (absolute + %)
+        const mk=(v)=>"$"+(v>=10?Math.round(v):v.toFixed(1))+"K", uk=(v)=>(v>=10?Math.round(v):v.toFixed(1))+"K", d2=(v)=>"$"+v.toFixed(2);
+        const M=[["Sales",m.sales,m.sales/1.15,mk],["Units",m.units,m.units/1.134,uk],["AGP",m.agp,m.agp/1.138,mk],["AIV",m.aiv,m.aiv/1.017,d2],["Fund",m.fund,m.fund/1.064,d2]];
+        const dcell=(cv,lv,fmt)=>{const dd=cv-lv,pp=lv?dd/lv*100:0,pos=dd>=0;
+          return '<td class="'+(pos?"np-pos":"np-neg")+'">'+(pos?"+":"−")+fmt(Math.abs(dd))+"<i>"+(pos?"+":"")+pp.toFixed(1)+"%</i></td>";};
+        h+='<div class="top"><span class="pa">'+pa+'</span></div>'+
+          '<table class="pamt2">'+
+          '<tr class="h"><td></td>'+M.map((x)=>"<td>"+x[0]+"</td>").join("")+"</tr>"+
+          '<tr class="cy"><td class="rl"></td>'+M.map((x)=>"<td>"+x[3](x[1])+"</td>").join("")+"</tr>"+
+          '<tr class="lyr"><td class="rl">LY</td>'+M.map((x)=>"<td>"+x[3](x[2])+"</td>").join("")+"</tr>"+
+          '<tr class="d"><td class="rl">Δ</td>'+M.map((x)=>dcell(x[1],x[2],x[3])).join("")+"</tr>"+
+          "</table>";
+      }
+      h+="</div>";
+    }
+    h+='<div class="loaded" data-live></div>';
+    const el=document.getElementById("pP"); el.innerHTML=h;
+    document.getElementById("cP").textContent=PA_TOTAL+" PAs";
+    bind("pP",".parow2",(i)=>{SEL.p=i;SEL.o=0;renderAll();});
+    live(el,PA_TOTAL,"price areas");
+  }
+  function renderO(){
+    let h="";
+    OPTS.forEach((x,i)=>{
+      h+='<div class="orow'+(SEL.o===i?" drill":"")+'" data-i="'+i+'">'+
+        '<span class="radio"></span>'+
+        '<div class="omain">'+
+          '<div class="otop"><span class="oname">'+(x.rec?'<span class="rec-pill">#1 REC</span>':x.n)+'</span>'+
+          '<span class="oscore"><small class="'+(x.low?"np-neg":"")+'">'+x.rg+"</small></span></div>"+
+          '<div class="chline"><span class="ch">S</span><span class="tn">'+x.st[0]+'</span><span class="dt">'+x.st[1]+'</span><small>'+x.st[2]+'</small><small>'+x.st[3]+"</small></div>"+
+          '<div class="chline"><span class="ch d">D</span><span class="tn">'+x.dg[0]+'</span><span class="dt">'+x.dg[1]+'</span><small>'+x.dg[2]+'</small><small>'+x.dg[3]+"</small></div>"+
+        "</div></div>";
+    });
+    h+='<div class="refrow"><span class="refpill ly">LY</span><b>Buy 5 Get 3</b> · $1.50<span class="rv">$5K · 2K · $3K</span></div>';
+    h+='<div class="refrow"><span class="refpill np">NP</span><b>No promo</b> · base $2.42<span class="rv">$6K · 3K · $4K</span></div>';
+    h+='<div class="ovlink">None of these fit? <a data-ov>Override the recommendation →</a></div>';
+    document.getElementById("pO").innerHTML=h;
+    bind("pO",".orow",(i)=>{SEL.o=i;renderAll();});
+    document.querySelectorAll("[data-ov]").forEach((a)=>a.onclick=()=>{
+      document.getElementById("ovItem").textContent=FLAT[SEL.n].nm;
+      document.getElementById("ovbg").hidden=false;
+    });
+  }
+  function renderK(){
+    const o=FLAT[SEL.n], pa="PA"+String(SEL.p+1).padStart(2,"0"), seed=o.id+pa;
+    const m=paMetrics(seed), sc=(1-SEL.o*.03);
+    const sales=m.sales*sc, units=m.units*sc, agp=m.agp*sc, aiv=m.aiv, fund=m.fund;
+    const tS=6*PA_TOTAL*.92, tU=3*PA_TOTAL*.92, tA=4*PA_TOTAL*.92;
+    let h='<div class="ktot"><span class="cap">All '+PA_TOTAL+" price areas · W7 total</span>"+
+      '<div class="ktotgrid">'+
+      '<span class="kt"><span>Sales</span><b>'+money(tS)+'</b><i class="np-pos">+22.0%</i></span>'+
+      '<span class="kt"><span>Units</span><b>'+fu(tU)+'</b><i class="np-pos">+20.4%</i></span>'+
+      '<span class="kt"><span>AGP</span><b>'+money(tA)+'</b><i class="np-pos">+21.8%</i></span>'+
+      "</div></div>";
+    h+='<div class="kscope"><b>'+pa+"</b> · "+(SEL.o===0?"#1 REC":OPTS[SEL.o].n)+" · store + digital union</div>";
+    const K=[["Sales",money(sales),money(sales*.85),9+rnd(seed,7)*12],
+             ["Units",fu(units),fu(units*.87),6+rnd(seed,8)*14],
+             ["AGP",money(agp),money(agp*.86),5+rnd(seed,9)*16],
+             ["AIV","$"+aiv.toFixed(2),"$"+(aiv*1.01).toFixed(2),(rnd(seed,10)-.45)*6],
+             ["Funding $/u","$"+fund.toFixed(2),"$0.35",6.4]];
+    K.forEach((k)=>{
+      h+='<div class="kpirow"><span class="kl">'+k[0]+"</span>"+
+        '<span class="kr"><span class="kv">'+k[1]+'</span><span class="kd '+(k[3]>=0?"np-pos":"np-neg")+'">'+(k[3]>=0?"+":"")+k[3].toFixed(1)+'%</span><span class="kly">LY '+k[2]+"</span></span></div>";
+    });
+    const buy=Math.round(units*1000*1.08);
+    h+='<div class="buyrow"><span class="kl">Send to buying<small>pred '+Math.round(units*1000).toLocaleString()+" · MAE-adj "+buy.toLocaleString()+'</small></span>'+
+      '<input class="buyin" value="'+buy.toLocaleString()+'"></div>';
+    document.getElementById("pK").innerHTML=h;
+  }
+  function renderH(){
+    const o=FLAT[SEL.n], pa="PA"+String(SEL.p+1).padStart(2,"0"), seed=o.id+pa;
+    document.getElementById("cHt").textContent="52-week benchmark · "+pa;
+    const f0=.8+rnd(seed,4)*.4;
+    // promoted weeks only — the benchmark is about what past promotions did
+    let h="", d=new Date(2026,1,9), nPromo=0;
+    for(let i=0;i<52;i++){
+      const wk=7-i<=0?7-i+52:7-i, yr=7-i<=0?"’25":"’26";
+      const promo=rnd(seed+"w"+i,2)>0.62, t=TAC[(i+hash(seed))%3];
+      const dstr=(d.getMonth()+1)+"/"+d.getDate(); d.setDate(d.getDate()-7);
+      if(!promo) continue;
+      nPromo++;
+      const dlist=DISC[t[1]], disc=dlist[(i+hash(seed))%dlist.length];
+      const f=f0*(.62+rnd(seed+"h"+i,4)*.5)*1.5;
+      const sales=6*f*.9, units=3*f*.92, agp=4*f*.85;
+      const aiv=(sales/units)*.82*(0.94+rnd(seed+"a"+i,6)*.12);
+      const fund=units*(0.3+rnd(seed+"f"+i,8)*.15);
+      h+='<tr class="pr">'+
+        '<td class="l wk"><b>W'+wk+yr+'</b><small>'+dstr+"</small>"+
+        '<span class="disc"><span class="tchip '+t[1]+'">'+t[2]+'</span><span class="dt">'+disc+"</span></span></td>"+
+        '<td>'+money(sales)+'</td><td>'+fu(units)+'</td><td>'+money(agp)+'</td><td class="aivc">$'+aiv.toFixed(2)+'</td>'+
+        '<td>$'+fund.toFixed(1)+"K</td></tr>";
+    }
+    document.getElementById("pH").innerHTML=h;
+    live(document.getElementById("pHwrap"),nPromo,"promo weeks · last 52");
+  }
+  function bind(id,cls,fn){document.querySelectorAll("#"+id+" "+cls).forEach((r)=>r.onclick=()=>fn(+r.dataset.i));}
+  function renderAll(){renderN();renderP();renderO();renderK();renderH();}
+  document.getElementById("pmDeal").onclick=()=>{PMODE="deal";pmSync();renderP();};
+  document.getElementById("pmKpi").onclick=()=>{PMODE="kpi";pmSync();renderP();};
+  function pmSync(){document.getElementById("pmDeal").classList.toggle("on",PMODE==="deal");document.getElementById("pmKpi").classList.toggle("on",PMODE==="kpi");}
+  const close=()=>document.getElementById("ovbg").hidden=true;
+  document.getElementById("ovclose1").onclick=close;
+  document.getElementById("ovclose2").onclick=close;
+  document.getElementById("ovsave").onclick=close;
+  document.getElementById("ovbg").addEventListener("mousedown",(e)=>{if(e.target.id==="ovbg")close();});
+  renderAll();
+})();
+</script>
+</body>
+</html>
